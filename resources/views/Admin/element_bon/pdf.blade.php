@@ -38,7 +38,15 @@
             <td>{{ $el->date_realisation }}</td>
         </tr>
     @endforeach
+
+    <p>
+        Montant total bon : {{ number_format($bon->montant_total) }} <br>
+        Déjà saisi : {{ number_format($elements->sum('montant_total_element_bon_commande')) }} <br>
+        Reste : {{ number_format($bon->montant_total - $elements->sum('montant_total_element_bon_commande')) }}
+    </p>
     </tbody>
+
 </table>
+
 </body>
 </html>

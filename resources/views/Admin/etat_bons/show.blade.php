@@ -83,6 +83,16 @@
 
                         </tbody>
                     </table>
+                    <p>
+                        <strong>Montant total bon :</strong>
+                        {{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA <br>
+
+                        <strong>Montant réalisé :</strong>
+                        {{ number_format($bon->montant_realise, 0, ',', ' ') }} FCFA <br>
+
+                        <strong>Reste :</strong>
+                        {{ number_format($bon->reste, 0, ',', ' ') }} FCFA
+                    </p>
                 </div>
 
                 <div class="mt-3 d-flex justify-content-between">

@@ -8,6 +8,7 @@ use App\Models\bon_commandeok;
 use App\Models\element_bon_commande;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth; // si tu utilises barryvdh/laravel-dompdf
 
 class ElementBonCommandeController extends Controller
@@ -44,8 +45,152 @@ class ElementBonCommandeController extends Controller
         // Sinon, on affiche les choix
         return view('Admin.element_bon.manage', compact('bon', 'elements'));
     }
+
+
+    public function storetest(Request $request, $bon_id)
+    {
+        $bon = bon_commandeok::findOrFail($bon_id);
+
+        $data = $request->validate([
+            'nom_element_bon_commande.*' => 'required|string',
+            'description_elements_bon_commande.*' => 'nullable|string',
+            'quantite_element_bon_commande.*' => 'required|integer|min:1',
+            'prix_unitaire_element_bon_commande.*' => 'required|numeric|min:0',
+            'date_realisation.*' => 'required|date',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+
+            // 🔥 OPTION : supprimer anciens éléments (évite doublons)
+            element_bon_commande::where('id_bon_commande', $bon->id)->delete();
+
+            $total_global = 0;
+            $elements = [];
+
+            foreach ($data['nom_element_bon_commande'] as $i => $nom) {
+
+                $qte = $data['quantite_element_bon_commande'][$i];
+                $pu  = $data['prix_unitaire_element_bon_commande'][$i];
+                $total = $qte * $pu;
+
+                $total_global += $total;
+
+                $elements[] = [
+                    'nom_element_bon_commande' => $nom,
+                    'description_elements_bon_commande' => $data['description_elements_bon_commande'][$i] ?? '',
+                    'quantite_element_bon_commande' => $qte,
+                    'prix_unitaire_element_bon_commande' => $pu,
+                    'montant_total_element_bon_commande' => $total,
+                    'date_realisation' => $data['date_realisation'][$i],
+                    'id_user' => auth()->id(),
+                    'id_bon_commande' => $bon->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            // 🔒 VALIDATION MÉTIER
+            if ($total_global != $bon->montant_total) {
+                return back()->with('error',
+                    "⚠️ Total ($total_global FCFA) ≠ Montant du bon ({$bon->montant_total} FCFA)"
+                );
+            }
+
+            // 🚀 INSERT EN MASSE (PERFORMANCE)
+            element_bon_commande::insert($elements);
+
+            // 🔥 MISE À JOUR STATUT DU BON
+            $bon->update([
+                'statuts' => 1 // ou statut personnalisé
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('bon_commande_management')
+                ->with('success', '✅ Éléments enregistrés avec succès.');
+
+        } catch (\Exception $e) {
+
+            DB::rollBack();
+
+            return back()->with('error', '❌ Erreur : '.$e->getMessage());
+        }
+    }
     public function store(Request $request, $bon_id)
     {
+        $bon = bon_commandeok::findOrFail($bon_id);
+
+        $data = $request->validate([
+            'nom_element_bon_commande.*' => 'required|string',
+            'description_elements_bon_commande.*' => 'nullable|string',
+            'quantite_element_bon_commande.*' => 'required|integer|min:1',
+            'prix_unitaire_element_bon_commande.*' => 'required|numeric|min:0',
+            'date_realisation.*' => 'required|date',
+        ]);
+
+        $total_global = 0;
+        $elements = [];
+
+        foreach ($data['nom_element_bon_commande'] as $i => $nom) {
+
+            $qte = $data['quantite_element_bon_commande'][$i];
+            $pu  = $data['prix_unitaire_element_bon_commande'][$i];
+            $total = $qte * $pu;
+
+            $total_global += $total;
+
+            $elements[] = [
+                'nom_element_bon_commande' => $nom,
+                'description_elements_bon_commande' => $data['description_elements_bon_commande'][$i] ?? '',
+                'quantite_element_bon_commande' => $qte,
+                'prix_unitaire_element_bon_commande' => $pu,
+                'montant_total_element_bon_commande' => $total,
+                'date_realisation' => $data['date_realisation'][$i],
+                'id_user' => auth()->id(),
+                'id_bon_commande' => $bon->id,
+            ];
+        }
+
+        // 🔥 TOTAL DÉJÀ EXISTANT EN BASE
+        $total_existant = element_bon_commande::where('id_bon_commande', $bon->id)
+            ->sum('montant_total_element_bon_commande');
+
+        $nouveau_total = $total_existant + $total_global;
+
+        // ❌ SI DÉPASSEMENT
+        if ($nouveau_total > $bon->montant_total) {
+
+            return redirect()
+                ->route('element_bon.editForm', $bon->id)
+                ->withInput()
+                ->with('error', "⚠️ Le montant total dépasse le montant du bon !");
+        }
+
+        // ✅ INSERTION (PARTIEL AUTORISÉ)
+        foreach ($elements as $element) {
+            element_bon_commande::create($element);
+        }
+
+        // 🔥 CALCUL RESTE
+        $reste = $bon->montant_total - $nouveau_total;
+
+        // 🔥 STATUT
+        $statut = ($reste > 0) ? 'En cours de réalisation' : 'Bon réalisé';
+
+        // (optionnel si tu veux stocker)
+        $bon->update([
+            'statuts' => ($reste > 0) ? 0 : 1
+        ]);
+
+        return redirect()
+            ->route('element_bon.editForm', $bon->id)
+            ->with('success', "✅ Enregistrement effectué. Reste : $reste FCFA");
+    }
+    public function storevo(Request $request, $bon_id)
+    {
+       // dd('ok store');
         $bon = bon_commandeok::findOrFail($bon_id);
 
         $data = $request->validate([
@@ -78,19 +223,34 @@ class ElementBonCommandeController extends Controller
             ];
         }
 
+       // dd($elements);
         // 2️⃣ Validation du montant global
-        if ($total_global > $bon->montant_total) {
+     /*   if ($total_global > $bon->montant_total) {
             return back()->with('error', "⚠️ Le montant global des éléments ($total_global FCFA) dépasse le montant du bon ({$bon->montant_total} FCFA).");
         }
 
         if ($total_global < $bon->montant_total) {
             return back()->with('error', "⚠️ Le montant global des éléments ($total_global FCFA) est inférieur au montant du bon ({$bon->montant_total} FCFA).");
+        }*/
+        if ($total_global > $bon->montant_total) {
+            return redirect()
+                ->route('element_bon.create', $bon->id)
+                ->withInput()
+                ->with('error', "⚠️ Le montant global ($total_global FCFA) dépasse le montant du bon ({$bon->montant_total} FCFA).");
+        }
+
+        if ($total_global < $bon->montant_total) {
+            return redirect()
+                ->route('element_bon.create', $bon->id)
+                ->withInput()
+                ->with('error', "⚠️ Le montant global ($total_global FCFA) est inférieur au montant du bon ({$bon->montant_total} FCFA).");
         }
 
         // 3️⃣ Insertion en base seulement si OK
         foreach ($elements as $element) {
             element_bon_commande::create($element);
         }
+
 
         return redirect()->route('bon_commande_management')
             ->with('success', '✅ Éléments ajoutés avec succès.');
@@ -150,8 +310,9 @@ class ElementBonCommandeController extends Controller
     {
         $bon = bon_commandeok::findOrFail($bon_id);
         $elements = element_bon_commande::where('id_bon_commande', $bon_id)->get();
+        $title='Les elements du bon de commande';
 
-        return view('Admin.element_bon.index', compact('bon', 'elements'));
+        return view('Admin.element_bon.index', compact('bon', 'elements','title'));
     }
 
     public function exportPdf($bon_id)

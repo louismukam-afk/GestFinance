@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\ReglementEtudiantController;
 use App\Http\Controllers\Admin\TrancheScolariteController;
 use App\Http\Controllers\Budget\BudgetController;
 use App\Http\Controllers\Budget\LigneBudgetaireEntreeController;
+use App\Http\Controllers\Budget\DecaissementController;
 use App\Http\Controllers\Budget\LigneBudgetaireSortieController;
 use App\Http\Controllers\Budget\ElementLigneBudgetaireSortieController;
 use App\Http\Controllers\Budget\ElementLigneBudgetaireEntreeController;
@@ -771,7 +772,33 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/situation-etudiant', [EtatComptableController::class, 'situationEtudiant'])
             ->name('etat_situation_etudiant');
     });*/
+// routes/web.php
 
+    Route::prefix('decaissements')->name('decaissements.')->group(function () {
+
+        Route::get('/index-decaissement', [DecaissementController::class, 'index'])->name('index');
+
+        Route::get('/financer/{id}', [DecaissementController::class, 'create'])->name('create');
+
+        Route::post('/store', [DecaissementController::class, 'store'])->name('store');
+
+        Route::delete('/delete/{id}', [DecaissementController::class, 'destroy'])->name('destroy');
+
+        Route::get('/reporting', [DecaissementController::class, 'reporting'])->name('reporting');
+
+        Route::get('/pdf', [DecaissementController::class, 'exportPdf'])->name('pdf');
+        // web.php
+        Route::get('/decaissements/bon/{id}', [DecaissementController::class, 'detailBon'])
+            ->name('detailBon');
+        Route::get('/ajax/lignes/{budget}', [DecaissementController::class, 'getLignes']);
+        Route::get('/ajax/elements/{ligne}', [DecaissementController::class, 'getElements']);
+        Route::get('/ajax/donnees-budget/{ligne}', [DecaissementController::class, 'getDonneesBudget']);
+        Route::get('/ajax/donnees-ligne/{element}', [DecaissementController::class, 'getDonneesLigne']);
+        Route::get('/ajax/solde-caisse/{id}', [DecaissementController::class, 'getSoldeAjax']);
+        Route::get('/ajax/transfert-caisse/{id}', [DecaissementController::class, 'getTransfertCaisse']);
+
+
+    });
     Route::prefix('etats')->middleware(['auth'])->group(function () {
 
         // 🟦 HUB des états

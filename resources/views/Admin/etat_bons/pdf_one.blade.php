@@ -12,14 +12,16 @@
     </style>
 </head>
 <body>
-<h2>Bon de Commande</h2>
-<h3>{{ $bon->nom_bon_commande }}</h3>
+<h2>Bon de Commande:  BC{{$bon->id}}</h2>
+<h3>{{ $bon->nom_bon_commande }}  </h3>
 
 <p><strong>Description :</strong> {{ $bon->description_bon_commande }}</p>
 <p><strong>Période :</strong> {{ $bon->date_debut }} au {{ $bon->date_fin }}</p>
 <p><strong>Montant Total :</strong> {{ number_format($bon->montant_total,0,',',' ') }} FCFA</p>
+<p><strong>Montant en lettre :</strong> {{ $bon->montant_lettre}} FCFA</p>
 <p><strong>Personnel :</strong> {{ $bon->personnels->nom ?? 'N/A' }}</p>
 <p><strong>Utilisateur :</strong> {{ $bon->user->name ?? 'N/A' }}</p>
+<li class="list-group-item"><strong>Entite :</strong> {{ $bon->entites->nom_entite ?? 'N/A' }}</li>
 
 <h3>Éléments du Bon</h3>
 <table>
@@ -44,7 +46,19 @@
             <td>{{ number_format($el->montant_total_element_bon_commande,0,',',' ') }} FCFA</td>
         </tr>
     @endforeach
+
     </tbody>
+
 </table>
+<p>
+    <strong>Montant total bon :</strong>
+    {{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA <br>
+
+    <strong>Montant réalisé :</strong>
+    {{ number_format($bon->montant_realise, 0, ',', ' ') }} FCFA <br>
+
+    <strong>Reste :</strong>
+    {{ number_format($bon->reste, 0, ',', ' ') }} FCFA
+</p>
 </body>
 </html>

@@ -26,7 +26,11 @@ class decaissement extends Model
         'montant',
         'id_user',
         'id_personnel',
+        'id_bon_commande',
         'id_annee_academique',
+        'id_transfert_caisse',
+        'reste',
+        'statut_financement'
     ];
     public function annee_academiques (){
         return $this->belongsTo(annee_academique::class,'id_annee_academique');
@@ -60,5 +64,17 @@ class decaissement extends Model
     }
     public function user(){
         return $this->belongsTo(User::class,'id_user');
+    }
+    public function bon()
+    {
+        return $this->belongsTo(bon_commandeok::class,'id_bon_commande');
+    }
+    public function entite()
+    {
+        return $this->belongsTo(entite::class,'id_entite');
+    }
+
+    public function transfert_caisse(){
+        return $this->belongsTo(Transfert_caisse::class,'id_transfert_caisse');
     }
 }

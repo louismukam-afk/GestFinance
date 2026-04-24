@@ -51,8 +51,40 @@ class bon_commandeok extends Model
         return $this->belongsTo(User::class,'id_user');
 
     }
+    public function getStatutFinancementAttribute()
+    {
+        $total = $this->decaissements()->sum('montant');
+
+        return $total >= $this->montant_total
+            ? 'Réalisé'
+            : 'En cours';
+    }
     public function element_bon_commandes(){
         return $this->hasMany(element_bon_commande::class,'id_bon_commande');
+    }
+
+    public function decaissements(){
+        return $this->hasMany(decaissement::class,'id_bon_commande');
+    }
+    public function getMontantRealiseAttribute()
+    {
+        return $this->decaissements()->sum('montant');
+    }
+    public function getStatutFinancierAttribute()
+    {
+        if ($this->montant_realise == 0) {
+            return 'Non financé';
+        }
+
+        if ($this->montant_realise < $this->montant_total) {
+            return 'En cours';
+        }
+
+        return 'Totalement financé';
+    }
+    public function getResteAttribute()
+    {
+        return $this->montant_total - $this->montant_realise;
     }
     public function users()
     {
