@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Bon de Commande #{{ $bon->id }}</title>
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #000; padding: 5px; text-align: left; }
+        th { background: #f0f0f0; }
+        h2, h3 { text-align: center; }
+    </style>
+</head>
+<body>
+<h2>Bon de Commande</h2>
+<h3>{{ $bon->nom_bon_commande }}</h3>
+
+<p><strong>Description :</strong> {{ $bon->description_bon_commande }}</p>
+<p><strong>Période :</strong> {{ $bon->date_debut }} au {{ $bon->date_fin }}</p>
+<p><strong>Montant Total :</strong> {{ number_format($bon->montant_total,0,',',' ') }} FCFA</p>
+<p><strong>Personnel :</strong> {{ $bon->personnels->nom ?? 'N/A' }}</p>
+<p><strong>Utilisateur :</strong> {{ $bon->user->name ?? 'N/A' }}</p>
+
+<h3>Éléments du Bon</h3>
+<table>
+    <thead>
+    <tr>
+        <th>#</th>
+        <th>Élément</th>
+        <th>Description</th>
+        <th>Quantité</th>
+        <th>PU</th>
+        <th>Montant Total</th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach($bon->element_bon_commandes as $i => $el)
+        <tr>
+            <td>{{ $i+1 }}</td>
+            <td>{{ $el->nom_element_bon_commande }}</td>
+            <td>{{ $el->description_elements_bon_commande }}</td>
+            <td>{{ $el->quantite_element_bon_commande }}</td>
+            <td>{{ number_format($el->prix_unitaire_element_bon_commande,0,',',' ') }} FCFA</td>
+            <td>{{ number_format($el->montant_total_element_bon_commande,0,',',' ') }} FCFA</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+</body>
+</html>

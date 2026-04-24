@@ -1,0 +1,97 @@
+
+/*=============================================================
+    Authour URI: www.binarycart.com
+    License: Commons Attribution 3.0
+
+    http://creativecommons.org/licenses/by/3.0/
+
+    100% To use For Personal And Commercial Use.
+    IN EXCHANGE JUST GIVE US CREDITS AND TELL YOUR FRIENDS ABOUT US
+   
+    ========================================================  */
+
+/* cyrillic-ext */
+@font-face { font-family: open-sans;
+    font-weight: 400;
+    font-style: normal;
+    src: url('../fonts/open-sans.regular.ttf'); }
+/*==============================================
+    GENERAL  STYLES    
+    =============================================*/
+
+
+
+
+.text-compress-1 div{
+    line-height: 1.5;
+}
+.recu .header-receipt{
+    position: relative;
+    height: 30mm;
+}
+
+.recu .header-receipt .left{
+    height: inherit;
+    width: 30%;
+    padding: 5px;
+    left: 0;
+}
+.recu .header-receipt .right{
+    height: inherit;
+    padding: 5px;
+    position: absolute;
+    right: 0;
+}
+
+.recu .receipt-footer {
+    position: relative;
+
+}
+.recu .receipt-footer .visa {
+    position: absolute;
+    right:10mm;
+
+}
+
+
+
+
+
+
+
+
+
+    table.table{
+        font-size: 13px;
+    }
+
+    table.table tbody tr,  table.table tbody tr td{
+        padding: 0 5px;
+    }
+
+    table.table tr.bg-primary td, table.table tr.bg-primary td h4 strong{
+        color: white !important;
+        background: #337ab7 !important;
+        padding: 6px 4px;
+        height: 17px;
+    }
+     table.table tr.bg-primary td h4 strong{
+        color: white !important;
+    }
+
+
+    p
+    {
+        margin: 0;
+    }
+    .traduction
+    {
+        -webkit-print-color-adjust:exact;
+        font-size: 11px !important;
+        color: grey !important;
+    }
+
+
+
+
+
