@@ -14,6 +14,24 @@
 
         </div>
 
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('etat_etudiants_scolarite.index') }}">
+                    <i class="fa fa-list-alt fa-5x"></i>
+                    <h4>Etat inscriptions et paiements</h4>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('etudiants.import') }}">
+                    <i class="fa fa-upload fa-5x"></i>
+                    <h4>Importer les etudiants</h4>
+                </a>
+            </div>
+        </div>
+
       {{--  <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
                 <a href="{{route('etat_bons.index')}}" >

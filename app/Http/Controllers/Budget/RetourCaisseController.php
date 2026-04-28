@@ -13,9 +13,11 @@ use App\Models\donnee_ligne_budgetaire_sortie;
 use App\Models\element_ligne_budgetaire_sortie;
 use App\Models\ligne_budgetaire_sortie;
 use App\Models\retour_caisse;
+use App\Models\Transfert_caisse;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RetourCaisseController extends Controller
 {
@@ -125,7 +127,7 @@ public function getDecaissementDetails($id)
 
         'montant_decaisse' => $decaissement->montant,
         'montant_retourne' => $totalRetour,
-        'reste' => $decaissement->montant - $totalRetour,
+        'reste' => $decaissement->montant,
     ]);
 }
 private function query(Request $request, bool $currentUserOnly = false)
@@ -192,29 +194,40 @@ public function store(Request $request)
         'motif' => 'nullable|string|max:255',
     ]);
 
-    $decaissement = decaissement::findOrFail($data['id_decaissement']);
+    DB::transaction(function () use ($data) {
+        $decaissement = decaissement::lockForUpdate()->findOrFail($data['id_decaissement']);
 
-    $totalRetour = retour_caisse::where('id_decaissement', $decaissement->id)->sum('montant');
-
-    if (($totalRetour + $data['montant']) > $decaissement->montant) {
-        return back()
-            ->withInput()
-            ->withErrors([
-                'montant' => 'Le montant retourné ne peut pas dépasser le reste du décaissement.'
+        if ($data['montant'] > $decaissement->montant) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'montant' => 'Le montant retourne ne peut pas depasser le reste du decaissement.'
             ]);
-    }
+        }
 
-    $data['id_user'] = auth()->id();
-    $data['numero_retour'] = 'RET-' . now()->format('YmdHis');
+        $data['id_user'] = auth()->id();
+        $data['numero_retour'] = 'RET-' . now()->format('YmdHis');
 
-    $data['id_budget'] = $decaissement->id_budget;
-    $data['id_ligne_budgetaire_sortie'] = $decaissement->id_ligne_budgetaire_sortie;
-    $data['id_elements_ligne_budgetaire_sortie'] = $decaissement->id_elements_ligne_budgetaire_sortie;
-    $data['id_donnee_ligne_budgetaire_sortie'] = $decaissement->id_donnee_ligne_budgetaire_sortie;
-    $data['id_donnee_budgetaire_sortie'] = $decaissement->id_donnee_budgetaire_sortie;
-    $data['id_annee_academique'] = $decaissement->id_annee_academique;
+        $data['id_budget'] = $decaissement->id_budget;
+        $data['id_ligne_budgetaire_sortie'] = $decaissement->id_ligne_budgetaire_sortie;
+        $data['id_elements_ligne_budgetaire_sortie'] = $decaissement->id_elements_ligne_budgetaire_sortie;
+        $data['id_donnee_ligne_budgetaire_sortie'] = $decaissement->id_donnee_ligne_budgetaire_sortie;
+        $data['id_donnee_budgetaire_sortie'] = $decaissement->id_donnee_budgetaire_sortie;
+        $data['id_annee_academique'] = $decaissement->id_annee_academique;
 
-    retour_caisse::create($data);
+        retour_caisse::create($data);
+
+        $decaissement->montant = $decaissement->montant - $data['montant'];
+        $decaissement->reste = ($decaissement->reste ?? 0) + $data['montant'];
+        $decaissement->save();
+
+        if ($decaissement->id_transfert_caisse) {
+            $transfert = Transfert_caisse::lockForUpdate()->find($decaissement->id_transfert_caisse);
+
+            if ($transfert) {
+                $transfert->sode_caisse = ($transfert->sode_caisse ?? 0) + $data['montant'];
+                $transfert->save();
+            }
+        }
+    });
 
     return redirect()
         ->route('retour_caisses.index')
@@ -272,7 +285,28 @@ public function store(Request $request)
         ]);
     }
 
-    $retour->delete();
+    DB::transaction(function () use ($retour) {
+        if ($retour->id_decaissement) {
+            $decaissement = decaissement::lockForUpdate()->find($retour->id_decaissement);
+
+            if ($decaissement) {
+                $decaissement->montant = $decaissement->montant + $retour->montant;
+                $decaissement->reste = max(0, ($decaissement->reste ?? 0) - $retour->montant);
+                $decaissement->save();
+
+                if ($decaissement->id_transfert_caisse) {
+                    $transfert = Transfert_caisse::lockForUpdate()->find($decaissement->id_transfert_caisse);
+
+                    if ($transfert) {
+                        $transfert->sode_caisse = max(0, ($transfert->sode_caisse ?? 0) - $retour->montant);
+                        $transfert->save();
+                    }
+                }
+            }
+        }
+
+        $retour->delete();
+    });
 
     return redirect()
         ->route('retour_caisses.index')

@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\EtudiantsTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Imports\EtudiantsImport;
 use App\Models\Etudiant;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class EtudiantController extends Controller
 {
@@ -13,6 +16,33 @@ class EtudiantController extends Controller
         $etudiants = Etudiant::orderBy('created_at', 'desc')->get();
         $title = "Gestion des Étudiants";
         return view('Admin.Etudiant.index', compact('etudiants', 'title'));
+    }
+
+    public function import()
+    {
+        $title = "Importation des etudiants";
+
+        return view('Admin.Etudiant.import', compact('title'));
+    }
+
+    public function downloadTemplate()
+    {
+        return Excel::download(new EtudiantsTemplateExport(), 'template_import_etudiants.xlsx');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate([
+            'fichier' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ]);
+
+        $import = new EtudiantsImport();
+        Excel::import($import, $request->file('fichier'));
+
+        return redirect()->route('etudiants.import')
+            ->with('success', $import->createdCount() . ' etudiant(s) importe(s).')
+            ->with('warning', $import->skippedCount() . ' ligne(s) ignoree(s).')
+            ->with('import_errors', $import->errors());
     }
 
    /* public function store(Request $request)

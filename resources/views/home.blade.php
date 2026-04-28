@@ -116,6 +116,24 @@
 
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
+                <a href="{{ route('mes_bons.attente') }}">
+                    <i class="fa fa-file-text-o fa-5x"></i>
+                    <h4>Mes bons en attente</h4>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('mes_bons.valides') }}">
+                    <i class="fa fa-check-square-o fa-5x"></i>
+                    <h4>Mes bons valides</h4>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
                 <a href="{{route('personnel')}}">
                     <i class="fa fa-stack-overflow fa-5x"></i>
                     <h4>Gestion du personnel </h4>
@@ -123,6 +141,26 @@
             </div>
 
         </div>
+
+        @if(auth()->user()?->isSuperAdmin())
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ route('access.index') }}">
+                        <i class="fa fa-lock fa-5x"></i>
+                        <h4>Roles et permissions</h4>
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ route('audit.index') }}">
+                        <i class="fa fa-history fa-5x"></i>
+                        <h4>Journal des operations</h4>
+                    </a>
+                </div>
+            </div>
+        @endif
 
 
 

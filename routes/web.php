@@ -20,6 +20,10 @@ use App\Http\Controllers\Budget\DonneeLigneBudgetaireEntreeController;
 use App\Http\Controllers\Budget\DonneeLigneBudgetaireSortieController;
 use App\Http\Controllers\Budget\EtatSortieController;
 use App\Http\Controllers\Budget\RetourCaisseController;
+use App\Http\Controllers\Admin\AccessControlController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\MesBonCommandeController;
+use App\Http\Controllers\Admin\EtatEtudiantScolariteController;
 
 use App\Http\Controllers\Admin\EtatComptableController;
 
@@ -48,6 +52,40 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/dashboard', function () {
         return view('admin.index')->with(['title' => 'Administration']);
     })->name('dashboard');
+
+    Route::prefix('etat-etudiants-scolarite')->name('etat_etudiants_scolarite.')->group(function () {
+        Route::get('/', [EtatEtudiantScolariteController::class, 'index'])->name('index');
+        Route::get('/data', [EtatEtudiantScolariteController::class, 'data'])->name('data');
+        Route::get('/export/pdf', [EtatEtudiantScolariteController::class, 'exportPdf'])->name('pdf');
+        Route::get('/export/excel', [EtatEtudiantScolariteController::class, 'exportExcel'])->name('excel');
+        Route::get('/ajax/budget/{budget}/lignes', [EtatEtudiantScolariteController::class, 'lignesBudgetaires'])->name('ajax.lignes');
+        Route::get('/ajax/ligne/{ligne}/elements', [EtatEtudiantScolariteController::class, 'elementsBudgetaires'])->name('ajax.elements');
+        Route::get('/ajax/ligne/{ligne}/donnees-budget', [EtatEtudiantScolariteController::class, 'donneesBudgetParLigne'])->name('ajax.donnees_budget');
+        Route::get('/ajax/element/{element}/donnees', [EtatEtudiantScolariteController::class, 'donneesBudgetaires'])->name('ajax.donnees');
+        Route::get('/ajax/scolarites', [EtatEtudiantScolariteController::class, 'scolarites'])->name('ajax.scolarites');
+        Route::get('/ajax/scolarite/{scolarite}/tranches', [EtatEtudiantScolariteController::class, 'tranches'])->name('ajax.tranches');
+    });
+
+    Route::prefix('mes-bons')->name('mes_bons.')->group(function () {
+        Route::get('/attente', [MesBonCommandeController::class, 'attente'])->name('attente');
+        Route::get('/valides', [MesBonCommandeController::class, 'valides'])->name('valides');
+        Route::post('/', [MesBonCommandeController::class, 'store'])->name('store');
+        Route::put('/{bon}', [MesBonCommandeController::class, 'update'])->name('update');
+        Route::post('/{bon}/validation-emetteur', [MesBonCommandeController::class, 'validerEmetteur'])->name('valider_emetteur');
+        Route::get('/export/pdf/{type}', [MesBonCommandeController::class, 'exportPdf'])->name('pdf');
+    });
+
+    Route::prefix('access-control')->name('access.')->middleware('super.admin')->group(function () {
+        Route::get('/', [AccessControlController::class, 'index'])->name('index');
+        Route::post('/sync', [AccessControlController::class, 'syncRoutes'])->name('sync');
+        Route::post('/roles', [AccessControlController::class, 'storeRole'])->name('roles.store');
+        Route::post('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->name('roles.permissions');
+        Route::post('/users/{user}/roles', [AccessControlController::class, 'updateUserRoles'])->name('users.roles');
+    });
+
+    Route::prefix('audit')->name('audit.')->middleware('super.admin')->group(function () {
+        Route::get('/', [AuditLogController::class, 'index'])->name('index');
+    });
 
     # Routes ADMIN protégées
     Route::prefix('admin')->group(function () {
@@ -536,6 +574,12 @@ Route::middleware(['auth'])->group(function () {
 // Étudiants
     Route::get('etudiants', [\App\Http\Controllers\Admin\EtudiantController::class, 'index'])
         ->name('etudiant_management');
+    Route::get('etudiants/import', [\App\Http\Controllers\Admin\EtudiantController::class, 'import'])
+        ->name('etudiants.import');
+    Route::get('etudiants/import/template', [\App\Http\Controllers\Admin\EtudiantController::class, 'downloadTemplate'])
+        ->name('etudiants.import.template');
+    Route::post('etudiants/import', [\App\Http\Controllers\Admin\EtudiantController::class, 'importStore'])
+        ->name('etudiants.import.store');
     Route::post('etudiants/store', [\App\Http\Controllers\Admin\EtudiantController::class, 'store'])
         ->name('store_etudiant');
     Route::post('etudiants/update', [\App\Http\Controllers\Admin\EtudiantController::class, 'update'])

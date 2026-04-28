@@ -99,15 +99,7 @@ class EtatSortieController extends Controller
     $entree = Transfert_caisse::whereDate('date_transfert','<=',$dateFin)
         ->sum('montant_transfert');
 
-        $retours = retour_caisse::when($request->date_debut, fn($q) =>
-            $q->whereDate('date_retour','>=',$request->date_debut)
-        )
-            ->whereDate('date_retour','<=',$dateFin)
-            ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
-            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
-            ->get();
-
-        $sortie = $decaissements->sum('montant') - $retours->sum('montant');
+        $sortie = $decaissements->sum('montant');
 
     $soldeGlobal = $entree - $sortie;
 
@@ -124,17 +116,13 @@ class EtatSortieController extends Controller
     // ==========================
     // 🔥 CONSTRUCTION ETAT
     // ==========================
-    $etat = $donnees->map(function ($d) use ($decaissements, $retours, $soldeGlobal) {
+    $etat = $donnees->map(function ($d) use ($decaissements, $soldeGlobal) {
 
         // 🔥 Filtrer les décaissements liés à cette donnée
         $depenses = $decaissements
             ->where('id_donnee_ligne_budgetaire_sortie', $d->id);
 
-        $retourTotal = $retours
-            ->where('id_donnee_ligne_budgetaire_sortie', $d->id)
-            ->sum('montant');
-
-        $depenseTotal = $depenses->sum('montant') - $retourTotal;
+        $depenseTotal = $depenses->sum('montant');
 
         // 🔥 ENTITÉ CORRIGÉE (via bon)
         $entite = $depenses
@@ -445,7 +433,7 @@ class EtatSortieController extends Controller
                 ->whereDate('date_transfert', '<=', $dateFin)
                 ->sum('montant_transfert');
 
-            $soldeAvantTransfert = $entreesReglements + $entreesRetours - $sortiesDecaissements;
+            $soldeAvantTransfert = $entreesReglements - $sortiesDecaissements;
             $soldeApresTransfert = $soldeAvantTransfert + $transfertsEntrants - $transfertsSortants;
 
             return [
@@ -623,8 +611,7 @@ class EtatSortieController extends Controller
         // =========================
         // 💰 DISPONIBILITÉ CAISSE
         // =========================
-        $entreeCaisse = Transfert_caisse::whereDate('date_transfert','<=',$dateFin)->sum('montant_transfert')
-            + retour_caisse::whereDate('date_retour','<=',$dateFin)->sum('montant');
+        $entreeCaisse = Transfert_caisse::whereDate('date_transfert','<=',$dateFin)->sum('montant_transfert');
         $sortieCaisse = decaissement::whereDate('date_depense','<=',$dateFin)->sum('montant');
 
         $disponibilite = $entreeCaisse - $sortieCaisse;
@@ -706,13 +693,7 @@ class EtatSortieController extends Controller
             ->when($idLigne, fn($c)=>$c->where('id_budget',$idLigne))
             ->whereBetween('date_depense',[$dateDebut,$dateFin]);
 
-        $retour = retour_caisse::where('id_donnee_ligne_budgetaire_sortie', $d->id)
-            ->when($idAnnee, fn($q)=>$q->where('id_annee_academique',$idAnnee))
-            ->when($idLigne, fn($q)=>$q->where('id_budget',$idLigne))
-            ->whereBetween('date_retour',[$dateDebut,$dateFin])
-            ->sum('montant');
-
-        $depense = $decaissements->sum('montant') - $retour;
+        $depense = $decaissements->sum('montant');
 
         $entite = optional(
                 optional($decaissements->first())->bon

@@ -11,10 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-       
-    Schema::table('retour_caisses', function (Blueprint $table) {
-        $table->unsignedBigInteger('id_decaissement')->nullable()->after('id_bon_commande');
-    });
+        if (Schema::hasTable('retour_caisses') && !Schema::hasColumn('retour_caisses', 'id_decaissement')) {
+            Schema::table('retour_caisses', function (Blueprint $table) {
+                $table->unsignedBigInteger('id_decaissement')->nullable()->after('id_bon_commande');
+            });
+        }
     }
 
     /**
@@ -22,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-       Schema::table('retour_caisses', function (Blueprint $table) {
-        $table->dropColumn('id_decaissement');
-    });
+        if (Schema::hasTable('retour_caisses') && Schema::hasColumn('retour_caisses', 'id_decaissement')) {
+            Schema::table('retour_caisses', function (Blueprint $table) {
+                $table->dropColumn('id_decaissement');
+            });
+        }
     }
 };

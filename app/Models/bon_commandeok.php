@@ -20,6 +20,8 @@ class bon_commandeok extends Model
         'date_entree_signature',
         'date_validation',
         'montant_total',
+        'montant_realise',
+        'reste',
         'montant_lettre',
         'id_personnel',
         'id_user',
@@ -101,16 +103,43 @@ class bon_commandeok extends Model
     // ✅ Accessor pour afficher le badge directement
     public function getStatutBadgeAttribute()
     {
-        switch ($this->statuts) {
-            case 0:
-                return '<span class="badge bg-warning">En attente</span>';
+        switch ($this->statut_bon_code) {
             case 1:
                 return '<span class="badge bg-success">Validé</span>';
+            case 0:
+                return '<span class="badge bg-warning">En attente</span>';
             case 2:
                 return '<span class="badge bg-danger">Rejeté</span>';
             default:
                 return '<span class="badge bg-secondary">Inconnu</span>';
         }
+    }
+
+    public function getStatutBonCodeAttribute(): int
+    {
+        if ($this->validation_pdg || $this->statuts === 1) {
+            return 1;
+        }
+
+        if ($this->statuts === 2) {
+            return 2;
+        }
+
+        if ($this->statuts === 0) {
+            return 0;
+        }
+
+        return -1;
+    }
+
+    public function getStatutBonLibelleAttribute(): string
+    {
+        return match ($this->statut_bon_code) {
+            1 => 'Validé',
+            0 => 'En attente',
+            2 => 'Rejeté',
+            default => 'Inconnu',
+        };
     }
 
 }

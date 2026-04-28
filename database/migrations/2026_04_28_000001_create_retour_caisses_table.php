@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('retour_caisses', function (Blueprint $table) {
             $table->id();
             $table->integer('id_bon_commande')->default(0);
+            $table->unsignedBigInteger('id_decaissement')->nullable();
             $table->integer('id_caisse')->default(0);
             $table->integer('id_budget')->default(0);
             $table->integer('id_ligne_budgetaire_sortie')->default(0);

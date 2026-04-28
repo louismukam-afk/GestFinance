@@ -8,6 +8,17 @@
             ➕ Nouvel Étudiant
         </button>
 
+        <a href="{{ route('etudiants.import') }}" class="btn btn-success">
+            Import Excel
+        </a>
+
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <label for="searchEtudiant">Recherche rapide</label>
+                <input type="text" id="searchEtudiant" class="form-control" placeholder="Rechercher par nom, prénom ou matricule">
+            </div>
+        </div>
+
         <div class="table-responsive mt-3">
             <table id="etudiantsTable" class="table table-bordered table-striped">
                 <thead>
@@ -210,20 +221,35 @@
         $(function () {
             const $table = $('#etudiantsTable');
             if ($table.length) {
-                $table.DataTable({
+                if ($.fn.DataTable) {
+                    const table = $table.DataTable({
 //                    responsive: true,
-                    responsive: false,
-                    scrollX: true,
-                    autoWidth: false,
-                    dom: 'Bfrtip',
-                    pageLength: 25,
-                    buttons: [
-                        { extend: 'excelHtml5', text: '📊 Excel', className: 'btn btn-success btn-sm', title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
-                        { extend: 'pdfHtml5',   text: '📄 PDF',   className: 'btn btn-danger btn-sm',  title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
-                        { extend: 'print',      text: '🖨 Imprimer', className: 'btn btn-info btn-sm', title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
-                    ],
-                    language: { url: "{{ asset('js/datatables/fr-FR.json') }}" }
-                });
+                        responsive: false,
+                        scrollX: true,
+                        autoWidth: false,
+                        dom: 'Bfrtip',
+                        pageLength: 25,
+                        buttons: [
+                            { extend: 'excelHtml5', text: '📊 Excel', className: 'btn btn-success btn-sm', title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
+                            { extend: 'pdfHtml5',   text: '📄 PDF',   className: 'btn btn-danger btn-sm',  title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
+                            { extend: 'print',      text: '🖨 Imprimer', className: 'btn btn-info btn-sm', title: 'LISTE DES ETUDIANTS', exportOptions: { columns: ':not(:last-child)' } },
+                        ],
+                        language: { url: "{{ asset('js/datatables/fr-FR.json') }}" }
+                    });
+
+                    $('#searchEtudiant').on('keyup change', function () {
+                        table.search(this.value).draw();
+                    });
+                } else {
+                    $('#searchEtudiant').on('keyup change', function () {
+                        const term = this.value.toLowerCase();
+
+                        $('#etudiantsTable tbody tr').each(function () {
+                            const rowText = $(this).text().toLowerCase();
+                            $(this).toggle(rowText.includes(term));
+                        });
+                    });
+                }
             }
         });
 

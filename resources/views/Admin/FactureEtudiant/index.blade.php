@@ -74,16 +74,12 @@
                         </td>
                         <td>{{ number_format($f->montant_total_facture,0,',',' ') }}</td>
                         <td>
-                            @php
-                                $pdfPath = "uploads/images/files/factures/FACT-{$f->numero_facture}.pdf";
-                            @endphp
-                            @if(file_exists(public_path($pdfPath)))
-                                <a class="btn btn-xs btn-default" target="_blank" href="{{ asset($pdfPath) }}">🧾 PDF</a>
-                            @else
-                                <a class="btn btn-xs btn-outline-primary" href="{{ route('facture_pdf', $f->id) }}">
-                                    Générer PDF
-                                </a>
-                            @endif
+                            <a class="btn btn-xs btn-info" href="{{ route('facture_download', $f->id) }}">
+                                PDF
+                            </a>
+                            <a class="btn btn-xs btn-outline-primary" target="_blank" href="{{ route('facture_pdf', $f->id) }}">
+                                Apercu
+                            </a>
                         </td>
 
                         {{-- <td>

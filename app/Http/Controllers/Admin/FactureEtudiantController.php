@@ -478,6 +478,9 @@ class FactureEtudiantController extends Controller
             @mkdir($publicDir, 0775, true);
         }
         $publicFile = $publicDir . DIRECTORY_SEPARATOR . "FACT-{$f->numero_facture}.pdf";
+        if (file_exists($publicFile)) {
+            @unlink($publicFile);
+        }
         file_put_contents($publicFile, $pdf->output());
 
         // (Optionnel) Sauvegarde aussi sur disk('public') si tu veux
@@ -509,7 +512,6 @@ class FactureEtudiantController extends Controller
     {
         // (re)génère avant de servir
         $this->generateInvoicePdf($id);
-          $title=" Gestion des factures étudiants";
         $facture= \App\Models\facture_etudiant::findOrFail($id);
         $publicRel = "uploads/images/files/factures/FACT-{$facture->numero_facture}.pdf";
         $full = public_path($publicRel);
@@ -518,7 +520,9 @@ class FactureEtudiantController extends Controller
             return back()->with('error', "Impossible de générer le PDF.");
         }
 
-        return response()->download($full,$title, 'Facture_'.$facture->numero_facture.'.pdf');
+        return response()
+            ->download($full, "FACT-{$facture->numero_facture}.pdf")
+            ->deleteFileAfterSend(false);
     }
 
     public function downloadPdftest($id)
@@ -529,7 +533,6 @@ class FactureEtudiantController extends Controller
 
         // (re)génère avant le download pour être sûr
         $this->generateInvoicePdf($id);
-        $title=" Gestion des factures étudiants";
         $facture = \App\Models\facture_etudiant::findOrFail($id);
         $path = "uploads/images/files/factures/FACT-{$facture->numero_facture}.pdf";
 
@@ -538,7 +541,7 @@ class FactureEtudiantController extends Controller
         }
 
         $full = storage_path('app/public/'.$path);
-        return response()->download($full,'$title=" Gestion des factures étudiants";', 'Facture_'.$facture->numero_facture.'.pdf');
+        return response()->download($full, "FACT-{$facture->numero_facture}.pdf");
     }
 
     /** Téléchargement (si dompdf) */
