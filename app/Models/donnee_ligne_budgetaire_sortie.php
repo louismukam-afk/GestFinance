@@ -34,7 +34,7 @@ class donnee_ligne_budgetaire_sortie extends Model
     {
         return $this->belongsTo(User::class,'id_user');
     }
-    public function element_ligne_budgetaire_sorties(){
+    public function element_ligne_budgetaire_sorties1(){
         return $this->belongsTo(element_ligne_budgetaire_sortie::class,'id_element_ligne_budgetaire_sortie');
     }
 
@@ -43,6 +43,13 @@ class donnee_ligne_budgetaire_sortie extends Model
     }
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_donnee_ligne_budgetaire_sortie');
+    }
+    public function element_ligne_budgetaire_sorties()
+    {
+        return $this->belongsTo(
+            \App\Models\element_ligne_budgetaire_sortie::class,
+            'id_element_ligne_budgetaire_sortie'
+        );
     }
 
 

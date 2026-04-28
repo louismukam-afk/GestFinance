@@ -37,9 +37,16 @@ class donnee_budgetaire_sortie extends Model
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_donnee_budgetaire_sortie');
     }
-    public function donnee_ligne_budgetaire_sorties ()
+    public function donnee_ligne_budgetaire_sorties1 ()
     {
         return $this->hasMany(donnee_budgetaire_sortie::class,'id_donnee_budgetaire_sortie');
 
+    }
+    public function donnee_ligne_budgetaire_sorties()
+    {
+        return $this->hasMany(
+            \App\Models\donnee_ligne_budgetaire_sortie::class,
+            'id_donnee_budgetaire_sortie'
+        );
     }
 }

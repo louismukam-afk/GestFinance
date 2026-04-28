@@ -18,6 +18,9 @@ use App\Http\Controllers\Budget\DonneeBudgetaireSortieController;
 use App\Http\Controllers\Budget\DonneeBudgetaireEntreeController;
 use App\Http\Controllers\Budget\DonneeLigneBudgetaireEntreeController;
 use App\Http\Controllers\Budget\DonneeLigneBudgetaireSortieController;
+use App\Http\Controllers\Budget\EtatSortieController;
+use App\Http\Controllers\Budget\RetourCaisseController;
+
 use App\Http\Controllers\Admin\EtatComptableController;
 
 /*
@@ -846,7 +849,59 @@ Route::middleware(['auth'])->group(function () {
 
     });
 
+    Route::prefix('etat-sorties')->name('etat_sorties.')->group(function () {
+
+        // 🔹 INDEX
+        Route::get('/', [EtatSortieController::class, 'index'])->name('index');
+
+        // 🔹 PILOTAGE
+        Route::get('/pilotage', [EtatSortieController::class, 'pilotage'])->name('pilotage');
+
+        // 🔹 ATTERRISSAGE
+        Route::get('/atterrissage', [EtatSortieController::class, 'atterrissage'])->name('atterrissage');
+
+        // 🔹 DÉCAISSEMENTS
+        Route::get('/decaissements', [EtatSortieController::class, 'decaissements'])->name('decaissements');
+        Route::get('/etat-caisse', [EtatSortieController::class, 'etatCaisse'])->name('etat_caisse');
+        Route::get('/etat-caisse/pdf', [EtatSortieController::class, 'exportEtatCaissePdf'])->name('etat_caisse.pdf');
+        Route::get('/etat-caisse/excel', [EtatSortieController::class, 'exportEtatCaisseExcel'])->name('etat_caisse.excel');
+        Route::get('/mon-etat-caisse', [EtatSortieController::class, 'monEtatCaisse'])->name('mon_etat_caisse');
+        Route::get('/mon-etat-caisse/pdf', [EtatSortieController::class, 'exportMonEtatCaissePdf'])->name('mon_etat_caisse.pdf');
+        Route::get('/mon-etat-caisse/excel', [EtatSortieController::class, 'exportMonEtatCaisseExcel'])->name('mon_etat_caisse.excel');
+        Route::get('/disponibilite-caisses', [EtatSortieController::class, 'disponibiliteCaisses'])->name('disponibilite_caisses');
+        Route::get('/disponibilite-caisses/pdf', [EtatSortieController::class, 'exportDisponibiliteCaissesPdf'])->name('disponibilite_caisses.pdf');
+
+        // 🔹 BON
+        Route::get('/bon/{id}', [EtatSortieController::class, 'bon'])->name('bon');
+
+        // 🔹 EXPORT
+        Route::get('/atterrissage/pdf', [EtatSortieController::class, 'exportPdf'])->name('pdf');
+        Route::get('/atterrissage/excel', [EtatSortieController::class, 'exportExcel'])->name('excel');
+        Route::get('/global', [EtatSortieController::class, 'etatGlobal'])
+            ->name('global');
+
+        Route::get('/global/pdf', [EtatSortieController::class, 'exportGlobalPdf'])
+            ->name('global.pdf');
+
+        Route::get('/global/excel', [EtatSortieController::class, 'exportGlobalExcel'])
+            ->name('global.excel');
 
 
+    });
+
+    Route::prefix('retour-caisses')->name('retour_caisses.')->group(function () {
+        Route::get('/', [RetourCaisseController::class, 'index'])->name('index');
+        Route::get('/create', [RetourCaisseController::class, 'create'])->name('create');
+        Route::post('/', [RetourCaisseController::class, 'store'])->name('store');
+        Route::get('/mes-retours', [RetourCaisseController::class, 'mine'])->name('mine');
+        Route::get('/export/pdf', [RetourCaisseController::class, 'exportPdf'])->name('pdf');
+        Route::get('/mes-retours/export/pdf', [RetourCaisseController::class, 'exportMinePdf'])->name('mine.pdf');
+       Route::get('/decaissements/{bon}', [RetourCaisseController::class, 'getDecaissements'])
+    ->name('decaissements');
+    Route::delete('/{retour}', [RetourCaisseController::class, 'destroy'])
+    ->name('destroy');
+Route::get('/decaissement-details/{decaissement}', [RetourCaisseController::class, 'getDecaissementDetails'])
+    ->name('decaissement_details');
+    });
 
 });

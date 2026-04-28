@@ -68,6 +68,44 @@
             width: 100% !important;
             table-layout: auto;
         }
+        @media print {
+            @page  {
+                margin-top: 2%;
+                margin-bottom: 2%;
+                margin-left: 2%;
+                margin-right: 2%;
+                size: A4,A3 portrait;
+            }
+
+            .wrapper,
+            .navbar,
+            .sidebar,
+            .breadcrumb,
+            .btn,
+            form,
+            select,
+            input,
+            .alert,
+            nav,
+            footer,
+            .nav-side-menu,
+            .menu-list,
+            .upper-band,
+            header {
+                display: none !important;
+            }
+
+
+            /* ================================
+            CONTENU
+            ================================= */
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0;
+                padding: 0;
+            }
+        }
     </style>
 
     @yield('styles')

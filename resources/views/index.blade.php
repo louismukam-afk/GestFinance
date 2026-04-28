@@ -73,6 +73,15 @@
             </div>
 
         </div>
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{route('etat_sorties.index')}}" >
+                    <i class="fa fa-bar-chart-o fa-5x"></i>
+                    <h4>Etats Budgetaires sorties  </h4>
+                </a>
+            </div>
+
+        </div>
 
 
     </div>

@@ -32,6 +32,10 @@ class decaissement extends Model
         'reste',
         'statut_financement'
     ];
+    public function retours_caisse()
+{
+    return $this->hasMany(retour_caisse::class, 'id_decaissement');
+}
     public function annee_academiques (){
         return $this->belongsTo(annee_academique::class,'id_annee_academique');
     }

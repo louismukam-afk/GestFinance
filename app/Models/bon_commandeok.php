@@ -66,6 +66,10 @@ class bon_commandeok extends Model
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_bon_commande');
     }
+
+    public function retour_caisses(){
+        return $this->hasMany(retour_caisse::class,'id_bon_commande');
+    }
     public function getMontantRealiseAttribute()
     {
         return $this->decaissements()->sum('montant');
