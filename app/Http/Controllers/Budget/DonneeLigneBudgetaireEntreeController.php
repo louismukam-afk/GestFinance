@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\donnee_ligne_budgetaire_entree;
 use App\Models\element_ligne_budgetaire_entree;
@@ -421,7 +421,7 @@ class DonneeLigneBudgetaireEntreeController extends Controller
     {
         $donnee = donnee_budgetaire_entree::findOrFail($donnee_id);
         $lignes = ligne_budgetaire_Entree::all();
-        $budgets=budget::all();
+        $budgets=Budget::all();
         return view('Budget.donnee_ligne_entrees.create', compact('donnee', 'lignes','budgets'), $this->values);
     }
 

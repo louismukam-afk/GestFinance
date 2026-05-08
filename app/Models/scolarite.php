@@ -12,6 +12,7 @@ class scolarite extends Model
     public $timestamps=true;
     protected $fillable = [
         'id_user',
+        'id_annee_academique',
         'id_cycle',
         'id_filiere',
         'id_niveau',
@@ -25,6 +26,10 @@ class scolarite extends Model
     public function user()
     {
         return $this->belongsTo(User::class,'id_user');
+    }
+    public function annee_academique()
+    {
+        return $this->belongsTo(annee_academique::class,'id_annee_academique');
     }
     public function cycles()
     {

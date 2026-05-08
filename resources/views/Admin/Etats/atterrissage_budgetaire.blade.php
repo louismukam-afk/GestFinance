@@ -211,6 +211,7 @@
                             <th class="col-num">Prévu</th>
                             <th class="col-num">Facturé</th>
                             <th class="col-num">Encaissé</th>
+                            <th class="col-num">Reduction</th>
                             <th class="col-num">Reste</th>
                         </tr>
                         </thead>
@@ -220,6 +221,7 @@
                             $totalPrevu = 0;
                             $totalFacture = 0;
                             $totalEncaisse = 0;
+                            $totalReduction = 0;
                             $totalReste = 0;
                         @endphp
 
@@ -233,11 +235,13 @@
                                 $prevu    = $e['prevu'] ?? 0;
                                 $facture  = $e['facture'] ?? 0;
                                 $encaisse = $e['encaisse'] ?? 0;
+                                $reduction = $e['reduction'] ?? 0;
                                 $reste    = $e['reste'] ?? 0;
 
                                 $totalPrevu    += $prevu;
                                 $totalFacture  += $facture;
                                 $totalEncaisse += $encaisse;
+                                $totalReduction += $reduction;
                                 $totalReste    += $reste;
                             @endphp
 
@@ -256,6 +260,10 @@
 
                                 <td class="text-end">
                                     {{ number_format($encaisse, 0, ',', ' ') }}
+                                </td>
+
+                                <td class="text-end">
+                                    {{ number_format($reduction, 0, ',', ' ') }}
                                 </td>
 
                                 <td class="text-end fw-bold">
@@ -278,6 +286,9 @@
                             </td>
                             <td class="text-end">
                                 {{ number_format($totalEncaisse, 0, ',', ' ') }}
+                            </td>
+                            <td class="text-end">
+                                {{ number_format($totalReduction, 0, ',', ' ') }}
                             </td>
                             <td class="text-end">
                                 {{ number_format($totalReste, 0, ',', ' ') }}

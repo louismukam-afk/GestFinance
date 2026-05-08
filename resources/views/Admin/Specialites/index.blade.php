@@ -35,6 +35,8 @@
                                onclick="editSpecialite({{ $sp->id }}, '{{ $sp->nom_specialite }}', '{{ $sp->code_specialite }}', '{{ $sp->id_filiere }}', '{{ $sp->capacite }}')"
                                class="btn btn-xs btn-warning">✏️</a>
 
+                            <a href="{{ route('programmes_specialites.index') }}" class="btn btn-xs btn-info">Programme</a>
+
                             <form action="{{ route('delete_specialite', $sp->id) }}" method="POST" style="display:inline;">
                                 @csrf @method('DELETE')
                                 <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cette spécialité ?')">🗑️</button>

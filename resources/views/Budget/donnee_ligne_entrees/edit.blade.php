@@ -59,7 +59,7 @@
 
                 <div class="col-md-4 mb-3">
                     <label>Montant</label>
-                    <input type="number" step="0.01" name="montant" value="{{ $donneeLigne->montant }}" class="form-control" required>
+                    <input type="number" step="0.01" name="montant" value="{{ $donneeLigne->montant }}" class="form-control" required disabled>
                 </div>
             </div>
 

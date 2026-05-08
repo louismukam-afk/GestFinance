@@ -30,6 +30,26 @@ class facture_etudiant extends Model
            'type_facture',
            'id_entite'
     ];
+
+    public function lignes_rattrapage()
+    {
+        return $this->hasMany(FactureRattrapageLigne::class, 'id_facture_etudiant');
+    }
+    public function reductions()
+    {
+        return $this->hasMany(reduction_facture::class, 'id_facture_etudiant');
+    }
+
+    public function getMontantReductionAttribute()
+    {
+        return (float) $this->reductions->sum('montant');
+    }
+
+    public function getMontantNetFactureAttribute()
+    {
+        return max((float) $this->montant_total_facture - (float) $this->montant_reduction, 0);
+    }
+
     public function cycles(){
         return $this->belongsTo(cycle::class,'id_cycle');
     }
@@ -62,7 +82,7 @@ class facture_etudiant extends Model
         return $this->belongsTo(Etudiant::class,'id_etudiant');
     }
     public function budget(){
-        return $this->belongsTo(budget::class,'id_budget');
+        return $this->belongsTo(Budget::class,'id_budget');
     }
     public function Annee_academique(){
         return $this->belongsTo(annee_academique::class,'id_annee_academique');

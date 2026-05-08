@@ -32,6 +32,14 @@ class caisse extends Model
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_caisse');
     }
+    public function entree_speciales()
+    {
+        return $this->hasMany(entree_speciale::class,'id_caisse');
+    }
+    public function remboursements_dettes()
+    {
+        return $this->hasMany(entree_speciale_echeance::class,'id_caisse_paiement');
+    }
     public function transfertsSortants()
     {
         return $this->hasMany(Transfert_caisse::class, 'id_caisse_depart', 'id');

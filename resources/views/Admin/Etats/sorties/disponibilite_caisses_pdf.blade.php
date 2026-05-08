@@ -66,8 +66,10 @@
         <th>Caisse</th>
         <th>Type</th>
         <th class="right">Entrees reglements</th>
+        <th class="right">Entrees speciales</th>
         <th class="right">Retours caisse</th>
         <th class="right">Decaissements</th>
+        <th class="right">Remboursements dettes</th>
         <th class="right">Solde avant transfert</th>
         <th class="right">Transferts entrants</th>
         <th class="right">Transferts sortants</th>
@@ -80,8 +82,10 @@
             <td>{{ $ligne['caisse']->nom_caisse }}</td>
             <td>{{ $ligne['caisse']->type_caisse ?? '-' }}</td>
             <td class="right">{{ number_format($ligne['entrees_reglements'], 0, ',', ' ') }}</td>
+            <td class="right">{{ number_format($ligne['entrees_speciales'] ?? 0, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['entrees_retours'], 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['sorties_decaissements'], 0, ',', ' ') }}</td>
+            <td class="right">{{ number_format($ligne['remboursements_dettes'] ?? 0, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['solde_avant_transfert'], 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['transferts_entrants'], 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['transferts_sortants'], 0, ',', ' ') }}</td>
@@ -89,7 +93,7 @@
         </tr>
     @endforeach
     <tr class="total">
-        <td colspan="5">TOTAL</td>
+        <td colspan="7">TOTAL</td>
         <td class="right">{{ number_format($totalAvantTransfert, 0, ',', ' ') }}</td>
         <td colspan="2"></td>
         <td class="right">{{ number_format($totalApresTransfert, 0, ',', ' ') }}</td>

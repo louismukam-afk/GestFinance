@@ -109,19 +109,21 @@
                 <th>Prévu</th>
                 <th>Facturé</th>
                 <th>Encaissé</th>
+                <th>Reduction</th>
                 <th>Reste</th>
             </tr>
             </thead>
 
             <tbody>
 
-            @php $tp=0;$tf=0;$te=0;$tr=0; @endphp
+            @php $tp=0;$tf=0;$treduction=0;$te=0;$tr=0; @endphp
 
             @foreach($lignes as $e)
 
                 @php
                     $tp += $e['prevu'];
                     $tf += $e['facture'];
+                    $treduction += $e['reduction'] ?? 0;
                     $te += $e['encaisse'];
                     $tr += $e['reste'];
                 @endphp
@@ -134,6 +136,7 @@
                     <td class="right">{{ number_format($e['prevu']) }}</td>
                     <td class="right">{{ number_format($e['facture']) }}</td>
                     <td class="right">{{ number_format($e['encaisse']) }}</td>
+                    <td class="right">{{ number_format($e['reduction'] ?? 0) }}</td>
                     <td class="right">{{ number_format($e['reste']) }}</td>
                 </tr>
 
@@ -144,6 +147,7 @@
                 <td class="right">{{ number_format($tp) }}</td>
                 <td class="right">{{ number_format($tf) }}</td>
                 <td class="right">{{ number_format($te) }}</td>
+                <td class="right">{{ number_format($treduction) }}</td>
                 <td class="right">{{ number_format($tr) }}</td>
             </tr>
 

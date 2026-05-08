@@ -83,6 +83,36 @@
                 </div>
             </div>
 
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">Entrees speciales</h5>
+                        <p class="card-text flex-grow-1">
+                            Suivi des dettes, dons, apports en caisse et rappels d'echeances.
+                        </p>
+                        <a href="{{ route('entrees_speciales.index') }}"
+                           class="btn btn-secondary mt-auto">
+                            Acceder
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">Reductions factures</h5>
+                        <p class="card-text flex-grow-1">
+                            Enregistrer, filtrer et exporter les reductions accordees sur les factures etudiants.
+                        </p>
+                        <a href="{{ route('reductions_factures.index') }}"
+                           class="btn btn-danger mt-auto">
+                            Acceder
+                        </a>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 @endsection

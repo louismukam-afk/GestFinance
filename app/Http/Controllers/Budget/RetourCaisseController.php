@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Budget;
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\bon_commandeok;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\caisse;
 use App\Models\decaissement;
 use App\Models\donnee_budgetaire_sortie;
@@ -39,7 +39,7 @@ private function filters()
             ? $centralCaisses
             : caisse::orderBy('nom_caisse')->get(),
 
-        'budgets' => budget::orderBy('libelle_ligne_budget')->get(),
+        'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
 
         'annees' => annee_academique::orderBy('nom', 'desc')->get(),
 
@@ -98,7 +98,7 @@ public function getDecaissementDetails($id)
     $totalRetour = retour_caisse::where('id_decaissement', $decaissement->id)
         ->sum('montant');
 
-    $budget = budget::find($decaissement->id_budget);
+    $budget = Budget::find($decaissement->id_budget);
 
     $ligne = ligne_budgetaire_sortie::find($decaissement->id_ligne_budgetaire_sortie);
 

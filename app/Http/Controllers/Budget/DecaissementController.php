@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Budget;
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\bon_commandeok;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\caisse;
 use App\Models\decaissement;
 use App\Models\donnee_budgetaire_sortie;
 use App\Models\donnee_ligne_budgetaire_sortie;
 use App\Models\element_ligne_budgetaire_sortie;
 use App\Models\entite;
+use App\Models\entree_speciale;
 use App\Models\ligne_budgetaire_sortie;
 use App\Models\personnel;
 use App\Models\Transfert_caisse;
@@ -125,11 +126,16 @@ class DecaissementController extends Controller
         $reste = $bon->montant_total - $totalDecaisse;
         $caissest = caisse::where('type_caisse', 1)->get();
         // 🔥 DONNÉES
-        $budgets = budget::all();
+        $budgets = Budget::all();
         $annees = annee_academique::all();
 
         $donnees = donnee_ligne_budgetaire_sortie::all();
         $caisses = Transfert_caisse::all();
+        $entreesSpeciales = entree_speciale::with(['echeances', 'decaissements'])
+            ->whereIn('type_entree', ['dette', 'don','apport'])
+            ->where('statut', 'actif')
+            ->orderByDesc('date_entree')
+            ->get();
 
         return view('decaissements.create', compact(
             'bon',
@@ -138,7 +144,8 @@ class DecaissementController extends Controller
             'annees',
             'donnees',
             'caisses',
-            'caissest'
+            'caissest',
+            'entreesSpeciales'
         ));
     }
     public function getSoldeAjax($id)
@@ -152,7 +159,13 @@ class DecaissementController extends Controller
         $decaisse = decaissement::where('id_caisse', $id)
             ->sum('montant');
 
-        $solde = $entree - $sortie - $decaisse;
+        $entreesSpeciales = entree_speciale::with('echeances')
+            ->where('id_caisse', $id)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        $solde = $entree + $entreesSpeciales - $sortie - $decaisse;
 
         return response()->json([
             'solde' => $solde
@@ -169,7 +182,13 @@ class DecaissementController extends Controller
         $decaisse = decaissement::where('id_caisse', $id_caisse)
             ->sum('montant');
 
-        return $entree - $sortie - $decaisse;
+        $entreesSpeciales = entree_speciale::with('echeances')
+            ->where('id_caisse', $id_caisse)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        return $entree + $entreesSpeciales - $sortie - $decaisse;
     }
     public function getSoldeCaisse($id_caisse)
     {
@@ -182,7 +201,13 @@ class DecaissementController extends Controller
         $decaisse = decaissement::where('id_caisse', $id_caisse)
             ->sum('montant');
 
-        return $entree - $sortie - $decaisse;
+        $entreesSpeciales = entree_speciale::with('echeances')
+            ->where('id_caisse', $id_caisse)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        return $entree + $entreesSpeciales - $sortie - $decaisse;
     }
     // ENREGISTREMENT
 
@@ -198,6 +223,7 @@ class DecaissementController extends Controller
             'id_donnee_budgetaire_sortie' => 'required',
             'id_donnee_ligne_budgetaire_sortie' => 'required',
             'id_annee_academique' => 'required',
+            'id_entree_speciale' => 'nullable|integer',
         ]);
 
         $bon = bon_commandeok::findOrFail($request->id_bon_commande);
@@ -228,6 +254,23 @@ class DecaissementController extends Controller
             return back()->with('error', 'Budget insuffisant');
         }
 // 🔒 Vérification bon
+        if ($request->filled('id_entree_speciale')) {
+            $entreeSpeciale = entree_speciale::with(['echeances', 'decaissements'])
+                ->whereIn('type_entree', ['dette', 'don','apport'])
+                ->where('statut', '!=', 'annule')
+                ->find($request->id_entree_speciale);
+
+            if (!$entreeSpeciale) {
+                return back()->with('error', 'Entree speciale invalide');
+            }
+
+            $disponibleEntreeSpeciale = $entreeSpeciale->montant_net_encaisse - $entreeSpeciale->decaissements->sum('montant');
+
+            if ($request->montant > $disponibleEntreeSpeciale) {
+                return back()->with('error', 'Montant superieur au disponible de cette entree speciale');
+            }
+        }
+
         $total = decaissement::where('id_bon_commande', $bon->id)->sum('montant');
         $reste = $bon->montant_total - ($total + $request->montant);
         $statut = ($reste > 0) ? 'En cours de réalisation' : 'Bon réalisé';
@@ -258,6 +301,11 @@ class DecaissementController extends Controller
 
             $entree = Transfert_caisse::where('id_caisse_arrivee', $transfert->id_caisse_arrivee)
                 ->sum('montant_transfert');
+            $entree += entree_speciale::with('echeances')
+                ->where('id_caisse', $transfert->id_caisse_arrivee)
+                ->where('statut', '!=', 'annule')
+                ->get()
+                ->sum(fn($e) => $e->montant_net_encaisse);
 
             $sortie = decaissement::where('id_caisse', $transfert->id_caisse_arrivee)
                 ->sum('montant');
@@ -335,6 +383,7 @@ class DecaissementController extends Controller
             'id_caisse' => $id_caisse,
             'id_transfert_caisse' => $id_transfert_caisse,
             'id_banque' => $id_banque,
+            'id_entree_speciale' => $request->id_entree_speciale ?? 0,
 
             'numero_depense' => 'DEP'.time(),
             'motif' => $request->motif,
@@ -555,6 +604,17 @@ class DecaissementController extends Controller
         decaissement::findOrFail($id)->delete();
 
         return back()->with('success', 'Supprimé');
+    }
+
+    public function destroyDecaissement($bonId, $decaissementId)
+    {
+        $decaissement = decaissement::where('id_bon_commande', $bonId)
+            ->where('id', $decaissementId)
+            ->firstOrFail();
+
+        $decaissement->delete();
+
+        return back()->with('success', 'Decaissement supprime');
     }
 
     // REPORTING

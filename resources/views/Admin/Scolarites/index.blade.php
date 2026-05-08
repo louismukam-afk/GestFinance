@@ -15,6 +15,7 @@
                 <thead>
                 <tr>
                     <th>#</th>
+                    <th>Année académique</th>
                     <th>Cycle</th>
                     <th>Filière</th>
                     <th>Niveau</th>
@@ -30,6 +31,7 @@
                 @foreach($scolarites as $i => $scolarite)
                     <tr>
                         <td>{{ $i+1 }}</td>
+                        <td>{{ $scolarite->annee_academique->nom ?? 'N/A' }}</td>
                         <td>{{ $scolarite->cycles->nom_cycle ?? 'N/A' }}</td>
                         <td>{{ $scolarite->filiere->nom_filiere ?? 'N/A' }}</td>
                         <td>{{ $scolarite->niveaux->nom_niveau ?? 'N/A' }}</td>
@@ -55,6 +57,7 @@
                             <a href="#edit_scolarite" data-toggle="modal" data-backdrop="false"
                                onclick="editScolarite(
                                {{ $scolarite->id }},
+                                       '{{ $scolarite->id_annee_academique }}',
                                        '{{ $scolarite->id_cycle }}',
                                        '{{ $scolarite->id_filiere }}',
                                        '{{ $scolarite->id_niveau }}',
@@ -88,6 +91,14 @@
                         <h4 class="modal-title">➕ Nouvelle Scolarité</h4>
                     </div>
                     <div class="modal-body">
+                        <div class="form-group"><label>Année académique</label>
+                            <select name="id_annee_academique" class="form-control" required>
+                                <option value="">-- Sélectionner --</option>
+                                @foreach($annees as $annee)
+                                    <option value="{{ $annee->id }}">{{ $annee->nom }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="form-group"><label>Cycle</label>
                             <select name="id_cycle" class="form-control" required>
                                 @foreach($cycles as $cycle)
@@ -148,6 +159,14 @@
                         <h4 class="modal-title">✏️ Modifier Scolarité</h4>
                     </div>
                     <div class="modal-body">
+                        <div class="form-group"><label>Année académique</label>
+                            <select name="id_annee_academique" id="edit-annee-academique" class="form-control" required>
+                                <option value="">-- Sélectionner --</option>
+                                @foreach($annees as $annee)
+                                    <option value="{{ $annee->id }}">{{ $annee->nom }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="form-group"><label>Cycle</label>
                             <select name="id_cycle" id="edit-cycle" class="form-control" required>
                                 @foreach($cycles as $cycle)
@@ -236,8 +255,9 @@
             }
         });
 
-        function editScolarite(id, cycle, filiere, niveau, specialite, montant, inscription, type) {
+        function editScolarite(id, anneeAcademique, cycle, filiere, niveau, specialite, montant, inscription, type) {
             $('#edit-id').val(id);
+            $('#edit-annee-academique').val(anneeAcademique);
             $('#edit-cycle').val(cycle);
             $('#edit-filiere').val(filiere);
             $('#edit-niveau').val(niveau);
@@ -264,6 +284,7 @@
                 <thead>
                 <tr>
                     <th>#</th>
+                    <th>Année académique</th>
                     <th>Cycle</th>
                     <th>Filière</th>
                     <th>Niveau</th>
@@ -279,6 +300,7 @@
                 @foreach($scolarites as $i => $scolarite)
                     <tr>
                         <td>{{ $i+1 }}</td>
+                        <td>{{ $scolarite->annee_academique->nom ?? 'N/A' }}</td>
                         <td>{{ $scolarite->cycles->nom_cycle ?? 'N/A' }}</td>
                         <td>{{ $scolarite->filiere->nom_filiere ?? 'N/A' }}</td>
                         <td>{{ $scolarite->niveaux->nom_niveau ?? 'N/A' }}</td>
@@ -304,6 +326,7 @@
                             <a href="#edit_scolarite" data-toggle="modal" data-backdrop="false"
                                onclick="editScolarite(
                                {{ $scolarite->id }},
+                                       '{{ $scolarite->id_annee_academique }}',
                                        '{{ $scolarite->id_cycle }}',
                                        '{{ $scolarite->id_filiere }}',
                                        '{{ $scolarite->id_niveau }}',
@@ -337,6 +360,14 @@
                         <h4 class="modal-title">➕ Nouvelle Scolarité</h4>
                     </div>
                     <div class="modal-body">
+                        <div class="form-group"><label>Année académique</label>
+                            <select name="id_annee_academique" class="form-control" required>
+                                <option value="">-- Sélectionner --</option>
+                                @foreach($annees as $annee)
+                                    <option value="{{ $annee->id }}">{{ $annee->nom }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="form-group"><label>Cycle</label>
                             <select name="id_cycle" class="form-control" required>
                                 @foreach($cycles as $cycle)
@@ -397,6 +428,14 @@
                         <h4 class="modal-title">✏️ Modifier Scolarité</h4>
                     </div>
                     <div class="modal-body">
+                        <div class="form-group"><label>Année académique</label>
+                            <select name="id_annee_academique" id="edit-annee-academique" class="form-control" required>
+                                <option value="">-- Sélectionner --</option>
+                                @foreach($annees as $annee)
+                                    <option value="{{ $annee->id }}">{{ $annee->nom }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="form-group"><label>Cycle</label>
                             <select name="id_cycle" id="edit-cycle" class="form-control" required>
                                 @foreach($cycles as $cycle)
@@ -485,8 +524,9 @@
             }
         });
 
-        function editScolarite(id, cycle, filiere, niveau, specialite, montant, inscription, type) {
+        function editScolarite(id, anneeAcademique, cycle, filiere, niveau, specialite, montant, inscription, type) {
             $('#edit-id').val(id);
+            $('#edit-annee-academique').val(anneeAcademique);
             $('#edit-cycle').val(cycle);
             $('#edit-filiere').val(filiere);
             $('#edit-niveau').val(niveau);

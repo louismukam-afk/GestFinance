@@ -62,6 +62,15 @@
 
         </div>
 
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('entrees_speciales.index') }}" >
+                    <i class="fa fa-plus-square fa-5x"></i>
+                    <h4>Entrees speciales hors factures</h4>
+                </a>
+            </div>
+        </div>
+
     </div>
     @endsection
 @section('breadcrumb')

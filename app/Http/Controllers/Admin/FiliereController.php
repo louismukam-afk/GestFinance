@@ -13,7 +13,7 @@ class FiliereController extends Controller
         $filieres = filiere::orderBy('created_at','desc')->get();
         $title = "Gestion des Filières";
 
-        return view('Admin.filieres.index', compact('filieres','title'));
+        return view('Admin.Filieres.index', compact('filieres','title'));
     }
 
     public function store(Request $request)

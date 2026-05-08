@@ -48,7 +48,7 @@
                     </div>
                     <div class="col-md-4 mb-3">
                         <label>Montant</label>
-                        <input type="number" step="0.01" name="montant[]" class="form-control" required>
+                        <input type="number" step="0.01" name="montant[]"  value="0" class="form-control" required readonly>
                     </div>
                 </div>
             </div>

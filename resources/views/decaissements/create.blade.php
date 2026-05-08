@@ -68,6 +68,20 @@
                 </select>
             </div>
             <div class="mb-3">
+                <label>Entree speciale utilisee (optionnel)</label>
+                <select name="id_entree_speciale" class="form-control">
+                    <option value="">-- Aucune entree speciale specifique --</option>
+                    @foreach($entreesSpeciales as $entreeSpeciale)
+                        @php
+                            $disponible = $entreeSpeciale->montant_net_encaisse - $entreeSpeciale->decaissements->sum('montant');
+                        @endphp
+                        <option value="{{ $entreeSpeciale->id }}">
+                            {{ ucfirst($entreeSpeciale->type_entree) }} - {{ $entreeSpeciale->libelle }} - disponible {{ number_format($disponible, 0, ',', ' ') }} FCFA
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="mb-3">
                 <label>Année académique</label>
                 <select name="id_annee_academique" class="form-control" required>
                     <option value="">-- Choisir --</option>

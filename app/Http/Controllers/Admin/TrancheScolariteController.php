@@ -43,7 +43,45 @@ class TrancheScolariteController extends Controller
 
         return view('Admin.tranche_scolarite.index', compact('scolarite', 'tranches', 'title'));
     }
-    public function store(Request $request, $scolarite_id)
+public function store(Request $request, $scolarite_id)
+{
+    $scolarite = \App\Models\scolarite::with(['cycles','filiere','niveaux','specialites'])
+        ->findOrFail($scolarite_id);
+
+    $nomTranches = $request->input('nom_tranche', []);
+    $dateLimites = $request->input('date_limite', []);
+    $montants = $request->input('montant_tranche', []);
+
+    if (!is_array($nomTranches)) {
+        $nomTranches = [$nomTranches];
+    }
+
+    if (!is_array($dateLimites)) {
+        $dateLimites = [$dateLimites];
+    }
+
+    if (!is_array($montants)) {
+        $montants = [$montants];
+    }
+
+    foreach ($nomTranches as $i => $nom) {
+        \App\Models\tranche_scolarite::create([
+            'nom_tranche' => $nom,
+            'date_limite' => $dateLimites[$i] ?? null,
+            'montant_tranche' => $montants[$i] ?? 0,
+            'id_scolarite' => $scolarite->id,
+            'id_cycle' => $scolarite->id_cycle,
+            'id_filiere' => $scolarite->id_filiere,
+            'id_niveau' => $scolarite->id_niveau,
+            'id_specialite' => $scolarite->id_specialite,
+            'id_user' => auth()->id(),
+        ]);
+    }
+
+    return redirect()->route('tranche_scolarite.index', $scolarite_id)
+        ->with('success', '✅ Tranches enregistrées avec succès.');
+}
+    public function storelocal(Request $request, $scolarite_id)
     {
         $scolarite = \App\Models\scolarite::with(['cycles','filiere','niveaux','specialites'])
             ->findOrFail($scolarite_id);

@@ -89,6 +89,7 @@
                                        )"
                                class="btn btn-xs btn-warning">✏️</a>
                             <a href="{{ route('factures_by_etudiant', $e->id) }}" class="btn btn-xs btn-primary">💳 Factures</a>
+                            <a href="{{ route('factures_rattrapage.index', ['id_etudiant' => $e->id]) }}" class="btn btn-xs btn-info">Rattrapages</a>
 
                             <form action="{{ route('delete_etudiant', $e->id) }}" method="POST" style="display:inline;">
                                 @csrf

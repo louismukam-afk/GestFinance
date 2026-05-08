@@ -43,7 +43,7 @@ public function decaissement()
     }
     public function budget()
     {
-        return $this->belongsTo(budget::class, 'id_budget');
+        return $this->belongsTo(Budget::class, 'id_budget');
     }
 
     public function ligne_budgetaire_sortie()

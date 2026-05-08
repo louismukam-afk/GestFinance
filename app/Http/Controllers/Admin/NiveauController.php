@@ -17,7 +17,7 @@ class NiveauController extends Controller
 
         $title = "Gestion des niveaux";
 
-        return view('Admin.niveaux.index', compact('niveaux', 'cycles', 'title'));
+        return view('Admin.Niveaux.index', compact('niveaux', 'cycles', 'title'));
     }
 
     public function store(Request $request)

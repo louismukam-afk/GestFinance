@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\annee_academique;
 use App\Models\cycle;
 use App\Models\filiere;
 use App\Models\niveau;
@@ -15,7 +16,8 @@ class ScolariteController extends Controller
 {
     public function index()
     {
-        $scolarites = scolarite::with(['cycles','filiere','niveaux','specialites'])->latest()->get();
+        $scolarites = scolarite::with(['annee_academique','cycles','filiere','niveaux','specialites'])->latest()->get();
+        $annees = annee_academique::orderBy('nom', 'desc')->get();
         $cycles = cycle::all();
         $filieres = filiere::all();
         $niveaux = niveau::all();
@@ -23,12 +25,13 @@ class ScolariteController extends Controller
 
         $title = "Gestion des scolarités";
 
-        return view('Admin.scolarites.index', compact('scolarites','cycles','filieres','niveaux','specialites','title'));
+        return view('Admin.Scolarites.index', compact('scolarites','annees','cycles','filieres','niveaux','specialites','title'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
+            'id_annee_academique' => 'required|exists:annee_academiques,id',
             'id_cycle' => 'required|exists:cycles,id',
             'id_filiere' => 'required|exists:filieres,id',
             'id_niveau' => 'required|exists:niveaux,id',
@@ -39,6 +42,7 @@ class ScolariteController extends Controller
         ]);
 
         scolarite::create([
+            'id_annee_academique' => $request->id_annee_academique,
             'id_cycle' => $request->id_cycle,
             'id_filiere' => $request->id_filiere,
             'id_niveau' => $request->id_niveau,
@@ -56,6 +60,7 @@ class ScolariteController extends Controller
     {
         $request->validate([
             'id' => 'required|exists:scolarites,id',
+            'id_annee_academique' => 'required|exists:annee_academiques,id',
             'id_cycle' => 'required|exists:cycles,id',
             'id_filiere' => 'required|exists:filieres,id',
             'id_niveau' => 'required|exists:niveaux,id',
@@ -68,6 +73,7 @@ class ScolariteController extends Controller
         $scolarite = scolarite::findOrFail($request->id);
 
         $scolarite->update([
+            'id_annee_academique' => $request->id_annee_academique,
             'id_cycle' => $request->id_cycle,
             'id_filiere' => $request->id_filiere,
             'id_niveau' => $request->id_niveau,

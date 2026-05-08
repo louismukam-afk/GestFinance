@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\donnee_budgetaire_sortie;
 use App\Models\donnee_ligne_budgetaire_entree;
@@ -15,6 +15,8 @@ use App\Models\bon_commandeok;
 use App\Models\caisse;
 use App\Models\decaissement;
 use App\Models\donnee_ligne_budgetaire_sortie;
+use App\Models\entree_speciale;
+use App\Models\entree_speciale_echeance;
 use App\Models\Transfert_caisse;
 use App\Models\User;
 use App\Models\personnel;
@@ -93,15 +95,18 @@ class EtatSortieController extends Controller
 
     $decaissements = $queryDecaissement->get();
 
+    $remboursementsDettes = entree_speciale_echeance::with('entree_speciale.budget')
+        ->where('statut', 'payee')
+        ->when($request->date_debut, fn($q) => $q->whereDate('date_paiement', '>=', $request->date_debut))
+        ->whereDate('date_paiement', '<=', $dateFin)
+        ->when($idBudget, fn($q) => $q->whereHas('entree_speciale', fn($d) => $d->where('id_budget', $idBudget)))
+        ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique_paiement', $request->id_annee_academique))
+        ->get();
+
     // ==========================
     // 🔥 SOLDE GLOBAL CAISSE
     // ==========================
-    $entree = Transfert_caisse::whereDate('date_transfert','<=',$dateFin)
-        ->sum('montant_transfert');
-
-        $sortie = $decaissements->sum('montant');
-
-    $soldeGlobal = $entree - $sortie;
+    $soldeGlobal = $this->buildDisponibiliteCaissesData($request)['totalApresTransfert'];
 
     // ==========================
     // 🔥 DONNÉES BUDGÉTAIRES
@@ -147,6 +152,58 @@ class EtatSortieController extends Controller
         ];
     });
 
+    $entreesSpecialesUtilisees = entree_speciale::with(['budget', 'decaissements', 'echeances'])
+        ->whereIn('type_entree', ['dette', 'don', 'apport'])
+        ->where('statut', '!=', 'annule')
+        ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+        ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
+        ->get()
+        ->map(function ($entreeSpeciale) use ($dateDebut, $dateFin, $soldeGlobal) {
+            $depenses = $entreeSpeciale->decaissements
+                ->when($dateDebut, fn($c) => $c->where('date_depense', '>=', $dateDebut))
+                ->where('date_depense', '<=', $dateFin);
+
+            $depenseTotal = $depenses->sum('montant');
+            $type = ucfirst($entreeSpeciale->type_entree);
+
+            return [
+                'entite' => $entreeSpeciale->nom_tiers ?: 'Entrees speciales',
+                'budget' => optional($entreeSpeciale->budget)->libelle_ligne_budget ?? '',
+                'ligne' => 'Utilisation entree speciale - ' . $type,
+                'donnee' => $entreeSpeciale->libelle,
+                'prevu' => $entreeSpeciale->montant,
+                'depense' => $depenseTotal,
+                'reste' => $entreeSpeciale->montant_net_encaisse - $depenseTotal,
+                'solde' => $soldeGlobal,
+            ];
+        });
+
+    $remboursementsRows = $remboursementsDettes
+        ->groupBy('id_entree_speciale')
+        ->map(function ($echeances) use ($soldeGlobal, $dateFin) {
+            $dette = $echeances->first()->entree_speciale;
+            $montantDette = (float) optional($dette)->montant;
+            $montantRembourse = (float) $echeances->sum('montant_paye');
+            $totalRembourseAuDateFin = entree_speciale_echeance::where('id_entree_speciale', optional($dette)->id)
+                ->where('statut', 'payee')
+                ->whereDate('date_paiement', '<=', $dateFin)
+                ->sum('montant_paye');
+
+            return [
+                'entite' => optional($dette)->nom_tiers ?: 'Dettes remboursees',
+                'budget' => optional(optional($dette)->budget)->libelle_ligne_budget ?? '',
+                'ligne' => 'Remboursement dette',
+                'donnee' => 'Remboursement dette - ' . (optional($dette)->libelle ?? 'Dette'),
+                'prevu' => $montantDette,
+                'depense' => $montantRembourse,
+                'reste' => max($montantDette - (float) $totalRembourseAuDateFin, 0),
+                'solde' => $soldeGlobal,
+            ];
+        })
+        ->values();
+
+    $etat = $etat->concat($entreesSpecialesUtilisees)->concat($remboursementsRows)->values();
+
     // ==========================
     // 🔥 GROUP BY ENTITE
     // ==========================
@@ -157,7 +214,7 @@ class EtatSortieController extends Controller
     // ==========================
     $entites = entite::all();
     $annees = annee_academique::all();
-    $budgets = budget::orderBy('libelle_ligne_budget')->get();
+    $budgets = Budget::orderBy('libelle_ligne_budget')->get();
 
     return view('Admin.Etats.sorties.atterrissage', compact(
         'etat',
@@ -214,6 +271,35 @@ class EtatSortieController extends Controller
                 'annee' => $r->annee_academique->nom ?? '',
                 'utilisateur' => $r->user->name ?? '',
                 'entree' => (float) $r->montant_reglement,
+                'retour' => 0,
+                'sortie' => 0,
+            ]);
+
+        $entreesSpeciales = entree_speciale::with(['caisse', 'budget', 'annee_academique', 'user', 'echeances'])
+            ->where('statut', '!=', 'annule')
+            ->when($dateDebut, fn($q) => $q->whereDate('date_entree', '>=', $dateDebut))
+            ->whereDate('date_entree', '<=', $dateFin)
+            ->when($idCaisse, fn($q) => $q->where('id_caisse', $idCaisse))
+            ->when($idUser, fn($q) => $q->where('id_user', $idUser))
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
+            ->get()
+            ->map(fn($e) => [
+                'caisse' => $e->caisse->nom_caisse ?? 'Non defini',
+                'date' => $e->date_entree,
+                'type' => 'Entree',
+                'operation' => 'Entree speciale - ' . ucfirst($e->type_entree),
+                'numero' => $e->code_entree,
+                'motif' => $e->libelle,
+                'budget' => $e->budget->libelle_ligne_budget ?? '',
+                'ligne' => 'Hors facture',
+                'element' => '',
+                'donnee' => $e->nom_tiers,
+                'entite' => '',
+                'annee' => $e->annee_academique->nom ?? '',
+                'utilisateur' => $e->user->name ?? '',
+                'entree' => (float) $e->montant,
+                'retour' => 0,
                 'sortie' => 0,
             ]);
 
@@ -250,10 +336,45 @@ class EtatSortieController extends Controller
                 'annee' => $d->annee_academiques->nom ?? '',
                 'utilisateur' => $d->user->name ?? '',
                 'entree' => 0,
+                'retour' => 0,
                 'sortie' => (float) $d->montant,
             ]);
 
+        $remboursementsDettes = entree_speciale_echeance::with([
+            'caisse_paiement',
+            'user_paiement',
+            'annee_paiement',
+            'entree_speciale.budget',
+        ])
+            ->where('statut', 'payee')
+            ->when($dateDebut, fn($q) => $q->whereDate('date_paiement', '>=', $dateDebut))
+            ->whereDate('date_paiement', '<=', $dateFin)
+            ->when($idCaisse, fn($q) => $q->where('id_caisse_paiement', $idCaisse))
+            ->when($idUser, fn($q) => $q->where('id_user_paiement', $idUser))
+            ->when($idBudget, fn($q) => $q->whereHas('entree_speciale', fn($e) => $e->where('id_budget', $idBudget)))
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique_paiement', $idAnnee))
+            ->get()
+            ->map(fn($r) => [
+                'caisse' => $r->caisse_paiement->nom_caisse ?? 'Non defini',
+                'date' => $r->date_paiement,
+                'type' => 'Sortie',
+                'operation' => 'Remboursement dette',
+                'numero' => 'REM-DET-' . $r->id,
+                'motif' => optional($r->entree_speciale)->libelle ?? $r->nom_echeance,
+                'budget' => optional(optional($r->entree_speciale)->budget)->libelle_ligne_budget ?? '',
+                'ligne' => 'Dette',
+                'element' => '',
+                'donnee' => $r->nom_echeance,
+                'entite' => '',
+                'annee' => $r->annee_paiement->nom ?? '',
+                'utilisateur' => $r->user_paiement->name ?? '',
+                'entree' => 0,
+                'retour' => 0,
+                'sortie' => (float) $r->montant_paye,
+            ]);
+
         $transfertsEntrants = Transfert_caisse::with(['caisseArrivee', 'caisseDepart', 'user'])
+            ->where('type_transfert', '!=', 2)
             ->when($dateDebut, fn($q) => $q->whereDate('date_transfert', '>=', $dateDebut))
             ->whereDate('date_transfert', '<=', $dateFin)
             ->when($idCaisse, fn($q) => $q->where('id_caisse_arrivee', $idCaisse))
@@ -274,10 +395,12 @@ class EtatSortieController extends Controller
                 'annee' => '',
                 'utilisateur' => $t->user->name ?? '',
                 'entree' => (float) $t->montant_transfert,
+                'retour' => 0,
                 'sortie' => 0,
             ]);
 
         $transfertsSortants = Transfert_caisse::with(['caisseArrivee', 'caisseDepart', 'user'])
+            ->where('type_transfert', '!=', 2)
             ->when($dateDebut, fn($q) => $q->whereDate('date_transfert', '>=', $dateDebut))
             ->whereDate('date_transfert', '<=', $dateFin)
             ->when($idCaisse, fn($q) => $q->where('id_caisse_depart', $idCaisse))
@@ -298,6 +421,7 @@ class EtatSortieController extends Controller
                 'annee' => '',
                 'utilisateur' => $t->user->name ?? '',
                 'entree' => 0,
+                'retour' => 0,
                 'sortie' => (float) $t->montant_transfert,
             ]);
 
@@ -332,12 +456,15 @@ class EtatSortieController extends Controller
                 'entite' => optional(optional($r->bon)->entites)->nom_entite ?? '',
                 'annee' => $r->annee_academique->nom ?? '',
                 'utilisateur' => $r->user->name ?? '',
-                'entree' => (float) $r->montant,
+                'entree' => 0,
+                'retour' => (float) $r->montant,
                 'sortie' => 0,
             ]);
 
         $operations = $reglements
+            ->concat($entreesSpeciales)
             ->concat($decaissements)
+            ->concat($remboursementsDettes)
             ->concat($transfertsEntrants)
             ->concat($transfertsSortants)
             ->concat($retoursCaisse)
@@ -348,11 +475,12 @@ class EtatSortieController extends Controller
             'operations' => $operations,
             'operationsGrouped' => $operations->groupBy('caisse'),
             'totalEntrees' => $operations->sum('entree'),
+            'totalRetours' => $operations->sum('retour'),
             'totalSorties' => $operations->sum('sortie'),
             'solde' => $operations->sum('entree') - $operations->sum('sortie'),
             'caisses' => caisse::orderBy('nom_caisse')->get(),
             'users' => User::orderBy('name')->get(),
-            'budgets' => budget::orderBy('libelle_ligne_budget')->get(),
+            'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
             'entites' => entite::orderBy('nom_entite')->get(),
             'annees' => annee_academique::orderBy('nom', 'desc')->get(),
             'dateDebut' => $dateDebut,
@@ -421,26 +549,41 @@ class EtatSortieController extends Controller
                 ->whereDate('date_retour', '<=', $dateFin)
                 ->sum('montant');
 
+            $entreesSpeciales = entree_speciale::with('echeances')
+                ->where('id_caisse', $caisse->id)
+                ->where('statut', '!=', 'annule')
+                ->whereDate('date_entree', '<=', $dateFin)
+                ->sum('montant');
+
             $sortiesDecaissements = decaissement::where('id_caisse', $caisse->id)
                 ->whereDate('date_depense', '<=', $dateFin)
                 ->sum('montant');
 
+            $remboursementsDettes = entree_speciale_echeance::where('id_caisse_paiement', $caisse->id)
+                ->where('statut', 'payee')
+                ->whereDate('date_paiement', '<=', $dateFin)
+                ->sum('montant_paye');
+
             $transfertsEntrants = Transfert_caisse::where('id_caisse_arrivee', $caisse->id)
+                ->where('type_transfert', '!=', 2)
                 ->whereDate('date_transfert', '<=', $dateFin)
                 ->sum('montant_transfert');
 
             $transfertsSortants = Transfert_caisse::where('id_caisse_depart', $caisse->id)
+                ->where('type_transfert', '!=', 2)
                 ->whereDate('date_transfert', '<=', $dateFin)
                 ->sum('montant_transfert');
 
-            $soldeAvantTransfert = $entreesReglements - $sortiesDecaissements;
+            $soldeAvantTransfert = $entreesReglements + $entreesRetours + $entreesSpeciales - $sortiesDecaissements - $remboursementsDettes;
             $soldeApresTransfert = $soldeAvantTransfert + $transfertsEntrants - $transfertsSortants;
 
             return [
                 'caisse' => $caisse,
                 'entrees_reglements' => $entreesReglements,
                 'entrees_retours' => $entreesRetours,
+                'entrees_speciales' => $entreesSpeciales,
                 'sorties_decaissements' => $sortiesDecaissements,
+                'remboursements_dettes' => $remboursementsDettes,
                 'transferts_entrants' => $transfertsEntrants,
                 'transferts_sortants' => $transfertsSortants,
                 'solde_avant_transfert' => $soldeAvantTransfert,
@@ -591,7 +734,7 @@ class EtatSortieController extends Controller
 
     $deficit = $disponibilite + $resteRecouvrer - $resteSortie;
 
-    $budgets = budget::all();
+    $budgets = Budget::all();
     $annees  = annee_academique::all();
 
     return view('Admin.Etats.sorties.global', compact(
@@ -611,10 +754,7 @@ class EtatSortieController extends Controller
         // =========================
         // 💰 DISPONIBILITÉ CAISSE
         // =========================
-        $entreeCaisse = Transfert_caisse::whereDate('date_transfert','<=',$dateFin)->sum('montant_transfert');
-        $sortieCaisse = decaissement::whereDate('date_depense','<=',$dateFin)->sum('montant');
-
-        $disponibilite = $entreeCaisse - $sortieCaisse;
+        $disponibilite = $this->buildDisponibiliteCaissesData($request)['totalApresTransfert'];
 
         // =========================
         // 🔵 ENTRÉES
@@ -624,6 +764,7 @@ class EtatSortieController extends Controller
             'ligne_budgetaire_entrees',
             'element_ligne_budgetaire_entrees',
             'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions',
             'facture_etudiants.entite'
         ])->get();
 
@@ -644,6 +785,7 @@ class EtatSortieController extends Controller
 
 
         $facture  = $factures->sum('montant_total_facture');
+        $reduction = $factures->sum(fn($facture) => $facture->montant_reduction);
 
         $encaisse = $factures->flatMap->reglement_etudiants
             ->sum('montant_reglement');
@@ -659,11 +801,37 @@ class EtatSortieController extends Controller
 
             'prevu'    => $d->montant,
             'facture'  => $facture,
+            'reduction' => $reduction,
             'encaisse' => $encaisse,
-            'reste'    => $facture - $encaisse
+            'reste'    => $facture - $reduction - $encaisse
         ];
 
     });
+
+        $entreesSpeciales = entree_speciale::with(['budget', 'echeances'])
+            ->where('statut', '!=', 'annule')
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
+            ->when($idLigne, fn($q) => $q->where('id_budget', $idLigne))
+            ->get()
+            ->map(function ($e) {
+                $encaisse = $e->type_entree === 'dette' ? $e->montant : $e->montant_net_encaisse;
+                $reste = $e->type_entree === 'dette' ? 0 : $e->montant - $e->montant_net_encaisse;
+
+                return [
+                    'entite' => $e->nom_tiers ?: 'Entrees speciales',
+                    'budget' => optional($e->budget)->libelle_ligne_budget,
+                    'ligne' => 'Entree speciale - ' . ucfirst($e->type_entree),
+                    'element' => '',
+                    'donnee' => $e->libelle,
+                    'prevu' => $e->montant,
+                    'facture' => 0,
+                    'reduction' => 0,
+                    'encaisse' => $encaisse,
+                    'reste' => $reste,
+                ];
+            });
+
+        $entrees = $entrees->concat($entreesSpeciales)->values();
 
         // =========================
         // 🔴 SORTIES
@@ -711,6 +879,62 @@ class EtatSortieController extends Controller
             'reste'   => $d->montant - $depense
         ];
     });
+
+        $entreesSpecialesSorties = entree_speciale::with(['budget', 'decaissements', 'echeances'])
+            ->whereIn('type_entree', ['dette', 'don', 'apport'])
+            ->where('statut', '!=', 'annule')
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
+            ->when($idLigne, fn($q) => $q->where('id_budget', $idLigne))
+            ->whereBetween('date_entree', [$dateDebut, $dateFin])
+            ->get()
+            ->map(function ($entreeSpeciale) use ($dateDebut, $dateFin) {
+                $depenses = $entreeSpeciale->decaissements
+                    ->whereBetween('date_depense', [$dateDebut, $dateFin]);
+                $depenseTotal = $depenses->sum('montant');
+                $type = ucfirst($entreeSpeciale->type_entree);
+
+                return [
+                    'entite' => $entreeSpeciale->nom_tiers ?: 'Entrees speciales',
+                    'budget' => optional($entreeSpeciale->budget)->libelle_ligne_budget,
+                    'ligne' => 'Utilisation entree speciale - ' . $type,
+                    'element' => '',
+                    'donnee' => $entreeSpeciale->libelle,
+                    'prevu' => $entreeSpeciale->montant,
+                    'depense' => $depenseTotal,
+                    'reste' => $entreeSpeciale->montant_net_encaisse - $depenseTotal,
+                ];
+            });
+
+        $remboursementsSorties = entree_speciale_echeance::with('entree_speciale.budget')
+            ->where('statut', 'payee')
+            ->whereBetween('date_paiement', [$dateDebut, $dateFin])
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique_paiement', $idAnnee))
+            ->when($idLigne, fn($q) => $q->whereHas('entree_speciale', fn($d) => $d->where('id_budget', $idLigne)))
+            ->get()
+            ->groupBy('id_entree_speciale')
+            ->map(function ($echeances) use ($dateFin) {
+                $dette = $echeances->first()->entree_speciale;
+                $montantDette = (float) optional($dette)->montant;
+                $montantRembourse = (float) $echeances->sum('montant_paye');
+                $totalRembourseAuDateFin = entree_speciale_echeance::where('id_entree_speciale', optional($dette)->id)
+                    ->where('statut', 'payee')
+                    ->whereDate('date_paiement', '<=', $dateFin)
+                    ->sum('montant_paye');
+
+                return [
+                    'entite' => optional($dette)->nom_tiers ?: 'Dettes remboursees',
+                    'budget' => optional(optional($dette)->budget)->libelle_ligne_budget,
+                    'ligne' => 'Remboursement dette',
+                    'element' => '',
+                    'donnee' => 'Remboursement dette - ' . (optional($dette)->libelle ?? 'Dette'),
+                    'prevu' => $montantDette,
+                    'depense' => $montantRembourse,
+                    'reste' => max($montantDette - (float) $totalRembourseAuDateFin, 0),
+                ];
+            })
+            ->values();
+
+        $sorties = $sorties->concat($entreesSpecialesSorties)->concat($remboursementsSorties)->values();
         //dd($entrees,$sorties);
 
         // =========================
@@ -728,7 +952,7 @@ class EtatSortieController extends Controller
         $deficit = $disponibilite + $resteEntrees - $resteSorties;
         $annees  = annee_academique::orderBy('nom','desc')->get();
         $entites = entite::orderBy('nom_entite')->get();
-        $budgets = budget::orderBy('libelle_ligne_budget')->get();
+        $budgets = Budget::orderBy('libelle_ligne_budget')->get();
 
         return view('Admin.Etats.sorties.global', compact(
             'entreesGrouped',
@@ -1016,7 +1240,7 @@ class EtatSortieController extends Controller
     $resteDecaisser = collect($sorties)->flatten(2)->sum('reste');
 
     $deficit = $disponibilite + $resteRecouvrer - $resteDecaisser;
-$budgets = \App\Models\budget::all();
+$budgets = \App\Models\Budget::all();
 $annees  = \App\Models\annee_academique::all();
     return view('Admin.Etats.sorties.global', compact(
         'entrees',
@@ -1300,7 +1524,7 @@ $entreesGrouped = $donneesEntrees->groupBy(function ($d) {
     });
    });
 
-    $budgets = budget::all();
+    $budgets = Budget::all();
     $annees  = annee_academique::all();
 
     return view('Admin.Etats.sorties.global', [
@@ -1412,7 +1636,7 @@ $entreesGrouped = $donneesEntrees->groupBy(function ($d) {
     // =========================
     // 📦 DATA
     // =========================
-    $budgets = budget::all();
+    $budgets = Budget::all();
     $annees  = annee_academique::all();
 return view('Admin.Etats.sorties.global', [
     'entreesGrouped' => $entrees,
@@ -1620,7 +1844,7 @@ $entrees = $factures->groupBy(function ($f) {
     // =========================
     // 📦 DONNÉES POUR LA VUE
     // =========================
-    $budgets = budget::all();
+    $budgets = Budget::all();
     $annees  = annee_academique::all();
 
     return view('Admin.Etats.sorties.global', compact(

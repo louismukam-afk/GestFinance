@@ -9,6 +9,10 @@
             ➕ Nouvelle Facture
         </button>
 
+        <a href="{{ route('reductions_factures.index') }}" class="btn btn-danger">
+            Reductions factures
+        </a>
+
         <div class="table-responsive mt-3">
             <table id="facturesTable" class="table table-bordered table-striped">
                 <thead>
@@ -32,13 +36,33 @@
                 @foreach($factures as $i => $f)
                     <tr>
                         <td>{{ $i+1 }}</td>
-                        <td>{{ $f->type_facture === 1 ? 'Scolarité' : 'Frais' }}</td>
+                        <td>
+                            @if((int)$f->type_facture === 2)
+                                Rattrapage
+                            @elseif((int)$f->type_facture === 1)
+                                Scolarité
+                            @else
+                                Frais
+                            @endif
+                        </td>
                         <td>{{ $f->entite->nom_entite ?? '-' }}</td>
                         <td>{{ $f->cycles->nom_cycle ?? '-' }} / {{ $f->filieres->nom_filiere ?? '-' }}</td>
                         <td>{{ $f->niveaux->nom_niveau ?? '-' }} / {{ $f->specialites->nom_specialite ?? '-' }}</td>
                         <td>
-                            @if($f->type_facture === 1)
-                                <div><strong>Scolarité:</strong> {{ number_format($f->scolarites->montant_total ?? 0,0,',',' ') }}</div>
+                            @if((int)$f->type_facture === 2)
+                                <div><strong>Matieres de rattrapage:</strong></div>
+                                <ul class="mb-0">
+                                    @foreach($f->lignes_rattrapage as $ligne)
+                                        <li>
+                                            {{ $ligne->matiere->nom_matiere ?? '-' }} :
+                                            {{ number_format($ligne->prix_unitaire,0,',',' ') }}
+                                            x {{ $ligne->quantite }}
+                                            = {{ number_format($ligne->montant,0,',',' ') }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @elseif((int)$f->type_facture === 1)
+                                <div><strong>Scolarité:</strong> {{ number_format($f->scolarites->montant_total ?? 0,0,',',' ') }} <br> Inscription:{{ number_format($f->scolarites->inscription ?? 0,0,',',' ') }}</div>
                                 @php
                                     $trs = \App\Models\tranche_scolarite::where('id_scolarite', $f->id_scolarite)->orderBy('date_limite')->get();
                                 @endphp
@@ -98,6 +122,7 @@
                          </td>--}}
 
                         <td>
+                            @if((int)$f->type_facture !== 2)
                             <a href="#edit_facture"
                                class="btn btn-xs btn-warning"
                                data-toggle="modal" data-backdrop="false"
@@ -119,6 +144,7 @@
                                data-donnee="{{ $f->id_donnee_ligne_budgetaire_entree }}"
                                data-montant="{{ $f->montant_total_facture }}"
                                onclick="return openEditFacture(this);">✏️</a>
+                            @endif
                             {{-- Dans la colonne Actions de ta table des factures --}}
                            {{-- <a class="btn btn-xs btn-success"
                                href="{{ route('reglement_from_facture', $f->id) }}">
@@ -126,6 +152,14 @@
                             </a>--}}
                             <a class="btn btn-xs btn-success" href="{{ route('reglement_by_facture', $f->id) }}">💵 Régler</a>
 
+                            @if((int)$f->type_facture !== 2)
+                                <a class="btn btn-xs btn-info" href="{{ route('factures_rattrapage.create_from_facture', $f->id) }}">Rattrapage</a>
+                            @else
+                                <a class="btn btn-xs btn-info" href="{{ route('factures_rattrapage.show', $f->id) }}">Detail rattrapage</a>
+                            @endif
+
+
+                            <a class="btn btn-xs btn-danger" href="{{ route('reductions_factures.index', ['id_facture_etudiant' => $f->id]) }}">Reduction</a>
 
                             <form action="{{ route('delete_facture', $f->id) }}" method="POST" style="display:inline;">
                                 @csrf @method('DELETE')
@@ -178,7 +212,7 @@
 
                             <div class="col-md-7">
                                 <label>Année Académique</label>
-                                <select name="id_annee_academique" class="form-control" required>
+                                <select name="id_annee_academique" id="add-annee" class="form-control" required>
                                     @foreach($annees as $a)
                                         <option value="{{ $a->id }}">{{ $a->nom }}</option>
                                     @endforeach
@@ -474,14 +508,14 @@
             }
 
             /* ===== AJOUT : pédagogie ===== */
-            function fetchFilters(cycle, filiere) {
+            function fetchFilters(cycle, filiere, annee) {
                 if (!cycle || !filiere) {
                     fillSelect($('#add-niveau'), [], 'nom_niveau', 'id');
                     fillSelect($('#add-specialite'), [], 'nom_specialite', 'id');
                     fillSelect($('#add-scolarite'), [], 'label', 'id', true);
                     return;
                 }
-                $.get("{{ route('ajax_scolarite_filters') }}", { id_cycle: cycle, id_filiere: filiere })
+                $.get("{{ route('ajax_scolarite_filters') }}", { id_cycle: cycle, id_filiere: filiere, id_annee_academique: annee })
                     .done(function(res){
                         fillSelect($('#add-niveau'), (res||{}).niveaux, 'nom_niveau', 'id');
                         fillSelect($('#add-specialite'), (res||{}).specialites, 'nom_specialite', 'id');
@@ -489,8 +523,8 @@
                     })
                     .fail(function(){ alert("Chargement des filtres impossible."); });
             }
-            $('#add-cycle, #add-filiere').on('change', function(){
-                fetchFilters($('#add-cycle').val(), $('#add-filiere').val());
+            $('#add-annee, #add-cycle, #add-filiere').on('change', function(){
+                fetchFilters($('#add-cycle').val(), $('#add-filiere').val(), $('#add-annee').val());
             });
 
             /* ===== AJOUT : type facture ===== */
@@ -749,9 +783,9 @@
             }
 
             // Pédago en édition
-            function presetPedagoForEdit(cycle, filiere, selectedNiv, selectedSpe, selectedSco) {
+            function presetPedagoForEdit(cycle, filiere, annee, selectedNiv, selectedSpe, selectedSco) {
                 if (cycle && filiere) {
-                    $.get("{{ route('ajax_scolarite_filters') }}", { id_cycle: cycle, id_filiere: filiere })
+                    $.get("{{ route('ajax_scolarite_filters') }}", { id_cycle: cycle, id_filiere: filiere, id_annee_academique: annee })
                         .done(function(res){
                             fillSelect($('#edit-niveau'), (res||{}).niveaux, 'nom_niveau', 'id');
                             if (selectedNiv) $('#edit-niveau').val(selectedNiv);
@@ -766,6 +800,10 @@
             }
 
             // Ouvre modal édition
+            $('#edit-annee, #edit-cycle, #edit-filiere').on('change', function(){
+                presetPedagoForEdit($('#edit-cycle').val(), $('#edit-filiere').val(), $('#edit-annee').val(), null, null, null);
+            });
+
             window.openEditFacture = function(el){
                 const $b = $(el);
                 $('#edit-id').val($b.data('id'));
@@ -805,7 +843,7 @@
                 );
 
                 // Pédagogie présélection
-                presetPedagoForEdit(cycle, filiere, selectedNiv, selectedSpe, selectedSco);
+                presetPedagoForEdit(cycle, filiere, $('#edit-annee').val(), selectedNiv, selectedSpe, selectedSco);
 
                 $('#edit_facture').modal('show');
                 return false;

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\cycle;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\donnee_budgetaire_sortie;
@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use PDF; // barryvdh/laravel-dompdf
 class FactureEtudiantController extends Controller
 {
@@ -68,6 +69,25 @@ class FactureEtudiantController extends Controller
         return $first?->id ?? 0;
     }
 
+    protected function refreshMontantsPrevisionnelsEntree(?int $donneeBudgetaireId, ?int $donneeLigneId = null): void
+    {
+        if ($donneeLigneId) {
+            $montantLigne = facture_etudiant::where('id_donnee_ligne_budgetaire_entree', $donneeLigneId)
+                ->sum('montant_total_facture');
+
+            donnee_ligne_budgetaire_entree::where('id', $donneeLigneId)
+                ->update(['montant' => $montantLigne]);
+        }
+
+        if ($donneeBudgetaireId) {
+            $montantBudgetaire = facture_etudiant::where('id_donnee_budgetaire_entree', $donneeBudgetaireId)
+                ->sum('montant_total_facture');
+
+            donnee_budgetaire_entree::where('id', $donneeBudgetaireId)
+                ->update(['montant' => $montantBudgetaire]);
+        }
+    }
+
     /* ================== PAGES ================== */
 
     /** Liste des factures d’un étudiant + form */
@@ -79,7 +99,8 @@ class FactureEtudiantController extends Controller
             'cycles','filieres','niveaux','specialites',
             'scolarites','tranche_scolarites','frais',
             'budget','ligne_budgetaire_entree','element_ligne_budgetaire_entree',
-            'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree','Annee_academique','entite'
+            'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree','Annee_academique','entite',
+            'lignes_rattrapage.matiere'
         ])
             ->where('id_etudiant', $etudiantId)
             ->orderBy('date_facture', 'desc')
@@ -91,7 +112,7 @@ class FactureEtudiantController extends Controller
         $fraisList= frais::orderBy('nom_frais')->get();
         $annees   = annee_academique::orderBy('created_at', 'desc')->get();
         $entites   = entite::orderBy('created_at', 'desc')->get();
-        $budgets  = budget::orderBy('created_at', 'desc')->get();
+        $budgets  = Budget::orderBy('created_at', 'desc')->get();
 
         return view('Admin.FactureEtudiant.index', compact(
             'title','etudiant','factures','cycles','filieres','entites','fraisList','annees','budgets'
@@ -106,6 +127,7 @@ class FactureEtudiantController extends Controller
         $request->validate([
             'id_cycle'   => 'required|integer|min:1',
             'id_filiere' => 'required|integer|min:1',
+            'id_annee_academique' => 'nullable|integer|exists:annee_academiques,id',
         ]);
 
         $id_cycle   = (int) $request->id_cycle;
@@ -114,6 +136,7 @@ class FactureEtudiantController extends Controller
         $sco = scolarite::with(['niveaux','specialites'])
             ->where('id_cycle', $id_cycle)
             ->where('id_filiere', $id_filiere)
+            ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
             ->get();
 
         if ($sco->isEmpty()) {
@@ -222,7 +245,12 @@ class FactureEtudiantController extends Controller
             'id_specialite'        => 'required|integer',
 //            'id_scolarite'         => 'required|integer|exists:scolarites,id',
 // CONDITIONNEL
-            'id_scolarite' => 'required_if:type_facture,1',
+            'id_scolarite' => [
+                'required_if:type_facture,1',
+                'nullable',
+                'integer',
+                Rule::exists('scolarites', 'id')->where(fn($q) => $q->where('id_annee_academique', $r->id_annee_academique)),
+            ],
             'id_frais'     => 'required_if:type_facture,0',
             // frais obligatoire si type=0
             'id_frais'             => 'required_if:type_facture,0|nullable|integer|exists:frais,id',
@@ -259,10 +287,13 @@ class FactureEtudiantController extends Controller
 
             // Montant + IDs frais/sco
             $idFrais = 0; $montant = 0.0;
-
+              
             if ($type === 1) { // scolarité
+
                 $sc = scolarite::findOrFail($r->id_scolarite);
-                $montant = (float) $sc->montant_total;
+                 $somme_facture=$sc->montant_total+$sc->inscription;
+              // dd($somme_facture);
+                $montant = (float) $somme_facture;
                 $idFrais = 0;
             } else { // frais
                 $fr = frais::findOrFail((int) $r->id_frais);
@@ -297,6 +328,10 @@ class FactureEtudiantController extends Controller
                 'montant_total_facture' => $montant,
                 'id_user'       => Auth::id() ?? 0,
             ]);
+            $this->refreshMontantsPrevisionnelsEntree(
+            $facture->id_donnee_budgetaire_entree,
+             $facture->id_donnee_ligne_budgetaire_entree
+);
 
             // PDF (2 exemplaires sur A4 si dompdf dispo)
             if (class_exists(\PDF::class)) {
@@ -322,7 +357,11 @@ class FactureEtudiantController extends Controller
             'id_filiere'           => 'required|integer',
             'id_niveau'            => 'nullable|integer',
             'id_specialite'        => 'required|integer',
-            'id_scolarite'         => 'required|integer|exists:scolarites,id',
+            'id_scolarite' => [
+                'required',
+                'integer',
+                Rule::exists('scolarites', 'id')->where(fn($q) => $q->where('id_annee_academique', $r->id_annee_academique)),
+            ],
 
             'id_frais'             => 'required_if:type_facture,0|nullable|integer|exists:frais,id',
 
@@ -350,7 +389,8 @@ class FactureEtudiantController extends Controller
 
             // Tranche auto (ou 0)
             $trancheId = $this->pickTrancheIdFromScolarite((int)$r->id_scolarite);
-
+               $oldDonneeBudgetaireId = $f->id_donnee_budgetaire_entree;
+                $oldDonneeLigneId = $f->id_donnee_ligne_budgetaire_entree;
             $f->update([
                 'id_cycle'      => (int)$r->id_cycle,
                 'id_filiere'    => (int)$r->id_filiere,
@@ -372,7 +412,15 @@ class FactureEtudiantController extends Controller
                 'id_donnee_budgetaire_entree'        => (int)$r->id_donnee_budgetaire_entree,
                 'id_donnee_ligne_budgetaire_entree'  => (int)$r->id_donnee_ligne_budgetaire_entree,
             ]);
+$this->refreshMontantsPrevisionnelsEntree(
+    $oldDonneeBudgetaireId,
+    $oldDonneeLigneId
+);
 
+$this->refreshMontantsPrevisionnelsEntree(
+    $f->id_donnee_budgetaire_entree,
+    $f->id_donnee_ligne_budgetaire_entree
+);
             if (class_exists(\PDF::class)) {
                 $this->generateInvoicePdf($f->id);
             }
@@ -380,8 +428,25 @@ class FactureEtudiantController extends Controller
             return back()->with('success', 'Facture modifiée ✏️ (N° '.$f->numero_facture.')');
         });
     }
+public function destroy($id)
+{
+    return DB::transaction(function () use ($id) {
+        $facture = facture_etudiant::findOrFail($id);
 
-    public function destroy($id)
+        $donneeBudgetaireId = $facture->id_donnee_budgetaire_entree;
+        $donneeLigneId = $facture->id_donnee_ligne_budgetaire_entree;
+
+        $facture->delete();
+
+        $this->refreshMontantsPrevisionnelsEntree(
+            $donneeBudgetaireId,
+            $donneeLigneId
+        );
+
+        return back()->with('success', 'Facture supprimée 🗑️ et montants prévisionnels recalculés ✅');
+    });
+}
+    public function destroy2($id)
     {
         facture_etudiant::findOrFail($id)->delete();
         return back()->with('success', 'Facture supprimée 🗑️');

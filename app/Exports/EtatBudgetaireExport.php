@@ -26,6 +26,7 @@ protected Collection $data;
     {
         return [
             'Budget',
+            'Reduction',
             'Ligne budgétaire',
             'Donnée budgétaire',
             'Montant prévu',
@@ -39,6 +40,7 @@ protected Collection $data;
     {
         return [
             $row['budget'],
+            number_format($row['reduction'] ?? 0, 0, ',', ' '),
             $row['ligne'],
             $row['donnee'],
             number_format($row['prevu'], 0, ',', ' '),

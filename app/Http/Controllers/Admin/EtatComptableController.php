@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\cycle;
 use App\Models\donnee_ligne_budgetaire_entree;
+use App\Models\entree_speciale;
 use App\Models\facture_etudiant;
 use App\Models\filiere;
 use App\Models\niveau;
@@ -83,6 +84,7 @@ class EtatComptableController extends Controller
             'budget',
             'ligne_budgetaire_entrees',
             'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions',
             'facture_etudiants.entite'
         ])->get();
 
@@ -104,6 +106,7 @@ class EtatComptableController extends Controller
 
             // 🔹 Facturé
             $factureTotal = $factures->sum('montant_total_facture');
+            $reductionTotal = $factures->sum(fn($facture) => $facture->montant_reduction);
 
             // 🔹 Encaissé (éventuellement par caisse)
             $encaisseTotal = $factures
@@ -127,10 +130,37 @@ class EtatComptableController extends Controller
 
             'prevu'    => (float) $d->montant,
             'facture'  => (float) $factureTotal,
+            'reduction' => (float) $reductionTotal,
             'encaisse' => (float) $encaisseTotal,
-            'reste'    => (float) ($factureTotal - $encaisseTotal),
+            'reste'    => (float) ($factureTotal - $reductionTotal - $encaisseTotal),
         ];
     });
+
+        $entreesSpeciales = entree_speciale::with(['budget', 'annee_academique', 'echeances'])
+            ->where('statut', '!=', 'annule')
+            ->when($request->filled('annee'), fn($q) => $q->where('id_annee_academique', $request->annee))
+            ->when($request->filled('caisse'), fn($q) => $q->where('id_caisse', $request->caisse))
+            ->when($request->filled('date_debut'), fn($q) => $q->whereDate('date_entree', '>=', $request->date_debut))
+            ->when($request->filled('date_fin'), fn($q) => $q->whereDate('date_entree', '<=', $request->date_fin))
+            ->get()
+            ->map(function ($e) {
+                $encaisse = $e->type_entree === 'dette' ? $e->montant : $e->montant_net_encaisse;
+                $reste = $e->type_entree === 'dette' ? 0 : $e->montant - $e->montant_net_encaisse;
+
+                return [
+                    'entite' => $e->nom_tiers ?: 'Entrees speciales',
+                    'budget' => optional($e->budget)->libelle_ligne_budget ?? '-',
+                    'ligne' => 'Entree speciale - ' . ucfirst($e->type_entree),
+                    'donnee' => $e->libelle,
+                    'prevu' => (float) $e->montant,
+                    'facture' => 0,
+                    'reduction' => 0,
+                    'encaisse' => (float) $encaisse,
+                    'reste' => (float) $reste,
+                ];
+            });
+
+        $etat = $etat->concat($entreesSpeciales)->values();
 
         // =========================
         // 🔹 Groupement final par entité
@@ -161,7 +191,8 @@ class EtatComptableController extends Controller
             'budget',
             'ligne_budgetaire_entrees',
             'facture_etudiants.entite',
-            'facture_etudiants.reglement_etudiants'
+            'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions'
         ])->get();
 
         $etat = $donnees->map(function ($d) use ($request) {
@@ -173,6 +204,7 @@ class EtatComptableController extends Controller
                 fn ($c) => $c->where('id_entite', $request->entite));
 
         $factureTotal = $factures->sum('montant_total_facture');
+        $reductionTotal = $factures->sum(fn($facture) => $facture->montant_reduction);
 
         $encaisseTotal = $factures
             ->flatMap->reglement_etudiants
@@ -188,8 +220,9 @@ class EtatComptableController extends Controller
             'donnee'   => $d->donnee_ligne_budgetaire_entree,
             'prevu'    => (float) $d->montant,
             'facture'  => (float) $factureTotal,
+            'reduction' => (float) $reductionTotal,
             'encaisse' => (float) $encaisseTotal,
-            'reste'    => (float) max($d->montant - $encaisseTotal, 0),
+            'reste'    => (float) max($factureTotal - $reductionTotal - $encaisseTotal, 0),
         ];
     });
 
@@ -270,7 +303,8 @@ class EtatComptableController extends Controller
                 if ($request->filled('caisse')) {
                     $q->where('id_caisse', $request->caisse);
                 }
-            }
+            },
+            'facture_etudiants.reductions'
         ])->get();
 
         // =========================
@@ -279,6 +313,7 @@ class EtatComptableController extends Controller
         $etat = $donnees->map(function ($d) {
 
             $factureTotal = $d->facture_etudiants->sum('montant_total_facture');
+            $reductionTotal = $d->facture_etudiants->sum(fn($facture) => $facture->montant_reduction);
 
             $encaisseTotal = $d->facture_etudiants
                 ->flatMap->reglement_etudiants
@@ -290,8 +325,9 @@ class EtatComptableController extends Controller
                 'donnee'   => $d->donnee_ligne_budgetaire_entree,
                 'prevu'    => (float) $d->montant,
                 'facture'  => (float) $factureTotal,   // 0 si aucune facture
+                'reduction' => (float) $reductionTotal,
                 'encaisse' => (float) $encaisseTotal,  // 0 si aucun règlement
-                'reste'    => (float) max($d->montant - $encaisseTotal, 0),
+                'reste'    => (float) max($factureTotal - $reductionTotal - $encaisseTotal, 0),
             ];
         });
 
@@ -321,7 +357,8 @@ class EtatComptableController extends Controller
         $query = donnee_ligne_budgetaire_entree::with([
             'budget',
             'ligne_budgetaire_entrees',
-            'facture_etudiants.reglement_etudiants'
+            'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions'
         ]);
 
         // 👉 Filtre : Année académique
@@ -365,6 +402,8 @@ class EtatComptableController extends Controller
 
             $factureTotal = $d->facture_etudiants
                 ->sum('montant_total_facture');
+            $reductionTotal = $d->facture_etudiants
+                ->sum(fn($facture) => $facture->montant_reduction);
 
             $encaisseTotal = $d->facture_etudiants
                 ->flatMap->reglement_etudiants
@@ -377,8 +416,9 @@ class EtatComptableController extends Controller
                 'donnee'   => $d->donnee_ligne_budgetaire_entree,
                 'prevu'    => (float) $d->montant,
                 'facture'  => (float) $factureTotal,
+                'reduction' => (float) $reductionTotal,
                 'encaisse' => (float) $encaisseTotal,
-                'reste'    => (float) ($factureTotal - $encaisseTotal),
+                'reste'    => (float) ($factureTotal - $reductionTotal - $encaisseTotal),
             ];
         });
 
@@ -660,7 +700,7 @@ class EtatComptableController extends Controller
         $niveaux   = \App\Models\niveau::orderBy('nom_niveau')->get();
         $filieres  = \App\Models\filiere::orderBy('nom_filiere')->get();
         $cycles    = \App\Models\cycle::orderBy('nom_cycle')->get();
-        $budgets   = \App\Models\budget::orderBy('libelle_ligne_budget')->get();
+        $budgets   = \App\Models\Budget::orderBy('libelle_ligne_budget')->get();
         $lignes    = \App\Models\ligne_budgetaire_entree::orderBy('libelle_ligne_budgetaire_entree')->get();
 
         $result = collect();
@@ -765,11 +805,13 @@ class EtatComptableController extends Controller
         $donnees = donnee_ligne_budgetaire_entree::with([
             'budget',
             'ligne_budgetaire_entrees',
-            'facture_etudiants.reglement_etudiants'
+            'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions'
         ])->get();
 
         $etat = $donnees->map(function ($d) {
             $facture = $d->facture_etudiants->sum('montant_total_facture');
+            $reduction = $d->facture_etudiants->sum(fn($facture) => $facture->montant_reduction);
 
             $encaisse = $d->facture_etudiants
                 ->flatMap->reglement_etudiants
@@ -781,8 +823,9 @@ class EtatComptableController extends Controller
                 'donnee'  => $d->donnee_ligne_budgetaire_entree,
                 'prevu'   => $d->montant,
                 'facture' => $facture,
+                'reduction' => $reduction,
                 'encaisse'=> $encaisse,
-                'reste'   => $facture - $encaisse,
+                'reste'   => $facture - $reduction - $encaisse,
             ];
         });
 
@@ -793,7 +836,8 @@ class EtatComptableController extends Controller
         $query = \App\Models\donnee_ligne_budgetaire_entree::with([
             'budget',
             'ligne_budgetaire_entrees',
-            'facture_etudiants.reglement_etudiants'
+            'facture_etudiants.reglement_etudiants',
+            'facture_etudiants.reductions'
         ]);
 
         if (!empty($filters['annee'])) {
@@ -816,6 +860,7 @@ class EtatComptableController extends Controller
 
         return $query->get()->map(function ($d) {
             $facture = $d->facture_etudiants->sum('montant_total_facture');
+            $reduction = $d->facture_etudiants->sum(fn($facture) => $facture->montant_reduction);
 
             $encaisse = $d->facture_etudiants
                 ->flatMap->reglement_etudiants
@@ -827,10 +872,33 @@ class EtatComptableController extends Controller
                 'donnee'  => $d->donnee_ligne_budgetaire_entree,
                 'prevu'   => (float) $d->montant,
                 'facture' => (float) $facture,
+                'reduction' => (float) $reduction,
                 'encaisse'=> (float) $encaisse,
-                'reste'   => (float) ($facture - $encaisse),
+                'reste'   => (float) ($facture - $reduction - $encaisse),
             ];
-        });
+        })->concat(
+            entree_speciale::with(['budget', 'echeances'])
+                ->where('statut', '!=', 'annule')
+                ->when(!empty($filters['annee']), fn($q) => $q->where('id_annee_academique', $filters['annee']))
+                ->when(!empty($filters['caisse']), fn($q) => $q->where('id_caisse', $filters['caisse']))
+                ->get()
+                ->map(function ($e) {
+                    $encaisse = $e->type_entree === 'dette' ? $e->montant : $e->montant_net_encaisse;
+                    $reste = $e->type_entree === 'dette' ? 0 : $e->montant - $e->montant_net_encaisse;
+
+                    return [
+                        'entite' => $e->nom_tiers ?: 'Entrees speciales',
+                        'budget' => optional($e->budget)->libelle_ligne_budget ?? '-',
+                        'ligne' => 'Entree speciale - ' . ucfirst($e->type_entree),
+                        'donnee' => $e->libelle,
+                        'prevu' => (float) $e->montant,
+                        'facture' => 0,
+                        'reduction' => 0,
+                        'encaisse'=> (float) $encaisse,
+                        'reste' => (float) $reste,
+                    ];
+                })
+        )->values();
     }
 
 

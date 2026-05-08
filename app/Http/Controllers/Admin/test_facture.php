@@ -45,7 +45,7 @@ $cycles   = cycle::orderBy('nom_cycle')->get();
 $filieres = filiere::orderBy('nom_filiere')->get();
 $fraisList= frais::orderBy('nom_frais')->get();
 $annees   = annee_academique::orderBy('created_at', 'desc')->get();
-$budgets  = budget::orderBy('created_at', 'desc')->get();
+$budgets  = Budget::orderBy('created_at', 'desc')->get();
 
 return view('Admin.FactureEtudiant.index', compact(
 'title','etudiant','factures','cycles','filieres','fraisList','annees','budgets'

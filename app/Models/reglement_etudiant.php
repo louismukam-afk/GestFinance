@@ -76,7 +76,7 @@ class reglement_etudiant extends Model
         return $this->belongsTo(Etudiant::class,'id_etudiant');
     }
     public function budget(){
-        return $this->belongsTo(budget::class,'id_budget');
+        return $this->belongsTo(Budget::class,'id_budget');
     }
     public function ligne_budgetaire_entree(){
         return $this->belongsTo(ligne_budgetaire_Entree::class,'id_ligne_budgetaire_entree');

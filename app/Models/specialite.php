@@ -26,6 +26,10 @@ class specialite extends Model
         return $this->hasMany(reglement_etudiant::class,'id_specialite');
 
     }
+    public function reduction_factures()
+    {
+        return $this->hasMany(reduction_facture::class,'id_specialite');
+    }
     public function filiere(){
        return $this->belongsTo(filiere::class,'id_filiere');
     }
@@ -37,5 +41,15 @@ class specialite extends Model
     }
     public function tranche_scolarite(){
         return $this->hasMany(tranche_scolarite::class,'id_specialite');
+    }
+
+    public function programme_specialites()
+    {
+        return $this->hasMany(ProgrammeSpecialite::class, 'id_specialite');
+    }
+
+    public function groupe_matieres()
+    {
+        return $this->hasMany(GroupeMatiere::class, 'id_specialite');
     }
 }

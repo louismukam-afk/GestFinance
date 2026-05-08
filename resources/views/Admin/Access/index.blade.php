@@ -90,34 +90,37 @@
 
     <div class="card">
         <div class="card-header"><strong>Permissions par role</strong></div>
-        <div class="card-body">
-            @forelse($roles as $role)
-                <form method="POST" action="{{ route('access.roles.permissions', $role) }}" class="mb-4 border rounded p-3">
-                    @csrf
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div>
-                            <h4 class="mb-0">{{ $role->name }}</h4>
-                            <small class="text-muted">{{ $role->description }}</small>
-                        </div>
-                        <button class="btn btn-success">Enregistrer les permissions</button>
-                    </div>
-
-                    <input type="text" class="form-control permission-search mb-3" placeholder="Rechercher une route ou une action">
-
-                    <div class="row permission-list">
-                        @foreach($permissions as $permission)
-                            <label class="col-md-4 mb-2 permission-item">
-                                <input type="checkbox" name="permissions[]" value="{{ $permission->id }}" {{ $role->permissions->contains($permission->id) ? 'checked' : '' }}>
-                                <strong>{{ $permission->label }}</strong>
-                                <br>
-                                <small class="text-muted">{{ $permission->method }} / {{ $permission->uri }}</small>
-                            </label>
-                        @endforeach
-                    </div>
-                </form>
-            @empty
-                <div class="alert alert-info">Cree d'abord un role pour attribuer des permissions.</div>
-            @endforelse
+        <div class="card-body table-responsive">
+            <table class="table table-bordered align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Role</th>
+                        <th>Description</th>
+                        <th>Permissions activees</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($roles as $role)
+                        <tr>
+                            <td><strong>{{ $role->name }}</strong></td>
+                            <td>{{ $role->description ?: 'Aucune description' }}</td>
+                            <td>{{ $role->permissions->count() }}</td>
+                            <td>
+                                <a href="{{ route('access.roles.permissions.edit', $role) }}" class="btn btn-sm btn-primary">
+                                    Gerer les permissions
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                Cree d'abord un role pour attribuer des permissions.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -128,17 +131,4 @@
     <li class="breadcrumb-item"><a href="{{ route('home') }}"><strong>Accueil</strong></a></li>
     <li class="breadcrumb-item active"><strong>Roles et permissions</strong></li>
 </ol>
-@endsection
-
-@section('scripts')
-<script>
-document.querySelectorAll('.permission-search').forEach(function (input) {
-    input.addEventListener('input', function () {
-        const term = input.value.toLowerCase();
-        input.closest('form').querySelectorAll('.permission-item').forEach(function (item) {
-            item.style.display = item.innerText.toLowerCase().includes(term) ? '' : 'none';
-        });
-    });
-});
-</script>
 @endsection

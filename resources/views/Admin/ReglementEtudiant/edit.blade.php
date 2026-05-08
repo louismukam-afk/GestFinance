@@ -256,7 +256,8 @@
                     fill($sco,    [], 'label','id');
                     return;
                 }
-                fetch("{{ route('ajax_regl_filters') }}?"+new URLSearchParams({id_cycle, id_filiere}))
+                const id_annee_academique = document.querySelector('input[name="id_annee_academique"]')?.value || '';
+                fetch("{{ route('ajax_regl_filters') }}?"+new URLSearchParams({id_cycle, id_filiere, id_annee_academique}))
                     .then(r=>r.json())
             .then(res=>{
                     fill($niveau, res.niveaux || [], 'nom_niveau','id');

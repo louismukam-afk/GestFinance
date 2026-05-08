@@ -51,7 +51,7 @@
                 </div>
                 <div class="col-md-4 mb-3">
                     <label>Montant</label>
-                    <input type="number" step="0.01" name="montant" class="form-control" value="{{ $donnee->montant }}" required>
+                    <input type="number" step="0.01" name="montant" class="form-control" value="{{ $donnee->montant }}" required readonly>
                 </div>
             </div>
 

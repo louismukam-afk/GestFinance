@@ -50,6 +50,9 @@
 <body>
 <div class="register-card">
     <h3>Créer un compte</h3>
+    <div class="alert alert-info small">
+        Apres inscription, le compte reste desactive. Un administrateur doit l'activer et lui attribuer un role avant toute utilisation du systeme.
+    </div>
     <form method="POST" action="{{ route('register') }}">
         @csrf
 

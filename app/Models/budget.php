@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class budget extends Model
+class Budget extends Model
 {
     use HasFactory;
 
@@ -45,6 +45,14 @@ class budget extends Model
         return $this->hasMany(reglement_etudiant::class,'id_budget');
 
     }
+    public function entree_speciales()
+    {
+        return $this->hasMany(entree_speciale::class,'id_budget');
+    }
+    public function reduction_factures()
+    {
+        return $this->hasMany(reduction_facture::class,'id_budget');
+    }
     public function donnee_ligne_budgetaire_sorties ()
     {
         return $this->hasMany(donnee_ligne_budgetaire_sortie::class,'id_budget');
@@ -57,6 +65,6 @@ class budget extends Model
 
     }
     public function decaissements(){
-        return $this->hasMany(budget::class,'id_budget');
+        return $this->hasMany(decaissement::class,'id_budget');
     }
 }

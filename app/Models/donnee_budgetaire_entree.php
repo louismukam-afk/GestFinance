@@ -30,7 +30,7 @@ class donnee_budgetaire_entree extends Model
         return $this->belongsTo(ligne_budgetaire_Entree::class,'id_ligne_budgetaire_entree');
     }
     public function budgets(){
-        return $this->belongsTo(budget::class,'id_budget');
+        return $this->belongsTo(Budget::class,'id_budget');
     }
     public function user(){
         return $this->belongsTo(User::class,'id_user');

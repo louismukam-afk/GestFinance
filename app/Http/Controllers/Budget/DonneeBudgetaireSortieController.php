@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\donnee_budgetaire_sortie;
 use App\Models\ligne_budgetaire_sortie;
 use Illuminate\Http\Request;
@@ -61,7 +61,7 @@ class DonneeBudgetaireSortieController extends Controller
     // Formulaire création
     public function create()
     {
-        $budgets = budget::all();
+        $budgets = Budget::all();
         $lignes = ligne_budgetaire_sortie::all();
         $this->values['title']='création d\'une donnée';
         return view('Budget.donnee_sorties.create', compact('budgets', 'lignes'),$this->values);

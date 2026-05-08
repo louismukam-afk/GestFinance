@@ -74,6 +74,8 @@
 <p class="summary">
     Total entrees : <strong>{{ number_format($totalEntrees, 0, ',', ' ') }} FCFA</strong>
     |
+    Retours en caisse : <strong>{{ number_format($totalRetours ?? 0, 0, ',', ' ') }} FCFA</strong>
+    |
     Total sorties : <strong>{{ number_format($totalSorties, 0, ',', ' ') }} FCFA</strong>
     |
     Solde : <strong>{{ number_format($solde, 0, ',', ' ') }} FCFA</strong>
@@ -97,14 +99,16 @@
             <th>Annee</th>
             <th>Utilisateur</th>
             <th class="right">Entree</th>
+            <th class="right">Retour</th>
             <th class="right">Sortie</th>
         </tr>
         </thead>
         <tbody>
-        @php $tEntree = 0; $tSortie = 0; @endphp
+        @php $tEntree = 0; $tRetour = 0; $tSortie = 0; @endphp
         @foreach($lignes as $op)
             @php
                 $tEntree += $op['entree'];
+                $tRetour += $op['retour'] ?? 0;
                 $tSortie += $op['sortie'];
             @endphp
             <tr>
@@ -120,17 +124,19 @@
                 <td>{{ $op['annee'] ?: '-' }}</td>
                 <td>{{ $op['utilisateur'] ?: '-' }}</td>
                 <td class="right">{{ number_format($op['entree'], 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($op['retour'] ?? 0, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($op['sortie'], 0, ',', ' ') }}</td>
             </tr>
         @endforeach
         <tr class="total">
             <td colspan="11">TOTAL {{ $caisse }}</td>
             <td class="right">{{ number_format($tEntree, 0, ',', ' ') }}</td>
+            <td class="right">{{ number_format($tRetour, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($tSortie, 0, ',', ' ') }}</td>
         </tr>
         <tr class="total">
             <td colspan="11">SOLDE {{ $caisse }}</td>
-            <td colspan="2" class="right">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
+            <td colspan="3" class="right">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
         </tr>
         </tbody>
     </table>

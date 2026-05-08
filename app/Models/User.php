@@ -103,7 +103,7 @@ class User extends Authenticatable
         }
 
         if (!$this->roles()->exists()) {
-            return true;
+            return false;
         }
 
         return $this->roles()
@@ -143,7 +143,7 @@ class User extends Authenticatable
 
     public function budgets()
     {
-        return $this->hasMany(budget::class,'id_user');
+        return $this->hasMany(Budget::class,'id_user');
 
     }
     public function decaissements(){

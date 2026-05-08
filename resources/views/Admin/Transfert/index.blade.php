@@ -41,7 +41,9 @@
                         <td>{{ number_format($t->montant_transfert, 0, ',', ' ') }}</td>
 
                         <td>
-                            @if($t->statut_caisse_transfert == 0)
+                            @if($t->type_transfert == 2)
+                                <span class="badge badge-info">Approvisionnement entree speciale</span>
+                            @elseif($t->statut_caisse_transfert == 0)
                                 <span class="badge badge-danger">Sortie (-)</span>
                             @else
                                 <span class="badge badge-success">Entrée (+)</span>

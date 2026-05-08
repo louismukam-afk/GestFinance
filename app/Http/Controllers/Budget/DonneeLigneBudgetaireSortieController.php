@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\donnee_budgetaire_sortie;
 use App\Models\donnee_ligne_budgetaire_sortie;
 use App\Models\element_ligne_budgetaire_sortie;
@@ -114,7 +114,7 @@ class DonneeLigneBudgetaireSortieController extends Controller
         $donnee = donnee_budgetaire_sortie::with(['budgets','ligne_budgetaire_sortie'])
             ->findOrFail($donnee_id);
 
-        $budgets =  budget::all();
+        $budgets =  Budget::all();
 
         $elements = element_ligne_budgetaire_sortie::where(
             'id_ligne_budgetaire_sortie',
@@ -162,7 +162,7 @@ class DonneeLigneBudgetaireSortieController extends Controller
                 'date_creation'                        => $request->date_creation[$i] ?? now()->toDateString(),
                 'id_budget'                            => $donnee->id_budget,
                 'id_ligne_budgetaire_sortie'           => $donnee->id_ligne_budgetaire_sortie,
-                'montant'           => $donnee->montant,
+                'montant'                              => $request->montant[$i] ?? null,
                 'id_donnee_budgetaire_sortie'          => $donnee->id,
                 'id_element_ligne_budgetaire_sortie'   => $request->id_element_ligne_budgetaire_sortie[$i],
                 'id_user'                              => Auth::id(),

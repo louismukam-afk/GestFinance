@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('bon_commandeoks', function (Blueprint $table) {
+            if (!Schema::hasColumn('bon_commandeoks', 'montant_realise')) {
+                $table->unsignedBigInteger('montant_realise')->after('statuts');
+            }
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('bon_commandeoks', function (Blueprint $table) {
+            if (Schema::hasColumn('bon_commandeoks', 'montant_realise')) {
+                $table->dropColumn('montant_realise');
+            }
+        });
+    }
+};

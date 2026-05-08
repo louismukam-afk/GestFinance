@@ -50,7 +50,9 @@
     $libType = [
         0=>'frais',
         1=>'scolarité'
-    ][$reg->type_reglement ?? 0];
+    ][$reg->type_reglement ?? 0] ?? 'rattrapage';
+    $typeReglement = (int)($reg->type_reglement ?? 0);
+    $isPedagogique = in_array($typeReglement, [1, 2], true);
 
     // libellé versement (si tu as stocké un entier)
     $libVersement = [
@@ -107,7 +109,7 @@
                     <span class="muted">Tel : {{ $et->telephone_whatsapp ?? '—' }}</span>
                 </div>
                 <div class="right">
-                    @if($libType === 'scolarité')
+                    @if($isPedagogique)
                         <strong>Cycle/Filière :</strong>
                         {{ optional($reg->ligne_budgetaire_entree)->libelle_ligne_budgetaire_entree ? ($reg->cycles->nom_cycle ?? '—') : ($reg->cycles->nom_cycle ?? '—') }}
                         / {{ $reg->filieres->nom_filiere ?? '—' }}<br>
@@ -132,7 +134,7 @@
                     <td>Règlement {{ ucfirst($libType) }}</td>
                     <td>
                         {{ $reg->motif_reglement ?? '—' }}
-                        @if($libType === 'scolarité' && $reg->id_tranche_scolarite)
+                        @if($typeReglement === 1 && $reg->id_tranche_scolarite)
                             @php $tr = \App\Models\tranche_scolarite::find($reg->id_tranche_scolarite); @endphp
                             @if($tr)
                                 <div class="small muted">Tranche : {{ $tr->nom_tranche }} ({{ number_format($tr->montant_tranche,0,',',' ') }})</div>
@@ -223,7 +225,7 @@
                     <span class="muted">Tel : {{ $et->telephone_whatsapp ?? '—' }}</span>
                 </div>
                 <div class="right">
-                    @if($libType === 'scolarité')
+                    @if($isPedagogique)
                         <strong>Cycle/Filière :</strong>
                         {{ $reg->cycles->nom_cycle ?? '—' }} / {{ $reg->filieres->nom_filiere ?? '—' }}<br>
                         <strong>Niveau/Spécialité :</strong>
@@ -247,7 +249,7 @@
                     <td>Règlement {{ ucfirst($libType) }}</td>
                     <td>
                         {{ $reg->motif_reglement ?? '—' }}
-                        @if($libType === 'scolarité' && $reg->id_tranche_scolarite)
+                        @if($typeReglement === 1 && $reg->id_tranche_scolarite)
                             @php $tr = \App\Models\tranche_scolarite::find($reg->id_tranche_scolarite); @endphp
                             @if($tr)
                                 <div class="small muted">Tranche : {{ $tr->nom_tranche }} ({{ number_format($tr->montant_tranche,0,',',' ') }})</div>

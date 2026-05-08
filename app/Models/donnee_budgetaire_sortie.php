@@ -32,7 +32,7 @@ class donnee_budgetaire_sortie extends Model
     }
     public function budgets(){
 
-        return $this->belongsTo(budget::class,'id_budget');
+        return $this->belongsTo(Budget::class,'id_budget');
     }
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_donnee_budgetaire_sortie');

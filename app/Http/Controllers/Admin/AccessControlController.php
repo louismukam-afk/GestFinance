@@ -34,6 +34,19 @@ class AccessControlController extends Controller
         return back()->with('success', 'Role cree avec succes.');
     }
 
+    public function editRolePermissions(Role $role)
+    {
+        $this->syncRoutePermissions();
+
+        $role->load('permissions');
+        $permissions = RoutePermission::orderBy('route_name')->get();
+
+        return view('Admin.Access.permissions', [
+            'role' => $role,
+            'sections' => $this->buildPermissionSections($permissions),
+        ]);
+    }
+
     public function updateRolePermissions(Request $request, Role $role)
     {
         $permissionIds = collect($request->input('permissions', []))
@@ -110,5 +123,106 @@ class AccessControlController extends Controller
     private function makeLabel(string $routeName): string
     {
         return ucfirst(str_replace(['.', '_'], [' / ', ' '], $routeName));
+    }
+
+    private function buildPermissionSections($permissions): array
+    {
+        $sections = [];
+
+        foreach ($permissions as $permission) {
+            $section = $this->sectionName($permission);
+            $sections[$section][] = [
+                'permission' => $permission,
+                'action' => $this->actionName($permission),
+                'context' => $this->contextName($permission),
+                'danger' => $this->isDangerousAction($permission),
+            ];
+        }
+
+        ksort($sections);
+
+        return $sections;
+    }
+
+    private function sectionName(RoutePermission $permission): string
+    {
+        $name = $permission->route_name;
+        $uri = $permission->uri;
+
+        $map = [
+            'Administration' => ['dashboard', 'admin/', 'entite', 'cycle', 'filiere', 'niveau', 'specialite', 'personnel', 'fonction', 'annee'],
+            'Budgets' => ['budget', 'ligne_budgetaire', 'element_ligne', 'donnee_entrees', 'donnee_sorties', 'donnee_ligne'],
+            'Bons de commande' => ['bon_commande', 'bons', 'element_bon', 'mes_bons', 'etat_bons'],
+            'Caisses' => ['caisse', 'banque', 'retour_caisses', 'decaissements'],
+            'Etudiants et factures' => ['etudiant', 'facture', 'reglement', 'tranche', 'scolarite'],
+            'Entrees speciales' => ['entrees_speciales'],
+            'Reductions de factures' => ['reductions_factures'],
+            'Etats et rapports' => ['etat', 'reporting', 'audit'],
+        ];
+
+        foreach ($map as $section => $needles) {
+            foreach ($needles as $needle) {
+                if (str_contains($name, $needle) || str_contains($uri, $needle)) {
+                    return $section;
+                }
+            }
+        }
+
+        return 'Autres actions';
+    }
+
+    private function actionName(RoutePermission $permission): string
+    {
+        $name = $permission->route_name;
+        $uri = $permission->uri;
+        $method = strtoupper($permission->method);
+
+        if (str_contains($name, 'destroy') || str_contains($name, 'delete') || str_contains($uri, 'delete') || str_contains($method, 'DELETE')) {
+            return 'Supprimer';
+        }
+
+        if (str_contains($name, 'update') || str_contains($name, 'edit') || str_contains($uri, 'edit') || str_contains($method, 'PUT') || str_contains($method, 'PATCH')) {
+            return 'Modifier';
+        }
+
+        if (str_contains($name, 'store') || str_contains($name, 'create') || str_contains($uri, 'create') || str_contains($method, 'POST')) {
+            return 'Creer';
+        }
+
+        if (str_contains($name, 'pdf')) {
+            return 'Exporter PDF';
+        }
+
+        if (str_contains($name, 'excel')) {
+            return 'Exporter Excel';
+        }
+
+        if (str_contains($name, 'export')) {
+            return 'Exporter';
+        }
+
+        if (str_contains($name, 'show') || str_contains($name, 'detail')) {
+            return 'Voir details';
+        }
+
+        if (str_contains($name, 'valider')) {
+            return 'Valider';
+        }
+
+        if (str_contains($name, 'payer') || str_contains($name, 'remboursement')) {
+            return 'Payer / rembourser';
+        }
+
+        return 'Afficher';
+    }
+
+    private function contextName(RoutePermission $permission): string
+    {
+        return ucfirst(str_replace(['.', '_', '-'], [' / ', ' ', ' '], $permission->route_name));
+    }
+
+    private function isDangerousAction(RoutePermission $permission): bool
+    {
+        return in_array($this->actionName($permission), ['Supprimer', 'Modifier'], true);
     }
 }

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\banque;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\caisse;
 use App\Models\cycle;
 use App\Models\donnee_budgetaire_entree;
@@ -75,7 +75,7 @@ class ReglementEtudiantController extends Controller
         $banques   = banque::orderBy('nom_banque')->get();
         $entites=entite::orderBy('nom_entite')->get();
         $annees    = annee_academique::orderBy('created_at', 'desc')->get();
-        $budgets   = budget::orderBy('created_at', 'desc')->get();
+        $budgets   = Budget::orderBy('created_at', 'desc')->get();
 
 
         $title = "Règlements de l'étudiant : {$etudiant->nom}";
@@ -102,7 +102,7 @@ class ReglementEtudiantController extends Controller
         die();
         $banques   = banque::orderBy('nom_banque')->get();
         $annees    = annee_academique::orderBy('created_at', 'desc')->get();
-        $budgets   = budget::orderBy('created_at', 'desc')->get();
+        $budgets   = Budget::orderBy('created_at', 'desc')->get();
 
         return view('Admin.ReglementEtudiant.create_from_facture', compact(
             'facture','totalFacture','totalPaye','reste','cycles','filieres','caisses','banques','annees','budgets'
@@ -115,11 +115,13 @@ class ReglementEtudiantController extends Controller
         $request->validate([
             'id_cycle'   => 'required|integer|min:1',
             'id_filiere' => 'required|integer|min:1',
+            'id_annee_academique' => 'nullable|integer|exists:annee_academiques,id',
         ]);
 
         $sco = scolarite::with(['niveaux','specialites'])
             ->where('id_cycle', (int)$request->id_cycle)
             ->where('id_filiere', (int)$request->id_filiere)
+            ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
             ->get();
 
         $niveauIds     = $sco->pluck('id_niveau')->filter()->unique()->values();
@@ -471,7 +473,7 @@ class ReglementEtudiantController extends Controller
         $caisses  = caisse::orderBy('nom_caisse')->where('type_caisse','=',0)->get();
         $banques  = banque::orderBy('nom_banque')->get();
         $annees   = annee_academique::orderBy('created_at', 'desc')->get();
-        $budgets  = budget::orderBy('created_at', 'desc')->get();
+        $budgets  = Budget::orderBy('created_at', 'desc')->get();
         $entites=entite::orderBy('nom_entite')->get();
 
         return view('Admin.ReglementEtudiant.create_from_facture', compact(
@@ -744,7 +746,7 @@ class ReglementEtudiantController extends Controller
         // données nécessaires aux selects
         $caisses = caisse::orderBy('nom_caisse')->get();
         $banques = banque::orderBy('nom_banque')->get();
-        $budgets = budget::orderBy('created_at','desc')->get();
+        $budgets = Budget::orderBy('created_at','desc')->get();
         $cycles   = cycle::orderBy('nom_cycle')->get();
         $filieres = filiere::orderBy('nom_filiere')->get();
 
@@ -915,6 +917,7 @@ class ReglementEtudiantController extends Controller
         $sco = \App\Models\scolarite::with(['niveaux','specialites'])
             ->where('id_cycle', $id_cycle)
             ->where('id_filiere', $id_filiere)
+            ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
             ->get();
 
         if ($sco->isEmpty()) {

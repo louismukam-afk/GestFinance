@@ -75,12 +75,20 @@
                                 <strong>{{ number_format($ligne['entrees_reglements'], 0, ',', ' ') }}</strong>
                             </div>
                             <div class="d-flex justify-content-between">
+                                <span>Entrees speciales</span>
+                                <strong>{{ number_format($ligne['entrees_speciales'] ?? 0, 0, ',', ' ') }}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
                                 <span>Retours en caisse</span>
                                 <strong>{{ number_format($ligne['entrees_retours'], 0, ',', ' ') }}</strong>
                             </div>
                             <div class="d-flex justify-content-between">
                                 <span>Decaissements</span>
                                 <strong>{{ number_format($ligne['sorties_decaissements'], 0, ',', ' ') }}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Remboursements dettes</span>
+                                <strong>{{ number_format($ligne['remboursements_dettes'] ?? 0, 0, ',', ' ') }}</strong>
                             </div>
                             <div class="d-flex justify-content-between">
                                 <span>Transferts entrants</span>
@@ -103,8 +111,10 @@
                     <th>Caisse</th>
                     <th>Type</th>
                     <th class="text-end">Entrees reglements</th>
+                    <th class="text-end">Entrees speciales</th>
                     <th class="text-end">Retours caisse</th>
                     <th class="text-end">Decaissements</th>
+                    <th class="text-end">Remboursements dettes</th>
                     <th class="text-end">Solde avant transfert</th>
                     <th class="text-end">Transferts entrants</th>
                     <th class="text-end">Transferts sortants</th>
@@ -117,8 +127,10 @@
                         <td>{{ $ligne['caisse']->nom_caisse }}</td>
                         <td>{{ $ligne['caisse']->type_caisse ?? '-' }}</td>
                         <td class="text-end">{{ number_format($ligne['entrees_reglements'], 0, ',', ' ') }}</td>
+                        <td class="text-end">{{ number_format($ligne['entrees_speciales'] ?? 0, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['entrees_retours'], 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['sorties_decaissements'], 0, ',', ' ') }}</td>
+                        <td class="text-end">{{ number_format($ligne['remboursements_dettes'] ?? 0, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['solde_avant_transfert'], 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['transferts_entrants'], 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['transferts_sortants'], 0, ',', ' ') }}</td>

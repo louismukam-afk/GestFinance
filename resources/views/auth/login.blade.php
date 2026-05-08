@@ -52,6 +52,13 @@
 <div class="login-card">
     <h3>GESTFINANCE</h3>
     <h4 >Connexion</h4>
+
+    @if(session('status'))
+        <div class="alert alert-success">
+            {{ session('status') }}
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('login') }}">
         @csrf
 

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\ligne_budgetaire_Entree;
 use Illuminate\Http\Request;
@@ -47,7 +47,7 @@ class DonneeBudgetaireEntreeController extends Controller
     // Formulaire création
     public function create()
     {
-        $budgets = budget::all();
+        $budgets = Budget::all();
         $lignes = ligne_budgetaire_Entree::all();
         $this->values['title']='Création d\'une donnée' ;
         return view('Budget.donnee_entrees.create', compact('budgets', 'lignes'),$this->values);
@@ -64,7 +64,8 @@ class DonneeBudgetaireEntreeController extends Controller
             'date_creation.*' => 'required|date',
             'id_budget.*' => 'required|integer',
             'id_ligne_budgetaire_entree.*' => 'required|integer',
-            'montant.*' => 'required|numeric',
+            'montant' => 'nullable|array',
+            'montant.*' => 'nullable|numeric',
         ]);
 
         foreach ($request->donnee_ligne_budgetaire_entree as $i => $val) {
@@ -76,7 +77,7 @@ class DonneeBudgetaireEntreeController extends Controller
                 'date_creation' => $request->date_creation[$i],
                 'id_budget' => $request->id_budget[$i],
                 'id_ligne_budgetaire_entree' => $request->id_ligne_budgetaire_entree[$i],
-                'montant' => $request->montant[$i],
+                'montant' => $request->input("montant.$i", 0),
                 'id_user' => Auth::id(),
             ]);
         }
@@ -107,7 +108,7 @@ class DonneeBudgetaireEntreeController extends Controller
             'date_creation' => 'required|date',
             'id_budget' => 'required|integer',
             'id_ligne_budgetaire_entree' => 'required|integer',
-            'montant' => 'required|numeric',
+            'montant' => 'nullable|numeric',
         ]);
 
         $donnee->update([
@@ -118,7 +119,7 @@ class DonneeBudgetaireEntreeController extends Controller
             'date_creation' => $request->date_creation,
             'id_budget' => $request->id_budget,
             'id_ligne_budgetaire_entree' => $request->id_ligne_budgetaire_entree,
-            'montant' => $request->montant,
+            'montant' => $request->input('montant', 0),
             'id_user' => Auth::id(),
         ]);
         $this->values['title']='Modification d\'une donnée' ;

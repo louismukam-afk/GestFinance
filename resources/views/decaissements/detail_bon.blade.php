@@ -97,6 +97,7 @@
                     <th>Personnel</th>
                     <th>Utilisateur</th>
                     <th>Motif</th>
+                    <th>Action</th>
                     <th>Entité</th>
                 </tr>
                 </thead>
@@ -111,11 +112,18 @@
                         <td>{{ $d->personnels->nom ?? 'N/A' }}</td>
                         <td>{{ $d->user->name ?? 'N/A' }}</td>
                         <td>{{ $d->motif }}</td>
+                        <td>
+                            <form method="POST" action="{{ route('decaissements.destroy_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" style="display:inline">
+                                @csrf
+                                @method('DELETE')
+                                <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer ce decaissement ?')">Supprimer</button>
+                            </form>
+                        </td>
                         <td>{{ $d->bon->entites->nom_entite ?? 'N/A' }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="text-center">⚠ Aucun décaissement</td>
+                        <td colspan="9" class="text-center">⚠ Aucun décaissement</td>
                     </tr>
                 @endforelse
                 </tbody>
@@ -125,7 +133,7 @@
                 <tr class="table-dark">
                     <th colspan="2">TOTAL</th>
                     <th>{{ number_format($total,0,',',' ') }} FCFA</th>
-                    <th colspan="4"></th>
+                    <th colspan="6"></th>
                 </tr>
                 </tfoot>
 

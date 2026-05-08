@@ -17,7 +17,7 @@ class SpecialiteController extends Controller
 
         $title = "Gestion des spécialités";
 
-        return view('Admin.specialites.index', compact('specialites', 'filieres', 'title'));
+        return view('Admin.Specialites.index', compact('specialites', 'filieres', 'title'));
     }
 
     public function store(Request $request)

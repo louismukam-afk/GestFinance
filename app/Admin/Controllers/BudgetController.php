@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-use App\Models\budget;
+use App\Models\Budget;
 use Encore\Admin\Controllers\AdminController;
 use Encore\Admin\Form;
 use Encore\Admin\Grid;
@@ -49,7 +49,7 @@ class BudgetController extends AdminController
      */
     protected function detail($id)
     {
-        $show = new Show(budget::findOrFail($id));
+        $show = new Show(Budget::findOrFail($id));
 
         $show->field('id', __('Id'));
         $show->field('libelle_ligne_budget', __('Libelle ligne budget'));

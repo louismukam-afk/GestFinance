@@ -47,4 +47,9 @@ class Etudiant extends Model
         return $this->hasMany(reglement_etudiant::class,'id_etudiant');
 
     }
+
+    public function reduction_factures()
+    {
+        return $this->hasMany(reduction_facture::class, 'id_etudiant');
+    }
 }

@@ -127,6 +127,33 @@
         </div>
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
+                <a href="{{route('emploi_temps.index')}}" >
+                    <i class="fa fa-calendar fa-5x"></i>
+                    <h4>Emploi du temps</h4>
+                </a>
+            </div>
+
+        </div>
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{route('matieres.index')}}" >
+                    <i class="fa fa-book fa-5x"></i>
+                    <h4>Gestion des matieres</h4>
+                </a>
+            </div>
+
+        </div>
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{route('factures_rattrapage.index')}}" >
+                    <i class="fa fa-money fa-5x"></i>
+                    <h4>Factures de rattrapage</h4>
+                </a>
+            </div>
+
+        </div>
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
                 <a href="{{route('annee_academique_management')}}" >
                     <i class="fa fa-youtube-square fa-5x"></i>
                     <h4>Gestion des Années académiques</h4>

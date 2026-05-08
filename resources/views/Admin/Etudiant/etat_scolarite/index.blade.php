@@ -243,8 +243,9 @@ $(function () {
         });
     });
 
-    $('#id_cycle, #id_filiere, #id_niveau, #id_specialite').on('change', function () {
+    $('#id_annee_academique, #id_cycle, #id_filiere, #id_niveau, #id_specialite').on('change', function () {
         $.get("{{ route('etat_etudiants_scolarite.ajax.scolarites') }}", {
+            id_annee_academique: $('#id_annee_academique').val(),
             id_cycle: $('#id_cycle').val(),
             id_filiere: $('#id_filiere').val(),
             id_niveau: $('#id_niveau').val(),

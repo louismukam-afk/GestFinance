@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\ViewExport;
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
-use App\Models\budget;
+use App\Models\Budget;
 use App\Models\cycle;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\donnee_ligne_budgetaire_entree;
@@ -102,6 +102,7 @@ class EtatEtudiantScolariteController extends Controller
     {
         return response()->json(
             scolarite::when($request->id_cycle, fn($q) => $q->where('id_cycle', $request->id_cycle))
+                ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
                 ->when($request->id_filiere, fn($q) => $q->where('id_filiere', $request->id_filiere))
                 ->when($request->id_niveau, fn($q) => $q->where('id_niveau', $request->id_niveau))
                 ->when($request->id_specialite, fn($q) => $q->where('id_specialite', $request->id_specialite))
@@ -127,7 +128,7 @@ class EtatEtudiantScolariteController extends Controller
             'filieres' => filiere::orderBy('nom_filiere')->get(),
             'niveaux' => niveau::orderBy('nom_niveau')->get(),
             'specialites' => specialite::orderBy('nom_specialite')->get(),
-            'budgets' => budget::orderBy('libelle_ligne_budget')->get(),
+            'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
             'scolarites' => scolarite::with(['cycles', 'filiere', 'niveaux', 'specialites'])->get(),
             'tranches' => tranche_scolarite::orderBy('nom_tranche')->get(),
         ];

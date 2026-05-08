@@ -1,0 +1,71 @@
+
+/*=============================================================
+    Authour URI: www.binarycart.com
+    License: Commons Attribution 3.0
+
+    http://creativecommons.org/licenses/by/3.0/
+
+    100% To use For Personal And Commercial Use.
+    IN EXCHANGE JUST GIVE US CREDITS AND TELL YOUR FRIENDS ABOUT US
+
+    ========================================================  */
+
+/* cyrillic-ext */
+@font-face { font-family: open-sans;
+    font-weight: 400;
+    font-style: normal;
+    src: url('../fonts/open-sans.regular.ttf'); }
+/*==============================================
+    GENERAL  STYLES
+    =============================================*/
+@page  {
+    size: A4 portrait;
+    margin-left: 2mm!important;
+    margin-right: 2mm!important;
+}
+
+.wrapper,.navbar-default,.alert,.btn,.big-title,hr,.action,.back-button,.navbar,.navbar-header,.modal,.copy,.back-button,.copy,.dt-buttons,.dataTables_filter,.dataTables_info,.dataTables_paginate,.breadcrumb, .hide-in-print
+{
+    display: none;
+}
+table.dataTable thead th,table.dataTable tbody tr,.table.dataTable tbody tr td
+{
+    padding: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+
+    height: 12px;
+}
+
+table.dataTable thead .classe
+{
+    width: 50px;
+}
+
+.caption
+{
+    padding-bottom: 30px;
+}
+
+
+
+.list-cont
+{
+    font-size: 11px;
+}
+.table tbody tr,.table tbody tr td{
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 12px;
+
+}
+
+.copy
+{
+    font-size: 10px;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+}
+
+

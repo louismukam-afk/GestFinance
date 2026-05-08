@@ -125,17 +125,19 @@
                     <th>Prévu</th>
                     <th>Facturé</th>
                     <th>Encaissé</th>
+                    <th>Reduction</th>
                     <th>Reste</th>
                 </tr>
                 </thead>
 
                 <tbody>
-                @php $tPrevu=0;$tFacture=0;$tEncaisse=0;$tReste=0; @endphp
+                @php $tPrevu=0;$tFacture=0;$tReduction=0;$tEncaisse=0;$tReste=0; @endphp
 
                 @foreach($lignes as $e)
                     @php
                         $tPrevu += $e['prevu'];
                         $tFacture += $e['facture'];
+                        $tReduction += $e['reduction'] ?? 0;
                         $tEncaisse += $e['encaisse'];
                         $tReste += $e['reste'];
                     @endphp
@@ -148,6 +150,7 @@
                         <td>{{ number_format($e['prevu']) }}</td>
                         <td>{{ number_format($e['facture']) }}</td>
                         <td>{{ number_format($e['encaisse']) }}</td>
+                        <td>{{ number_format($e['reduction'] ?? 0) }}</td>
                         <td>{{ number_format($e['reste']) }}</td>
                     </tr>
                 @endforeach
@@ -157,6 +160,7 @@
                     <td>{{ number_format($tPrevu) }}</td>
                     <td>{{ number_format($tFacture) }}</td>
                     <td>{{ number_format($tEncaisse) }}</td>
+                    <td>{{ number_format($tReduction) }}</td>
                     <td>{{ number_format($tReste) }}</td>
                 </tr>
 

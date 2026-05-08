@@ -114,6 +114,8 @@
             |
             <strong>Total entrees :</strong> {{ number_format($totalEntrees, 0, ',', ' ') }} FCFA
             |
+            <strong>Retours en caisse :</strong> {{ number_format($totalRetours ?? 0, 0, ',', ' ') }} FCFA
+            |
             <strong>Total sorties :</strong> {{ number_format($totalSorties, 0, ',', ' ') }} FCFA
             |
             <strong>Solde :</strong> {{ number_format($solde, 0, ',', ' ') }} FCFA
@@ -141,14 +143,16 @@
                             <th>Annee</th>
                             <th>Utilisateur</th>
                             <th class="text-end">Entree</th>
+                            <th class="text-end">Retour</th>
                             <th class="text-end">Sortie</th>
                         </tr>
                         </thead>
                         <tbody>
-                        @php $tEntree = 0; $tSortie = 0; @endphp
+                        @php $tEntree = 0; $tRetour = 0; $tSortie = 0; @endphp
                         @foreach($lignes as $op)
                             @php
                                 $tEntree += $op['entree'];
+                                $tRetour += $op['retour'] ?? 0;
                                 $tSortie += $op['sortie'];
                             @endphp
                             <tr>
@@ -164,17 +168,19 @@
                                 <td>{{ $op['annee'] ?: '-' }}</td>
                                 <td>{{ $op['utilisateur'] ?: '-' }}</td>
                                 <td class="text-end text-success">{{ number_format($op['entree'], 0, ',', ' ') }}</td>
+                                <td class="text-end text-info">{{ number_format($op['retour'] ?? 0, 0, ',', ' ') }}</td>
                                 <td class="text-end text-danger">{{ number_format($op['sortie'], 0, ',', ' ') }}</td>
                             </tr>
                         @endforeach
                         <tr class="table-secondary fw-bold">
                             <td colspan="11">TOTAL {{ $caisse }}</td>
                             <td class="text-end">{{ number_format($tEntree, 0, ',', ' ') }}</td>
+                            <td class="text-end">{{ number_format($tRetour, 0, ',', ' ') }}</td>
                             <td class="text-end">{{ number_format($tSortie, 0, ',', ' ') }}</td>
                         </tr>
                         <tr class="table-info fw-bold">
                             <td colspan="11">SOLDE {{ $caisse }}</td>
-                            <td colspan="2" class="text-end">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
+                            <td colspan="3" class="text-end">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
                         </tr>
                         </tbody>
                     </table>

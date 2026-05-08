@@ -20,13 +20,24 @@ use App\Http\Controllers\Budget\DonneeLigneBudgetaireEntreeController;
 use App\Http\Controllers\Budget\DonneeLigneBudgetaireSortieController;
 use App\Http\Controllers\Budget\EtatSortieController;
 use App\Http\Controllers\Budget\RetourCaisseController;
+use App\Http\Controllers\Budget\EntreeSpecialeController;
 use App\Http\Controllers\Admin\AccessControlController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\MesBonCommandeController;
 use App\Http\Controllers\Admin\EtatEtudiantScolariteController;
+use App\Http\Controllers\Admin\ReportingController;
+use App\Http\Controllers\Admin\ReductionFactureController;
+use App\Http\Controllers\Admin\MatiereController;
+use App\Http\Controllers\Admin\FactureRattrapageController;
+use App\Http\Controllers\Admin\ProgrammeSpecialiteController;
+use App\Http\Controllers\Admin\GroupeMatiereController;
+use App\Http\Controllers\Admin\EmploiTempsController;
 
 use App\Http\Controllers\Admin\EtatComptableController;
-
+use App\Models\facture_etudiant;
+use App\Models\donnee_budgetaire_entree;
+use App\Models\donnee_ligne_budgetaire_entree;
+use Illuminate\Support\Facades\DB;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -50,7 +61,7 @@ Route::middleware(['auth'])->group(function () {
 
     # Tableau de bord admin
     Route::get('/admin/dashboard', function () {
-        return view('admin.index')->with(['title' => 'Administration']);
+        return view('Admin.index')->with(['title' => 'Administration']);
     })->name('dashboard');
 
     Route::prefix('etat-etudiants-scolarite')->name('etat_etudiants_scolarite.')->group(function () {
@@ -66,6 +77,38 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/ajax/scolarite/{scolarite}/tranches', [EtatEtudiantScolariteController::class, 'tranches'])->name('ajax.tranches');
     });
 
+    Route::prefix('reductions-factures')->name('reductions_factures.')->group(function () {
+        Route::get('/', [ReductionFactureController::class, 'index'])->name('index');
+        Route::post('/', [ReductionFactureController::class, 'store'])->name('store');
+        Route::put('/{id}', [ReductionFactureController::class, 'update'])->name('update');
+        Route::delete('/{id}', [ReductionFactureController::class, 'destroy'])->name('destroy');
+        Route::get('/export/excel', [ReductionFactureController::class, 'exportExcel'])->name('excel');
+        Route::get('/export/pdf', [ReductionFactureController::class, 'exportPdf'])->name('pdf');
+    });
+
+    Route::resource('matieres', MatiereController::class)->except(['create', 'show', 'edit']);
+
+    Route::get('/emploi-du-temps', [EmploiTempsController::class, 'index'])->name('emploi_temps.index');
+    Route::get('/emploi-du-temps/programmes-specialites', [ProgrammeSpecialiteController::class, 'index'])->name('programmes_specialites.index');
+    Route::get('/specialites/{specialite}/programme/contexte', [ProgrammeSpecialiteController::class, 'configure'])->name('programmes_specialites.configure');
+    Route::get('/specialites/{specialite}/programme', [ProgrammeSpecialiteController::class, 'edit'])->name('programmes_specialites.edit');
+    Route::post('/specialites/{specialite}/programme', [ProgrammeSpecialiteController::class, 'store'])->name('programmes_specialites.store');
+    Route::put('/programmes-specialites/{programme}', [ProgrammeSpecialiteController::class, 'update'])->name('programmes_specialites.update');
+    Route::delete('/programmes-specialites/{programme}', [ProgrammeSpecialiteController::class, 'destroy'])->name('programmes_specialites.destroy');
+    Route::get('/programmes-specialites/{programme}/groupe-matiere', [GroupeMatiereController::class, 'create'])->name('groupes_matieres.create');
+    Route::post('/programmes-specialites/{programme}/groupe-matiere', [GroupeMatiereController::class, 'store'])->name('groupes_matieres.store');
+    Route::delete('/groupes-matieres/{groupe}', [GroupeMatiereController::class, 'destroy'])->name('groupes_matieres.destroy');
+    Route::delete('/groupe-matiere-lignes/{ligne}', [GroupeMatiereController::class, 'destroyLine'])->name('groupes_matieres.lignes.destroy');
+
+    Route::prefix('factures-rattrapage')->name('factures_rattrapage.')->group(function () {
+        Route::get('/', [FactureRattrapageController::class, 'index'])->name('index');
+        Route::get('/create', [FactureRattrapageController::class, 'create'])->name('create');
+        Route::get('/create/from-facture/{facture}', [FactureRattrapageController::class, 'createFromFacture'])->name('create_from_facture');
+        Route::post('/', [FactureRattrapageController::class, 'store'])->name('store');
+        Route::get('/{id}', [FactureRattrapageController::class, 'show'])->name('show');
+        Route::delete('/{id}', [FactureRattrapageController::class, 'destroy'])->name('destroy');
+    });
+
     Route::prefix('mes-bons')->name('mes_bons.')->group(function () {
         Route::get('/attente', [MesBonCommandeController::class, 'attente'])->name('attente');
         Route::get('/valides', [MesBonCommandeController::class, 'valides'])->name('valides');
@@ -79,6 +122,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [AccessControlController::class, 'index'])->name('index');
         Route::post('/sync', [AccessControlController::class, 'syncRoutes'])->name('sync');
         Route::post('/roles', [AccessControlController::class, 'storeRole'])->name('roles.store');
+        Route::get('/roles/{role}/permissions', [AccessControlController::class, 'editRolePermissions'])->name('roles.permissions.edit');
         Route::post('/roles/{role}/permissions', [AccessControlController::class, 'updateRolePermissions'])->name('roles.permissions');
         Route::post('/users/{user}/roles', [AccessControlController::class, 'updateUserRoles'])->name('users.roles');
     });
@@ -228,6 +272,20 @@ Route::middleware(['auth'])->group(function () {
        Route::get('/{id}/export/pdf/i', [BudgetController::class, 'exportPdfOne'])->name('budgets.export_pdf_one');
        Route::get('/{id}/export/excel/i', [BudgetController::class, 'exportExcelOne'])->name('budgets.export_excel_one');
 
+    });
+
+    Route::prefix('entrees-speciales')->name('entrees_speciales.')->group(function () {
+        Route::get('/rappels', [EntreeSpecialeController::class, 'rappels'])->name('rappels');
+        Route::get('/remboursements', [EntreeSpecialeController::class, 'remboursements'])->name('remboursements');
+        Route::patch('/echeances/{id}/payer', [EntreeSpecialeController::class, 'payerEcheance'])->name('echeances.payer');
+        Route::patch('/echeances/{id}/annuler-paiement', [EntreeSpecialeController::class, 'annulerPaiementEcheance'])->name('echeances.annuler_paiement');
+        Route::get('/', [EntreeSpecialeController::class, 'index'])->name('index');
+        Route::get('/create', [EntreeSpecialeController::class, 'create'])->name('create');
+        Route::post('/', [EntreeSpecialeController::class, 'store'])->name('store');
+        Route::get('/{id}', [EntreeSpecialeController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [EntreeSpecialeController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [EntreeSpecialeController::class, 'update'])->name('update');
+        Route::delete('/{id}', [EntreeSpecialeController::class, 'destroy'])->name('destroy');
     });
 
 
@@ -571,7 +629,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/etudiants/dashboard', function () {
         return view('Admin.Etudiant.index_etudiant')->with(['title' => 'Gestion des étudiants']);
     })->name('etudiant');
-// Étudiants
+// Étudiantsdonnee_entrees/create
     Route::get('etudiants', [\App\Http\Controllers\Admin\EtudiantController::class, 'index'])
         ->name('etudiant_management');
     Route::get('etudiants/import', [\App\Http\Controllers\Admin\EtudiantController::class, 'import'])
@@ -837,6 +895,8 @@ Route::middleware(['auth'])->group(function () {
         // web.php
         Route::get('/decaissements/bon/{id}', [DecaissementController::class, 'detailBon'])
             ->name('detailBon');
+        Route::delete('/bon/{bon}/decaissement/{decaissement}', [DecaissementController::class, 'destroyDecaissement'])
+            ->name('destroy_decaissement');
         Route::get('/ajax/lignes/{budget}', [DecaissementController::class, 'getLignes']);
         Route::get('/ajax/elements/{ligne}', [DecaissementController::class, 'getElements']);
         Route::get('/ajax/donnees-budget/{ligne}', [DecaissementController::class, 'getDonneesBudget']);
@@ -947,5 +1007,41 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/decaissement-details/{decaissement}', [RetourCaisseController::class, 'getDecaissementDetails'])
     ->name('decaissement_details');
     });
+/* 
+http://localhost/GestFinance/public/recalcul-montants-entrees
+Route::get('/recalcul-montants-entrees', function () {
+    DB::transaction(function () {
+        $lignes = facture_etudiant::select(
+                'id_donnee_ligne_budgetaire_entree',
+                DB::raw('SUM(montant_total_facture) as total')
+            )
+            ->whereNotNull('id_donnee_ligne_budgetaire_entree')
+            ->groupBy('id_donnee_ligne_budgetaire_entree')
+            ->get();
 
+        donnee_ligne_budgetaire_entree::query()->update(['montant' => 0]);
+
+        foreach ($lignes as $ligne) {
+            donnee_ligne_budgetaire_entree::where('id', $ligne->id_donnee_ligne_budgetaire_entree)
+                ->update(['montant' => $ligne->total]);
+        }
+
+        $parents = facture_etudiant::select(
+                'id_donnee_budgetaire_entree',
+                DB::raw('SUM(montant_total_facture) as total')
+            )
+            ->whereNotNull('id_donnee_budgetaire_entree')
+            ->groupBy('id_donnee_budgetaire_entree')
+            ->get();
+
+        donnee_budgetaire_entree::query()->update(['montant' => 0]);
+
+        foreach ($parents as $parent) {
+            donnee_budgetaire_entree::where('id', $parent->id_donnee_budgetaire_entree)
+                ->update(['montant' => $parent->total]);
+        }
+    });
+
+    return 'Montants prévisionnels des entrées recalculés avec succès ✅';
+}); */
 });
