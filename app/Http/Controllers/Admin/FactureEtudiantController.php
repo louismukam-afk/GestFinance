@@ -379,7 +379,7 @@ class FactureEtudiantController extends Controller
             $idFrais = 0; $montant = 0.0;
             if ($type === 1) {
                 $sc = scolarite::findOrFail($r->id_scolarite);
-                $montant = (float) $sc->montant_total;
+                $montant = (float) $sc->montant_total + (float) $sc->inscription;
                 $idFrais = 0;
             } else {
                 $fr = frais::findOrFail((int) $r->id_frais);

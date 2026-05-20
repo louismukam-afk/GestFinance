@@ -205,6 +205,10 @@ class AccessControlController extends Controller
             return 'Voir details';
         }
 
+        if (str_contains($name, 'document')) {
+            return 'Voir document';
+        }
+
         if (str_contains($name, 'valider')) {
             return 'Valider';
         }

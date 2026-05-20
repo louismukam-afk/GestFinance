@@ -180,7 +180,7 @@
                         </tr>
                         <tr class="table-info fw-bold">
                             <td colspan="11">SOLDE {{ $caisse }}</td>
-                            <td colspan="3" class="text-end">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
+                            <td colspan="3" class="text-end">{{ number_format($tEntree + $tRetour - $tSortie, 0, ',', ' ') }} FCFA</td>
                         </tr>
                         </tbody>
                     </table>

@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h1>{{ $type === 'valides' ? 'MES BONS VALIDES' : 'MES BONS EN ATTENTE DE VALIDATION' }}</h1>
+    <h1>{{ $type === 'valides' ? 'MES BONS VALIDES' : ($type === 'refuses' ? 'MES BONS REFUSES' : 'MES BONS EN ATTENTE DE VALIDATION') }}</h1>
     <div class="subtitle">
         Utilisateur : {{ $user->name }}
         @if($dateDebut || $dateFin)
@@ -36,6 +36,7 @@
                 <th>DAF</th>
                 <th>Achats</th>
                 <th>Emetteur</th>
+                <th>Motif refus</th>
             </tr>
         </thead>
         <tbody>
@@ -52,10 +53,11 @@
                     <td>{{ $bon->validation_daf ? 'Oui' : 'Non' }}</td>
                     <td>{{ $bon->validation_achats ? 'Oui' : 'Non' }}</td>
                     <td>{{ $bon->validation_emetteur ? 'Oui' : 'Non' }}</td>
+                    <td>{{ $bon->motif_refus ?: '-' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="11" style="text-align: center;">Aucun bon trouve.</td>
+                    <td colspan="12" style="text-align: center;">Aucun bon trouve.</td>
                 </tr>
             @endforelse
         </tbody>

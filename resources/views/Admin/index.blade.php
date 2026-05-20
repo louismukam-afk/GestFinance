@@ -128,17 +128,8 @@
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
                 <a href="{{route('emploi_temps.index')}}" >
-                    <i class="fa fa-calendar fa-5x"></i>
-                    <h4>Emploi du temps</h4>
-                </a>
-            </div>
-
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{route('matieres.index')}}" >
-                    <i class="fa fa-book fa-5x"></i>
-                    <h4>Gestion des matieres</h4>
+                    <i class="fa fa-users fa-5x"></i>
+                    <h4>Gestion des ressources humaines</h4>
                 </a>
             </div>
 

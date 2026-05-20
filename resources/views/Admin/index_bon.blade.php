@@ -10,6 +10,30 @@
             <span class="glyphicon glyphicon-download"></span> Exporter Excel
         </a>
 
+        <form method="GET" action="{{ route('bon_commande_management') }}" class="row" style="margin-top:15px; margin-bottom:15px;">
+            <div class="col-md-3">
+                <label>Date debut</label>
+                <input type="date" name="date_debut" value="{{ request('date_debut') }}" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label>Date fin</label>
+                <input type="date" name="date_fin" value="{{ request('date_fin') }}" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label>Statut</label>
+                <select name="statut" class="form-control">
+                    <option value="">Tous</option>
+                    <option value="0" {{ request('statut') === '0' ? 'selected' : '' }}>En attente</option>
+                    <option value="1" {{ request('statut') === '1' ? 'selected' : '' }}>Valide</option>
+                    <option value="2" {{ request('statut') === '2' ? 'selected' : '' }}>Refuse</option>
+                </select>
+            </div>
+            <div class="col-md-3" style="padding-top:25px;">
+                <button class="btn btn-primary">Filtrer</button>
+                <a href="{{ route('bon_commande_management') }}" class="btn btn-default">Reset</a>
+            </div>
+        </form>
+
         <div class="form-group" style="margin-top: 15px;">
             <input type="text" id="searchProduit" class="form-control" placeholder="Rechercher un bon de commande...">
         </div>
@@ -43,6 +67,7 @@
                             <th>Personnel</th>
                             <th>Entité</th>
                             <th>Statut</th>
+                            <th>Motif refus</th>
                             <th></th>
                             <th>Actions</th>
                         </tr>
@@ -76,6 +101,7 @@
                                         <span class="label label-default">Inconnu</span>
                                     @endif
                                 </td>
+                                <td>{{ $bon->motif_refus ?: '-' }}</td>
 
                                 <td>
                                     @if($bon->validation_pdg == 0)
@@ -83,6 +109,7 @@
                                             @csrf
                                             <button type="submit" class="btn btn-xs btn-success" style="margin:2px;">Valider PDG</button>
                                         </form>
+                                        <button type="button" class="btn btn-xs btn-danger" data-toggle="modal" data-target="#refus_pdg_{{ $bon->id }}" style="margin:2px;">Refuser PDG</button>
                                     @endif
 
                                     @if($bon->validation_daf == 0)
@@ -90,6 +117,7 @@
                                             @csrf
                                             <button type="submit" class="btn btn-xs btn-info" style="margin:2px;">Valider DAF</button>
                                         </form>
+                                        <button type="button" class="btn btn-xs btn-danger" data-toggle="modal" data-target="#refus_daf_{{ $bon->id }}" style="margin:2px;">Refuser DAF</button>
                                     @endif
 
                                     @if($bon->validation_achats == 0)
@@ -97,6 +125,7 @@
                                             @csrf
                                             <button type="submit" class="btn btn-xs btn-warning" style="margin:2px;">Valider Achats</button>
                                         </form>
+                                        <button type="button" class="btn btn-xs btn-danger" data-toggle="modal" data-target="#refus_achats_{{ $bon->id }}" style="margin:2px;">Refuser Achats</button>
                                     @endif
 
                                     @if($bon->validation_emetteur == 0)
@@ -104,6 +133,7 @@
                                             @csrf
                                             <button type="submit" class="btn btn-xs btn-primary" style="margin:2px;">Valider Émetteur</button>
                                         </form>
+                                        <button type="button" class="btn btn-xs btn-danger" data-toggle="modal" data-target="#refus_emetteur_{{ $bon->id }}" style="margin:2px;">Refuser Emetteur</button>
                                     @endif
                                       {{--  <a href="{{ route('element_bon.create', $bon->id) }}"
                                            class="btn btn-xs btn-default" style="margin:2px; background-color:#eee;">
@@ -146,6 +176,29 @@
                                     </form>
                                 </td>
                             </tr>
+                            @foreach(['pdg' => 'PDG', 'daf' => 'DAF', 'achats' => 'Achats', 'emetteur' => 'Emetteur'] as $niveau => $label)
+                                <div class="modal fade" id="refus_{{ $niveau }}_{{ $bon->id }}">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form method="POST" action="{{ route('refuser_bon', [$niveau, $bon->id]) }}">
+                                                @csrf
+                                                <div class="modal-header">
+                                                    <button type="button" class="close" data-dismiss="modal">x</button>
+                                                    <h4 class="modal-title">Refus {{ $label }}</h4>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p><strong>{{ $bon->nom_bon_commande }}</strong></p>
+                                                    <textarea name="motif_refus" class="form-control" rows="4" required placeholder="Motif du refus"></textarea>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+                                                    <button class="btn btn-danger">Confirmer le refus</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
                         @endforeach
                         </tbody>
                     </table>

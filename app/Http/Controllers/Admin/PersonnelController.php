@@ -27,11 +27,17 @@ class PersonnelController extends Controller
             'email'               => 'nullable|email|max:255',
             'telephone'           => 'required|string|max:50',
             'telephone_whatsapp'  => 'nullable|string|max:50',
+            'numero_cnps'         => 'nullable|string|max:100',
+            'numero_contribuable' => 'nullable|string|max:100',
             'diplome'             => 'nullable|string|max:255',
             'niveau_etude'        => 'nullable|string|max:255',
             'domaine_formation'   => 'nullable|string|max:255',
             'date_recrutement'    => 'required|date',
             'nationalite'         => 'required|string|max:100',
+            'type_personnel'      => 'nullable|in:permanent,vacataire',
+            'mode_horaire'        => 'nullable|in:strict,souple',
+            'categorie_horaire'   => 'nullable|in:standard,conseil_administration,chef_service,coordination',
+            'horaire_travail'     => 'nullable|in:permanent_jour,permanent_soir,vacataire_jour,vacataire_soir',
         ]);
 
         personnel::create([
@@ -44,11 +50,17 @@ class PersonnelController extends Controller
             'email'               => $request->email,
             'telephone'           => $request->telephone,
             'telephone_whatsapp'  => $request->telephone_whatsapp,
+            'numero_cnps'         => $request->numero_cnps,
+            'numero_contribuable' => $request->numero_contribuable,
             'diplome'             => $request->diplome,
             'niveau_etude'        => $request->niveau_etude,
             'domaine_formation'   => $request->domaine_formation,
             'date_recrutement'    => $request->date_recrutement,
             'nationalite'         => $request->nationalite,
+            'type_personnel'      => $request->type_personnel ?? 'permanent',
+            'mode_horaire'        => $request->mode_horaire ?? 'strict',
+            'categorie_horaire'   => $request->categorie_horaire ?? 'standard',
+            'horaire_travail'     => $request->horaire_travail,
             'id_user'             => Auth::id() ?? 0,
         ]);
 
@@ -68,11 +80,17 @@ class PersonnelController extends Controller
             'email'               => 'nullable|email|max:255',
             'telephone'           => 'required|string|max:50',
             'telephone_whatsapp'  => 'nullable|string|max:50',
+            'numero_cnps'         => 'nullable|string|max:100',
+            'numero_contribuable' => 'nullable|string|max:100',
             'diplome'             => 'nullable|string|max:255',
             'niveau_etude'        => 'nullable|string|max:255',
             'domaine_formation'   => 'nullable|string|max:255',
             'date_recrutement'    => 'required|date',
             'nationalite'         => 'required|string|max:100',
+            'type_personnel'      => 'nullable|in:permanent,vacataire',
+            'mode_horaire'        => 'nullable|in:strict,souple',
+            'categorie_horaire'   => 'nullable|in:standard,conseil_administration,chef_service,coordination',
+            'horaire_travail'     => 'nullable|in:permanent_jour,permanent_soir,vacataire_jour,vacataire_soir',
         ]);
 
         $p = personnel::findOrFail($request->id);
@@ -87,11 +105,17 @@ class PersonnelController extends Controller
             'email'               => $request->email,
             'telephone'           => $request->telephone,
             'telephone_whatsapp'  => $request->telephone_whatsapp,
+            'numero_cnps'         => $request->numero_cnps,
+            'numero_contribuable' => $request->numero_contribuable,
             'diplome'             => $request->diplome,
             'niveau_etude'        => $request->niveau_etude,
             'domaine_formation'   => $request->domaine_formation,
             'date_recrutement'    => $request->date_recrutement,
             'nationalite'         => $request->nationalite,
+            'type_personnel'      => $request->type_personnel ?? 'permanent',
+            'mode_horaire'        => $request->mode_horaire ?? 'strict',
+            'categorie_horaire'   => $request->categorie_horaire ?? 'standard',
+            'horaire_travail'     => $request->horaire_travail,
         ]);
 
         return redirect()->route('personnel_management')->with('success', 'Membre du personnel modifié avec succès ✏️');

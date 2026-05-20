@@ -31,11 +31,18 @@ class ReductionFactureController extends Controller
             'observations' => 'nullable|string',
         ]);
 
-        $facture = facture_etudiant::with('reductions')->findOrFail($validated['id_facture_etudiant']);
-        $resteFacture = $facture->montant_total_facture - $facture->reductions->sum('montant');
+        $facture = facture_etudiant::with(['reductions', 'reglement_etudiants'])->findOrFail($validated['id_facture_etudiant']);
+        $totalReductions = (float) $facture->reductions->sum('montant');
+        $totalPaye = (float) $facture->reglement_etudiants->sum('montant_reglement');
+        $resteFacture = (float) $facture->montant_total_facture - $totalReductions;
+        $netApresReduction = (float) $facture->montant_total_facture - $totalReductions - (float) $validated['montant'];
 
         if ($validated['montant'] > $resteFacture) {
             return back()->withInput()->with('error', 'La reduction depasse le reste disponible sur cette facture.');
+        }
+
+        if ($netApresReduction < $totalPaye) {
+            return back()->withInput()->with('error', 'Reduction impossible : les reglements deja enregistres depasseraient le net a payer.');
         }
 
         reduction_facture::create([
@@ -65,12 +72,18 @@ class ReductionFactureController extends Controller
             'observations' => 'nullable|string',
         ]);
 
-        $facture = facture_etudiant::with('reductions')->findOrFail($reduction->id_facture_etudiant);
-        $autresReductions = $facture->reductions->where('id', '!=', $reduction->id)->sum('montant');
-        $resteFacture = $facture->montant_total_facture - $autresReductions;
+        $facture = facture_etudiant::with(['reductions', 'reglement_etudiants'])->findOrFail($reduction->id_facture_etudiant);
+        $autresReductions = (float) $facture->reductions->where('id', '!=', $reduction->id)->sum('montant');
+        $totalPaye = (float) $facture->reglement_etudiants->sum('montant_reglement');
+        $resteFacture = (float) $facture->montant_total_facture - $autresReductions;
+        $netApresReduction = (float) $facture->montant_total_facture - $autresReductions - (float) $validated['montant'];
 
         if ($validated['montant'] > $resteFacture) {
             return back()->withInput()->with('error', 'La reduction depasse le reste disponible sur cette facture.');
+        }
+
+        if ($netApresReduction < $totalPaye) {
+            return back()->withInput()->with('error', 'Reduction impossible : les reglements deja enregistres depasseraient le net a payer.');
         }
 
         $reduction->update($validated);

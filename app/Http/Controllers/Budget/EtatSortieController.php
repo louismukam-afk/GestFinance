@@ -477,7 +477,7 @@ class EtatSortieController extends Controller
             'totalEntrees' => $operations->sum('entree'),
             'totalRetours' => $operations->sum('retour'),
             'totalSorties' => $operations->sum('sortie'),
-            'solde' => $operations->sum('entree') - $operations->sum('sortie'),
+            'solde' => $operations->sum('entree') + $operations->sum('retour') - $operations->sum('sortie'),
             'caisses' => caisse::orderBy('nom_caisse')->get(),
             'users' => User::orderBy('name')->get(),
             'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
@@ -749,7 +749,9 @@ class EtatSortieController extends Controller
 
         $idAnnee  = $request->id_annee_academique;
         $idEntite = $request->id_entite;
-        $idLigne  = $request->id_ligne ?? $request->id_budget;
+        $idBudget = $request->id_budget;
+        $idLigneEntree = $request->id_ligne_entree ?? $request->id_ligne;
+        $idLigneSortie = $request->id_ligne_sortie ?? $request->id_ligne;
 
         // =========================
         // 💰 DISPONIBILITÉ CAISSE
@@ -766,7 +768,10 @@ class EtatSortieController extends Controller
             'facture_etudiants.reglement_etudiants',
             'facture_etudiants.reductions',
             'facture_etudiants.entite'
-        ])->get();
+        ])
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+            ->when($idLigneEntree, fn($q) => $q->where('id_ligne_budgetaire_entree', $idLigneEntree))
+            ->get();
 
         /*$entrees = $donneesEntrees->map(function ($d) use ($dateDebut,$dateFin,$idAnnee,$idEntite,$idLigne) {
 
@@ -775,12 +780,13 @@ class EtatSortieController extends Controller
             ->when($idEntite, fn($c)=>$c->where('id_entite',$idEntite))
             ->when($idLigne, fn($c)=>$c->where('id_ligne_budgetaire_entree',$idLigne))
             ->whereBetween('date_facture',[$dateDebut,$dateFin]);*/
-        $entrees = $donneesEntrees->map(function ($d) use ($dateDebut,$dateFin,$idAnnee,$idEntite,$idLigne) {
+        $entrees = $donneesEntrees->map(function ($d) use ($dateDebut, $dateFin, $idAnnee, $idEntite, $idBudget, $idLigneEntree) {
 
             $factures = $d->facture_etudiants
                 ->when($idAnnee, fn($c)=>$c->where('id_annee_academique',$idAnnee))
             ->when($idEntite, fn($c)=>$c->where('id_entite',$idEntite))
-            ->when($idLigne, fn($c)=>$c->where('id_budget',$idLigne))
+            ->when($idBudget, fn($c)=>$c->where('id_budget',$idBudget))
+            ->when($idLigneEntree, fn($c)=>$c->where('id_ligne_budgetaire_entree',$idLigneEntree))
             ->whereBetween('date_facture',[$dateDebut,$dateFin]);
 
 
@@ -788,6 +794,8 @@ class EtatSortieController extends Controller
         $reduction = $factures->sum(fn($facture) => $facture->montant_reduction);
 
         $encaisse = $factures->flatMap->reglement_etudiants
+            ->where('date_reglement', '>=', $dateDebut)
+            ->where('date_reglement', '<=', $dateFin)
             ->sum('montant_reglement');
 
         $entite = optional($factures->first()?->entite)->nom_entite ?? '—';
@@ -811,7 +819,8 @@ class EtatSortieController extends Controller
         $entreesSpeciales = entree_speciale::with(['budget', 'echeances'])
             ->where('statut', '!=', 'annule')
             ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
-            ->when($idLigne, fn($q) => $q->where('id_budget', $idLigne))
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+            ->whereBetween('date_entree', [$dateDebut, $dateFin])
             ->get()
             ->map(function ($e) {
                 $encaisse = $e->type_entree === 'dette' ? $e->montant : $e->montant_net_encaisse;
@@ -841,7 +850,10 @@ class EtatSortieController extends Controller
             'ligne_budgetaire_sortie',
             'element_ligne_budgetaire_sorties',
             'decaissements.bon.entites'
-        ])->get();
+        ])
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+            ->when($idLigneSortie, fn($q) => $q->where('id_ligne_budgetaire_sortie', $idLigneSortie))
+            ->get();
 
         /*$sorties = $donneesSorties->map(function ($d) use ($dateDebut,$dateFin,$idAnnee,$idEntite,$idLigne) {
 
@@ -849,7 +861,7 @@ class EtatSortieController extends Controller
                 ->when($idAnnee, fn($c)=>$c->where('id_annee_academique',$idAnnee))
             ->when($idLigne, fn($c)=>$c->where('id_ligne_budgetaire_sortie',$idLigne))
             ->whereBetween('date_depense',[$dateDebut,$dateFin]);*/
-            $sorties = $donneesSorties->map(function ($d) use ($dateDebut,$dateFin,$idAnnee,$idEntite,$idLigne) {
+            $sorties = $donneesSorties->map(function ($d) use ($dateDebut, $dateFin, $idAnnee, $idEntite, $idBudget, $idLigneSortie) {
 
                 $decaissements = $d->decaissements
                     ->when($idAnnee, fn($c)=>$c->where('id_annee_academique',$idAnnee))
@@ -858,7 +870,8 @@ class EtatSortieController extends Controller
                     return optional(optional($decaissement->bon)->entites)->id == $idEntite;
                 });
             })
-            ->when($idLigne, fn($c)=>$c->where('id_budget',$idLigne))
+            ->when($idBudget, fn($c)=>$c->where('id_budget',$idBudget))
+            ->when($idLigneSortie, fn($c)=>$c->where('id_ligne_budgetaire_sortie',$idLigneSortie))
             ->whereBetween('date_depense',[$dateDebut,$dateFin]);
 
         $depense = $decaissements->sum('montant');
@@ -884,7 +897,7 @@ class EtatSortieController extends Controller
             ->whereIn('type_entree', ['dette', 'don', 'apport'])
             ->where('statut', '!=', 'annule')
             ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
-            ->when($idLigne, fn($q) => $q->where('id_budget', $idLigne))
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
             ->whereBetween('date_entree', [$dateDebut, $dateFin])
             ->get()
             ->map(function ($entreeSpeciale) use ($dateDebut, $dateFin) {
@@ -909,7 +922,7 @@ class EtatSortieController extends Controller
             ->where('statut', 'payee')
             ->whereBetween('date_paiement', [$dateDebut, $dateFin])
             ->when($idAnnee, fn($q) => $q->where('id_annee_academique_paiement', $idAnnee))
-            ->when($idLigne, fn($q) => $q->whereHas('entree_speciale', fn($d) => $d->where('id_budget', $idLigne)))
+            ->when($idBudget, fn($q) => $q->whereHas('entree_speciale', fn($d) => $d->where('id_budget', $idBudget)))
             ->get()
             ->groupBy('id_entree_speciale')
             ->map(function ($echeances) use ($dateFin) {

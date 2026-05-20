@@ -34,6 +34,7 @@
                         <th>Coefficient maximum</th>
                         <th>Type</th>
                         <th>Semestre</th>
+                        <th>Volume horaire</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -55,6 +56,7 @@
                                     </select>
                                 </td>
                                 <td><input type="text" name="semestre" value="{{ $programme->semestre }}" class="form-control" placeholder="S1, S2..."></td>
+                                <td><input type="number" step="0.5" name="volume_horaire" value="{{ $programme->volume_horaire }}" class="form-control"></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary">Modifier</button>
                                     <a href="{{ route('groupes_matieres.create', $programme) }}" class="btn btn-sm btn-info">Groupe matiere</a>
@@ -68,7 +70,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center text-muted">Aucune matiere affectee pour le moment.</td>
+                            <td colspan="8" class="text-center text-muted">Aucune matiere affectee pour le moment.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -105,6 +107,7 @@
                                 <th>Coefficient maximum</th>
                                 <th>Type</th>
                                 <th>Semestre</th>
+                                <th>Volume horaire</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -129,10 +132,11 @@
                                         </select>
                                     </td>
                                     <td><input type="text" name="programmes[{{ $i }}][semestre]" class="form-control" placeholder="S1, S2..."></td>
+                                    <td><input type="number" step="0.5" name="programmes[{{ $i }}][volume_horaire]" class="form-control"></td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">Toutes les matieres sont deja affectees a cette specialite.</td>
+                                    <td colspan="8" class="text-center text-muted">Toutes les matieres sont deja affectees a cette specialite.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -158,7 +162,8 @@ document.getElementById('matiere-search').addEventListener('input', function () 
 @section('breadcrumb')
 <ol class="breadcrumb" style="background-color: transparent;padding: 4px 10px">
     <li><a href="{{ route('home') }}"><strong>Accueil</strong></a></li>
-    <li><a href="{{ route('specialite_management') }}"><strong>Specialites</strong></a></li>
+    <li><a href="{{ route('emploi_temps.index') }}"><strong>Ressources humaines</strong></a></li>
+    <li><a href="{{ route('programmes_specialites.index') }}"><strong>Programmes de specialite</strong></a></li>
     <li class="active"><strong>{{ $title }}</strong></li>
 </ol>
 @endsection

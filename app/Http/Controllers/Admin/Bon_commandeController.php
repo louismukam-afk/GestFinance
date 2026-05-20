@@ -35,12 +35,15 @@ class Bon_commandeController extends Controller
     }
 
 
-    public function index_bon()
+    public function index_bon(Request $request)
     {
         $bons = bon_commandeok::with('personnels','entites')
+            ->when($request->date_debut, fn($q) => $q->whereDate('date_debut', '>=', $request->date_debut))
+            ->when($request->date_fin, fn($q) => $q->whereDate('date_debut', '<=', $request->date_fin))
+            ->when($request->statut !== null && $request->statut !== '', fn($q) => $q->where('statuts', $request->statut))
             ->orderBy('date_debut', 'desc')
             ->get()
-            ->groupBy('personnel_id')
+            ->groupBy('id_personnel')
             ; // ✅ 10 par page
 
         $p = personnel::all();
@@ -82,9 +85,12 @@ class Bon_commandeController extends Controller
     public function index_bonvalide()
     {
         $bons = bon_commandeok::with('personnels','entites')
+            ->when($request->date_debut, fn($q) => $q->whereDate('date_debut', '>=', $request->date_debut))
+            ->when($request->date_fin, fn($q) => $q->whereDate('date_debut', '<=', $request->date_fin))
+            ->when($request->statut !== null && $request->statut !== '', fn($q) => $q->where('statuts', $request->statut))
             ->orderBy('date_debut', 'desc')
             ->get()
-            ->groupBy('personnel_id');
+            ->groupBy('id_personnel');
         $p=personnel::all();
         $e=entite::all();
         $this->values['personnels']=$p;
@@ -161,6 +167,14 @@ class Bon_commandeController extends Controller
         $bon->id_user = Auth::user()->id ;// ou Auth::id() si hors de Laravel Admin
 //        $bon->id_user = $request->input('id_user');
         $bon->id_entite = $request->input('id_entite');
+        $bon->validation_pdg = 0;
+        $bon->validation_daf = 0;
+        $bon->validation_achats = 0;
+        $bon->validation_emetteur = 0;
+        $bon->refus_pdg = 0;
+        $bon->refus_daf = 0;
+        $bon->refus_achats = 0;
+        $bon->refus_emetteur = 0;
 //        $bon->statuts = $request->input('statuts');
         $bon->save();
 
@@ -216,6 +230,7 @@ class Bon_commandeController extends Controller
     {
         $commande = bon_commandeok::findOrFail($id);
         $commande->validation_pdg = 1;
+        $this->clearRefus($commande, 'pdg');
         $this->updateStatut($commande);
         admin_toastr('Validation PDG réussie', 'success');
         return redirect(admin_url('bon_commande'));
@@ -224,6 +239,7 @@ class Bon_commandeController extends Controller
     {
         $commande = bon_commandeok::findOrFail($id);
         $commande->validation_daf = 1;
+        $this->clearRefus($commande, 'daf');
         $this->updateStatut($commande);
         admin_toastr('Validation DAF réussie', 'success');
         return redirect(admin_url('bon_commande'));
@@ -233,6 +249,7 @@ class Bon_commandeController extends Controller
     {
         $commande = bon_commandeok::findOrFail($id);
         $commande->validation_achats = 1;
+        $this->clearRefus($commande, 'achats');
         $this->updateStatut($commande);
         admin_toastr('Validation Achats réussie', 'success');
         return redirect(admin_url('bon_commande'));
@@ -242,6 +259,7 @@ class Bon_commandeController extends Controller
     {
         $commande = bon_commandeok::findOrFail($id);
         $commande->validation_emetteur = 1;
+        $this->clearRefus($commande, 'emetteur');
         $this->updateStatut($commande);
         admin_toastr('Validation Émetteur réussie', 'success');
         return redirect(admin_url('bon_commande'));
@@ -249,6 +267,18 @@ class Bon_commandeController extends Controller
 
     private function updateStatut($commande)
     {
+        if (
+            $commande->refus_pdg ||
+            $commande->refus_daf ||
+            $commande->refus_achats ||
+            $commande->refus_emetteur
+        ) {
+            $commande->statuts = 2;
+            $commande->date_validation = null;
+            $commande->save();
+            return;
+        }
+
         // Si toutes les validations sont faites, on valide le bon de commande
         if (
             $commande->validation_pdg &&
@@ -258,9 +288,19 @@ class Bon_commandeController extends Controller
         ) {
             $commande->statuts = 1; // validé
             $commande->date_validation = now(); // Enregistre la date actuelle
+        } else {
+            $commande->statuts = 0;
+            $commande->date_validation = null;
         }
 
         $commande->save();
+    }
+
+    private function clearRefus(bon_commandeok $commande, string $niveau): void
+    {
+        $commande->{"refus_{$niveau}"} = 0;
+        $commande->{"motif_refus_{$niveau}"} = null;
+        $commande->{"date_refus_{$niveau}"} = null;
     }
     public function destroy($id)
     {
@@ -271,3 +311,4 @@ class Bon_commandeController extends Controller
             ->withSuccess(['ok' => 'Bon de commande supprimé avec succès']);
     }
 }
+

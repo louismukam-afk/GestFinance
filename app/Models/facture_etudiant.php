@@ -50,6 +50,20 @@ class facture_etudiant extends Model
         return max((float) $this->montant_total_facture - (float) $this->montant_reduction, 0);
     }
 
+    public function getMontantPayeAttribute()
+    {
+        $reglements = $this->relationLoaded('reglement_etudiants')
+            ? $this->reglement_etudiants
+            : $this->reglement_etudiants()->get();
+
+        return (float) $reglements->sum('montant_reglement');
+    }
+
+    public function getResteAPayerAttribute()
+    {
+        return max((float) $this->montant_net_facture - (float) $this->montant_paye, 0);
+    }
+
     public function cycles(){
         return $this->belongsTo(cycle::class,'id_cycle');
     }

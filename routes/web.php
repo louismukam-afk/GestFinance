@@ -24,6 +24,7 @@ use App\Http\Controllers\Budget\EntreeSpecialeController;
 use App\Http\Controllers\Admin\AccessControlController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\MesBonCommandeController;
+use App\Http\Controllers\Admin\BonValidationController;
 use App\Http\Controllers\Admin\EtatEtudiantScolariteController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\ReductionFactureController;
@@ -32,6 +33,16 @@ use App\Http\Controllers\Admin\FactureRattrapageController;
 use App\Http\Controllers\Admin\ProgrammeSpecialiteController;
 use App\Http\Controllers\Admin\GroupeMatiereController;
 use App\Http\Controllers\Admin\EmploiTempsController;
+use App\Http\Controllers\Admin\SalleController;
+use App\Http\Controllers\Admin\TauxHoraireController;
+use App\Http\Controllers\Admin\PlageHoraireController;
+use App\Http\Controllers\Admin\CoursEnseignantController;
+use App\Http\Controllers\Admin\BiometrieHeureController;
+use App\Http\Controllers\Admin\SalairePermanentController;
+use App\Http\Controllers\Admin\DisciplinePersonnelController;
+use App\Http\Controllers\Admin\PersonnelEntiteController;
+use App\Http\Controllers\Admin\EmploiPermanentController;
+use App\Http\Controllers\Admin\PaiePermanentController;
 
 use App\Http\Controllers\Admin\EtatComptableController;
 use App\Models\facture_etudiant;
@@ -89,6 +100,75 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('matieres', MatiereController::class)->except(['create', 'show', 'edit']);
 
     Route::get('/emploi-du-temps', [EmploiTempsController::class, 'index'])->name('emploi_temps.index');
+    Route::resource('emploi-du-temps/salles', SalleController::class)->except(['show', 'create', 'edit'])->names('salles');
+    Route::resource('emploi-du-temps/taux-horaires', TauxHoraireController::class)->except(['show', 'create', 'edit'])->names('taux_horaires');
+    Route::resource('emploi-du-temps/salaires-permanents', SalairePermanentController::class)
+        ->except(['show', 'create', 'edit'])
+        ->parameters(['salaires-permanents' => 'salaire_permanent'])
+        ->names('salaires_permanents');
+    Route::get('emploi-du-temps/discipline-personnels', [DisciplinePersonnelController::class, 'index'])->name('discipline_personnels.index');
+    Route::put('emploi-du-temps/discipline-personnels/{discipline}', [DisciplinePersonnelController::class, 'update'])->name('discipline_personnels.update');
+    Route::post('emploi-du-temps/discipline-personnels/{discipline}/justifier', [DisciplinePersonnelController::class, 'justify'])->name('discipline_personnels.justify');
+    Route::resource('emploi-du-temps/personnel-entites', PersonnelEntiteController::class)
+        ->except(['show', 'create', 'edit'])
+        ->parameters(['personnel-entites' => 'personnel_entite'])
+        ->names('personnel_entites');
+    Route::resource('emploi-du-temps/emplois-permanents', EmploiPermanentController::class)
+        ->except(['show', 'create', 'edit'])
+        ->parameters(['emplois-permanents' => 'emploi_permanent'])
+        ->names('emplois_permanents');
+    Route::resource('emploi-du-temps/plages-horaires', PlageHoraireController::class)
+        ->except(['show', 'create', 'edit'])
+        ->parameters(['plages-horaires' => 'plage_horaire'])
+        ->names('plages_horaires');
+    Route::get('emploi-du-temps/cours-enseignants/contextes', [CoursEnseignantController::class, 'contextes'])->name('cours_enseignants.contextes');
+    Route::get('emploi-du-temps/cours-enseignants/specialites/{specialite}/contexte', [CoursEnseignantController::class, 'configure'])->name('cours_enseignants.configure');
+    Route::get('emploi-du-temps/cours-enseignants/specialites/{specialite}/create', [CoursEnseignantController::class, 'createForContext'])->name('cours_enseignants.create_context');
+    Route::get('emploi-du-temps/emplois-specialites', [CoursEnseignantController::class, 'emploiSpecialite'])->name('cours_enseignants.emploi_specialite');
+    Route::get('emploi-du-temps/emplois-specialites/pdf', [CoursEnseignantController::class, 'emploiSpecialitePdf'])->name('cours_enseignants.emploi_specialite_pdf');
+    Route::get('emploi-du-temps/emplois-enseignants', [CoursEnseignantController::class, 'emploiEnseignant'])->name('cours_enseignants.emploi_enseignant');
+    Route::get('emploi-du-temps/emplois-enseignants/pdf', [CoursEnseignantController::class, 'emploiEnseignantPdf'])->name('cours_enseignants.emploi_enseignant_pdf');
+    Route::get('emploi-du-temps/volumes-specialites', [CoursEnseignantController::class, 'volumesSpecialite'])->name('cours_enseignants.volumes_specialite');
+    Route::get('emploi-du-temps/volumes-specialites/pdf', [CoursEnseignantController::class, 'volumesSpecialitePdf'])->name('cours_enseignants.volumes_specialite_pdf');
+    Route::get('emploi-du-temps/decompte-heures', [BiometrieHeureController::class, 'index'])->name('biometrie_heures.index');
+    Route::get('emploi-du-temps/biometrie-permanents', [BiometrieHeureController::class, 'permanentIndex'])->name('biometrie_permanents.index');
+    Route::post('emploi-du-temps/biometrie-permanents/import', [BiometrieHeureController::class, 'permanentStore'])->name('biometrie_permanents.store');
+    Route::post('emploi-du-temps/biometrie-permanents/{import}/consolider', [BiometrieHeureController::class, 'permanentConsolider'])->name('biometrie_permanents.consolider');
+    Route::delete('emploi-du-temps/biometrie-permanents/{import}/consolidation', [BiometrieHeureController::class, 'permanentClear'])->name('biometrie_permanents.clear');
+    Route::prefix('emploi-du-temps/paie-permanents')->name('paie_permanents.')->group(function () {
+        Route::get('/', [PaiePermanentController::class, 'index'])->name('index');
+        Route::post('/generer', [PaiePermanentController::class, 'generer'])->name('generer');
+        Route::get('/bulletins/pdf', [PaiePermanentController::class, 'exportPdf'])->name('bulletins.pdf');
+        Route::post('/rubriques', [PaiePermanentController::class, 'storeRubrique'])->name('rubriques.store');
+        Route::post('/configs', [PaiePermanentController::class, 'storeConfig'])->name('configs.store');
+        Route::post('/acomptes', [PaiePermanentController::class, 'storeAcompte'])->name('acomptes.store');
+        Route::post('/sanctions', [PaiePermanentController::class, 'storeSanction'])->name('sanctions.store');
+        Route::post('/baremes-irpp', [PaiePermanentController::class, 'storeBaremeIrpp'])->name('baremes_irpp.store');
+        Route::put('/baremes-irpp/{bareme}', [PaiePermanentController::class, 'updateBaremeIrpp'])->name('baremes_irpp.update');
+        Route::delete('/baremes-irpp/{bareme}', [PaiePermanentController::class, 'destroyBaremeIrpp'])->name('baremes_irpp.destroy');
+        Route::post('/parametres-cac', [PaiePermanentController::class, 'storeParametreCac'])->name('parametres_cac.store');
+        Route::put('/parametres-cac/{cac}', [PaiePermanentController::class, 'updateParametreCac'])->name('parametres_cac.update');
+        Route::delete('/parametres-cac/{cac}', [PaiePermanentController::class, 'destroyParametreCac'])->name('parametres_cac.destroy');
+        Route::post('/parametres-pvid', [PaiePermanentController::class, 'storeParametrePvid'])->name('parametres_pvid.store');
+        Route::put('/parametres-pvid/{pvid}', [PaiePermanentController::class, 'updateParametrePvid'])->name('parametres_pvid.update');
+        Route::delete('/parametres-pvid/{pvid}', [PaiePermanentController::class, 'destroyParametrePvid'])->name('parametres_pvid.destroy');
+        Route::post('/etats', [PaiePermanentController::class, 'genererEtatPaie'])->name('etats.generer');
+        Route::get('/etats/{etat}', [PaiePermanentController::class, 'showEtatPaie'])->name('etats.show');
+        Route::get('/etats/{etat}/pdf', [PaiePermanentController::class, 'exportEtatPaiePdf'])->name('etats.pdf');
+        Route::post('/bulletins/valider-global', [PaiePermanentController::class, 'validerGlobal'])->name('bulletins.valider_global');
+        Route::post('/bulletins/{bulletin}/valider', [PaiePermanentController::class, 'valider'])->name('bulletins.valider');
+    });
+    Route::get('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualCreate'])->name('biometrie_heures.manual.create');
+    Route::post('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualStore'])->name('biometrie_heures.manual.store');
+    Route::post('emploi-du-temps/decompte-heures/import', [BiometrieHeureController::class, 'store'])->name('biometrie_heures.store');
+    Route::post('emploi-du-temps/decompte-heures/{import}/consolider', [BiometrieHeureController::class, 'consolider'])->name('biometrie_heures.consolider');
+    Route::delete('emploi-du-temps/decompte-heures/{import}/consolidation', [BiometrieHeureController::class, 'clearConsolidation'])->name('biometrie_heures.clear');
+    Route::delete('emploi-du-temps/decompte-heures/{import}', [BiometrieHeureController::class, 'destroy'])->name('biometrie_heures.destroy');
+    Route::post('emploi-du-temps/decompte-heures/association', [BiometrieHeureController::class, 'storeMapping'])->name('biometrie_heures.mapping');
+    Route::get('emploi-du-temps/decompte-heures/export/excel', [BiometrieHeureController::class, 'exportExcel'])->name('biometrie_heures.excel');
+    Route::get('emploi-du-temps/decompte-heures/export/pdf', [BiometrieHeureController::class, 'exportPdf'])->name('biometrie_heures.pdf');
+    Route::get('emploi-du-temps/cours-enseignants/export', [CoursEnseignantController::class, 'export'])->name('cours_enseignants.export');
+    Route::resource('emploi-du-temps/cours-enseignants', CoursEnseignantController::class)->except(['show'])->names('cours_enseignants');
     Route::get('/emploi-du-temps/programmes-specialites', [ProgrammeSpecialiteController::class, 'index'])->name('programmes_specialites.index');
     Route::get('/specialites/{specialite}/programme/contexte', [ProgrammeSpecialiteController::class, 'configure'])->name('programmes_specialites.configure');
     Route::get('/specialites/{specialite}/programme', [ProgrammeSpecialiteController::class, 'edit'])->name('programmes_specialites.edit');
@@ -112,10 +192,25 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('mes-bons')->name('mes_bons.')->group(function () {
         Route::get('/attente', [MesBonCommandeController::class, 'attente'])->name('attente');
         Route::get('/valides', [MesBonCommandeController::class, 'valides'])->name('valides');
+        Route::get('/refuses', [MesBonCommandeController::class, 'refuses'])->name('refuses');
         Route::post('/', [MesBonCommandeController::class, 'store'])->name('store');
         Route::put('/{bon}', [MesBonCommandeController::class, 'update'])->name('update');
+        Route::delete('/{bon}', [MesBonCommandeController::class, 'destroy'])->name('destroy');
         Route::post('/{bon}/validation-emetteur', [MesBonCommandeController::class, 'validerEmetteur'])->name('valider_emetteur');
+        Route::post('/{bon}/refus-emetteur', [MesBonCommandeController::class, 'refuserEmetteur'])->name('refuser_emetteur');
         Route::get('/export/pdf/{type}', [MesBonCommandeController::class, 'exportPdf'])->name('pdf');
+        Route::get('/{bon}/document', [MesBonCommandeController::class, 'document'])->name('document');
+        Route::get('/{bon}/document/pdf', [MesBonCommandeController::class, 'documentPdf'])->name('document_pdf');
+    });
+
+    Route::prefix('validation-bons')->name('validation_bons.')->group(function () {
+        Route::get('/pdg', [BonValidationController::class, 'pdg'])->name('pdg');
+        Route::get('/daf', [BonValidationController::class, 'daf'])->name('daf');
+        Route::get('/achats', [BonValidationController::class, 'achats'])->name('achats');
+        Route::get('/{niveau}', [BonValidationController::class, 'index'])->name('index');
+        Route::post('/{niveau}/{bon}/valider', [BonValidationController::class, 'valider'])->name('valider');
+        Route::post('/{niveau}/{bon}/refuser', [BonValidationController::class, 'refuser'])->name('refuser');
+        Route::get('/{niveau}/export/pdf', [BonValidationController::class, 'exportPdf'])->name('pdf');
     });
 
     Route::prefix('access-control')->name('access.')->middleware('super.admin')->group(function () {
@@ -163,6 +258,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('valider_achats_bon');
         Route::post('bon_commande/{id}/valider-emetteur', [Bon_commandeController::class, 'validerEmetteur'])
             ->name('valider_emetteur_bon');
+        Route::post('bon_commande/{niveau}/{bon}/refuser', [BonValidationController::class, 'refuser'])
+            ->name('refuser_bon');
 
         // 📌 Gestion des éléments de bon
         Route::get('/bon/{bon}/elements/manage', [ElementBonCommandeController::class, 'manage'])

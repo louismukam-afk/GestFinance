@@ -51,7 +51,7 @@
 @section('breadcrumb')
 <ol class="breadcrumb" style="background-color: transparent;padding: 4px 10px">
     <li><a href="{{ route('home') }}"><strong>Accueil</strong></a></li>
-    <li><a href="{{ route('emploi_temps.index') }}"><strong>Emploi du temps</strong></a></li>
+    <li><a href="{{ route('emploi_temps.index') }}"><strong>Ressources humaines</strong></a></li>
     <li class="active"><strong>{{ $title }}</strong></li>
 </ol>
 @endsection

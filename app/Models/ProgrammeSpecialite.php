@@ -24,6 +24,7 @@ class ProgrammeSpecialite extends Model
         'coefficient_maximum',
         'type_matiere',
         'semestre',
+        'volume_horaire',
         'id_user',
     ];
 
@@ -60,5 +61,10 @@ class ProgrammeSpecialite extends Model
     public function entite()
     {
         return $this->belongsTo(entite::class, 'id_entite');
+    }
+
+    public function cours_enseignants()
+    {
+        return $this->hasMany(CoursEnseignant::class, 'id_programme_specialite');
     }
 }

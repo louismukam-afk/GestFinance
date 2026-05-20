@@ -63,13 +63,15 @@
     ][$reg->type_versement ?? 0] ?? (is_string($reg->type_versement) ? ucfirst($reg->type_versement) : '—');
 
     // Totaux (si disponibles – sinon laisse tel quel)
-    $totalFacture = 0; $totalPaye = 0; $reste = 0;
+    $totalFacture = 0; $totalReduction = 0; $totalNet = 0; $totalPaye = 0; $reste = 0;
     if (!empty($reg->id_facture_etudiant)) {
         $fact = \App\Models\facture_etudiant::find($reg->id_facture_etudiant);
         if ($fact) {
             $totalFacture = (float)$fact->montant_total_facture;
-            $totalPaye    = (float)\App\Models\reglement_etudiant::where('id_facture_etudiant',$fact->id)->sum('montant_reglement');
-            $reste        = max(0, $totalFacture - $totalPaye);
+            $totalReduction = (float)$fact->montant_reduction;
+            $totalNet = (float)$fact->montant_net_facture;
+            $totalPaye = (float)\App\Models\reglement_etudiant::where('id_facture_etudiant',$fact->id)->sum('montant_reglement');
+            $reste = max(0, $totalNet - $totalPaye);
         }
     }
 @endphp
@@ -175,6 +177,14 @@
                     <tr>
                         <td><strong>Total facture</strong></td>
                         <td class="right">{{ number_format($totalFacture,0,',',' ') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Reduction</strong></td>
+                        <td class="right">{{ number_format($totalReduction ?? 0,0,',',' ') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Net a payer</strong></td>
+                        <td class="right">{{ number_format($totalNet ?? $totalFacture,0,',',' ') }}</td>
                     </tr>
                     <tr>
                         <td><strong>Déjà payé (incluant ce règlement)</strong></td>
@@ -290,6 +300,14 @@
                     <tr>
                         <td><strong>Total facture</strong></td>
                         <td class="right">{{ number_format($totalFacture,0,',',' ') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Reduction</strong></td>
+                        <td class="right">{{ number_format($totalReduction ?? 0,0,',',' ') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Net a payer</strong></td>
+                        <td class="right">{{ number_format($totalNet ?? $totalFacture,0,',',' ') }}</td>
                     </tr>
                     <tr>
                         <td><strong>Déjà payé (incluant ce règlement)</strong></td>

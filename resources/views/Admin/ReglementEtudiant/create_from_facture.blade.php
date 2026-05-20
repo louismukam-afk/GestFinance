@@ -10,6 +10,8 @@
             <strong>Type :</strong> {{ $facture->type_facture === 1 ? 'Scolarité' : 'Frais' }}<br>
             <strong>Total facture :</strong> {{ number_format($totalFacture,0,',',' ') }} —
             <strong>Déjà payé :</strong> {{ number_format($totalPaye,0,',',' ') }} —
+            <strong>Reduction :</strong> {{ number_format($totalReduction ?? 0,0,',',' ') }} -
+            <strong>Net a payer :</strong> {{ number_format($totalNet ?? $totalFacture,0,',',' ') }} -
             <strong>Reste :</strong> {{ number_format($reste,0,',',' ') }}
         </div>
 
@@ -543,7 +545,8 @@
                 <div class="row">
                     <div class="col-md-4">
                         <label>Montant du règlement <span class="text-danger">*</span></label>
-                        <input type="number" min="0" step="0.01" class="form-control" name="montant_reglement" required>
+                        <input type="number" min="0" max="{{ $reste }}" step="0.01" class="form-control" name="montant_reglement" required>
+                        <small class="text-muted">Maximum apres reduction : {{ number_format($reste,0,',',' ') }} FCFA</small>
                     </div>
                     <div class="col-md-4">
                         <label>Motif (optionnel)</label>

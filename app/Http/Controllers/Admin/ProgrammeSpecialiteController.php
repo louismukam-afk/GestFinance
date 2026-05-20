@@ -101,6 +101,7 @@ class ProgrammeSpecialiteController extends Controller
             'programmes.*.coefficient_maximum' => 'nullable|numeric|min:0',
             'programmes.*.type_matiere' => 'nullable|in:transversale,professionnelle,fondamentale',
             'programmes.*.semestre' => 'nullable|string|max:50',
+            'programmes.*.volume_horaire' => 'nullable|numeric|min:0',
         ]);
 
         foreach ($request->input('programmes', []) as $line) {
@@ -124,6 +125,7 @@ class ProgrammeSpecialiteController extends Controller
                     'coefficient_maximum' => (float)($line['coefficient_maximum'] ?? 0),
                     'type_matiere' => $line['type_matiere'] ?? 'professionnelle',
                     'semestre' => $line['semestre'] ?? null,
+                    'volume_horaire' => (float)($line['volume_horaire'] ?? 0),
                     'id_user' => Auth::id() ?? 0,
                 ]
             );
@@ -140,6 +142,7 @@ class ProgrammeSpecialiteController extends Controller
             'coefficient_maximum' => 'nullable|numeric|min:0',
             'type_matiere' => 'required|in:transversale,professionnelle,fondamentale',
             'semestre' => 'nullable|string|max:50',
+            'volume_horaire' => 'nullable|numeric|min:0',
         ]);
 
         $programme->update($data);

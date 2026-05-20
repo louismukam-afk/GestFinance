@@ -310,6 +310,8 @@
             <strong>Type :</strong> {{ $facture->type_facture === 1 ? 'Scolarité' : 'Frais' }} —
             <strong>Montant facture :</strong> {{ number_format($totalFacture,0,',',' ') }} —
             <strong>Payé :</strong> {{ number_format($totalPaye,0,',',' ') }} —
+            <strong>Reduction :</strong> {{ number_format($totalReduction ?? 0,0,',',' ') }} -
+            <strong>Net a payer :</strong> {{ number_format($totalNet ?? $totalFacture,0,',',' ') }} -
             <strong>Reste :</strong> {{ number_format($reste,0,',',' ') }}
         </p>
 
@@ -395,6 +397,8 @@
             — <strong>Matricule :</strong> {{ $etudiant->matricule ?? '—' }}<br>
             <strong>Type :</strong> {{ $facture->type_facture === 1 ? 'Scolarité' : 'Frais' }} —
             <strong>Montant facture :</strong> {{ number_format($totalFacture,0,',',' ') }} —
+            <strong>Reduction :</strong> {{ number_format($totalReduction ?? 0,0,',',' ') }} -
+            <strong>Net a payer :</strong> {{ number_format($totalNet ?? $totalFacture,0,',',' ') }} -
             <strong>Payé :</strong> {{ number_format($totalPaye,0,',',' ') }} —
             <strong>Reste :</strong> {{ number_format($reste,0,',',' ') }}
         </p>
@@ -510,4 +514,5 @@
         });
     </script>
 @endsection
+
 

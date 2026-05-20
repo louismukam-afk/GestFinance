@@ -324,7 +324,10 @@
         <div class="alert alert-info">
             <strong>Facture :</strong> {{ $facture->numero_facture ?? '—' }} —
             <strong>Étudiant :</strong> {{ $reglement->etudiants->nom ?? '—' }}<br>
-            <strong>Type :</strong> {{ $facture->type_facture === 1 ? 'Scolarité' : 'Frais' }}
+            <strong>Type :</strong> {{ $facture->type_facture === 1 ? 'Scolarité' : 'Frais' }}<br>
+            <strong>Total :</strong> {{ number_format($facture->montant_total_facture ?? 0,0,',',' ') }} -
+            <strong>Reduction :</strong> {{ number_format($facture->montant_reduction ?? 0,0,',',' ') }} -
+            <strong>Net a payer :</strong> {{ number_format($facture->montant_net_facture ?? 0,0,',',' ') }}
         </div>
 
         <form method="POST" action="{{ route('update_reglement') }}">
@@ -507,9 +510,10 @@
                 <div class="row">
                     <div class="col-md-3">
                         <label>Montant du règlement <span class="text-danger">*</span></label>
-                        <input type="number" name="montant_reglement" min="0" step="0.01"
+                        <input type="number" name="montant_reglement" min="0" max="{{ $montantMaximum ?? '' }}" step="0.01"
                                value="{{ old('montant_reglement', $reglement->montant_reglement) }}"
                                class="form-control" required>
+                        <small class="text-muted">Maximum apres reduction : {{ number_format($montantMaximum ?? 0,0,',',' ') }} FCFA</small>
                     </div>
                     <div class="col-md-3">
                         <label>Date du règlement <span class="text-danger">*</span></label>

@@ -136,7 +136,7 @@
         </tr>
         <tr class="total">
             <td colspan="11">SOLDE {{ $caisse }}</td>
-            <td colspan="3" class="right">{{ number_format($tEntree - $tSortie, 0, ',', ' ') }} FCFA</td>
+            <td colspan="3" class="right">{{ number_format($tEntree + $tRetour - $tSortie, 0, ',', ' ') }} FCFA</td>
         </tr>
         </tbody>
     </table>

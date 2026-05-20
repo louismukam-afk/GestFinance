@@ -436,7 +436,7 @@ class ReglementEtudiantController extends Controller
     {
         $facture = facture_etudiant::with([
             'etudiants','cycles','filieres','niveaux','specialites',
-            'scolarites','frais','budget','Annee_academique'
+            'scolarites','frais','budget','Annee_academique','reductions','reglement_etudiants'
         ])->findOrFail($factureId);
 
         $etudiant = $facture->etudiants;
@@ -448,11 +448,13 @@ class ReglementEtudiantController extends Controller
             ->get();
 
         $totalFacture = (float)$facture->montant_total_facture;
-        $totalPaye    = (float) reglement_etudiant::where('id_facture_etudiant', $factureId)->sum('montant_reglement');
-        $reste        = max(0, $totalFacture - $totalPaye);
+        $totalReduction = (float)$facture->montant_reduction;
+        $totalNet = (float)$facture->montant_net_facture;
+        $totalPaye = (float)$facture->montant_paye;
+        $reste = (float)$facture->reste_a_payer;
 
         return view('Admin.ReglementEtudiant.index', compact(
-            'facture', 'etudiant', 'reglements', 'totalFacture', 'totalPaye', 'reste'
+            'facture', 'etudiant', 'reglements', 'totalFacture', 'totalReduction', 'totalNet', 'totalPaye', 'reste'
         ));
     }
 
@@ -461,12 +463,14 @@ class ReglementEtudiantController extends Controller
     {
         $facture = facture_etudiant::with([
             'etudiants','cycles','filieres','niveaux','specialites',
-            'scolarites.tranche_scolarite','frais','Annee_academique','budget'
+            'scolarites.tranche_scolarite','frais','Annee_academique','budget','reductions','reglement_etudiants'
         ])->findOrFail($factureId);
 
         $totalFacture = (float)$facture->montant_total_facture;
-        $totalPaye    = (float) reglement_etudiant::where('id_facture_etudiant', $factureId)->sum('montant_reglement');
-        $reste        = max(0, $totalFacture - $totalPaye);
+        $totalReduction = (float)$facture->montant_reduction;
+        $totalNet = (float)$facture->montant_net_facture;
+        $totalPaye = (float)$facture->montant_paye;
+        $reste = (float)$facture->reste_a_payer;
 
         $cycles   = cycle::orderBy('nom_cycle')->get();
         $filieres = filiere::orderBy('nom_filiere')->get();
@@ -477,7 +481,7 @@ class ReglementEtudiantController extends Controller
         $entites=entite::orderBy('nom_entite')->get();
 
         return view('Admin.ReglementEtudiant.create_from_facture', compact(
-            'facture','totalFacture','totalPaye','reste',
+            'facture','totalFacture','totalReduction','totalNet','totalPaye','reste',
             'cycles','filieres','caisses','banques','annees','entites','budgets'
         ));
     }
@@ -520,12 +524,12 @@ class ReglementEtudiantController extends Controller
             'scolarites',
             'budget',
             'entite',
+            'reductions',
+            'reglement_etudiants',
         ])->findOrFail($r->id_facture_etudiant);
 
         // 2. calcul reste
-        $totalFacture = (float)$facture->montant_total_facture;
-        $totalPaye    = (float) reglement_etudiant::where('id_facture_etudiant', $facture->id)->sum('montant_reglement');
-        $reste        = max(0, $totalFacture - $totalPaye);
+        $reste = (float)$facture->reste_a_payer;
         if ($r->montant_reglement > $reste) {
             return back()->withInput()->withErrors([
                 'montant_reglement' => "Le montant dépasse le reste à payer (".number_format($reste,0,',',' ').")."
@@ -782,8 +786,16 @@ class ReglementEtudiantController extends Controller
             'ligne_budgetaire_entree',
             'element_ligne_budgetaire_entree',
             'donnee_budgetaire_entree',
-            'donnee_ligne_budgetaire_entree'
+            'donnee_ligne_budgetaire_entree',
+            'reductions',
+            'reglement_etudiants',
         ])->findOrFail($reglement->id_facture_etudiant);
+
+        $montantMaximum = max(
+            0,
+            (float) $facture->montant_net_facture
+            - (float) $facture->reglement_etudiants->where('id', '!=', $reglement->id)->sum('montant_reglement')
+        );
 
         // listes pour les champs encore éditables
         $caisses = caisse::orderBy('nom_caisse')->get();
@@ -792,6 +804,7 @@ class ReglementEtudiantController extends Controller
         return view('Admin.ReglementEtudiant.edit', compact(
             'reglement',
             'facture',
+            'montantMaximum',
             'caisses',
             'banques'
         ));
@@ -821,11 +834,11 @@ class ReglementEtudiantController extends Controller
         $facture = facture_etudiant::with([
             'cycles','filieres','niveaux','specialites','scolarites','entite',
             'budget','ligne_budgetaire_entree','element_ligne_budgetaire_entree',
-            'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree'
+            'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree','reductions'
         ])->findOrFail($r->id_facture_etudiant);
 
         // recalcul du reste dispo (on exclut ce règlement)
-        $totalFacture = (float)$facture->montant_total_facture;
+        $totalFacture = (float)$facture->montant_net_facture;
         $totalAutres  = (float) reglement_etudiant::where('id_facture_etudiant', $facture->id)
             ->where('id', '<>', $reg->id)
             ->sum('montant_reglement');

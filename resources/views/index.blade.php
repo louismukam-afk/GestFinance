@@ -26,7 +26,7 @@
 
         </div>
 
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+       {{-- <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
                 {{--<a href="{{route('index_rapport')}}" >--}}
                     <i class="fa fa-book fa-5x"></i>
@@ -34,7 +34,7 @@
                 </a>
             </div>
 
-        </div>
+        </div>--}}
 
 
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">

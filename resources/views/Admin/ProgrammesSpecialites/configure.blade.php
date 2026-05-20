@@ -57,3 +57,12 @@
     </div>
 </div>
 @endsection
+
+@section('breadcrumb')
+<ol class="breadcrumb" style="background-color: transparent;padding: 4px 10px">
+    <li><a href="{{ route('home') }}"><strong>Accueil</strong></a></li>
+    <li><a href="{{ route('emploi_temps.index') }}"><strong>Ressources humaines</strong></a></li>
+    <li><a href="{{ route('programmes_specialites.index') }}"><strong>Programmes de specialite</strong></a></li>
+    <li class="active"><strong>{{ $title }}</strong></li>
+</ol>
+@endsection

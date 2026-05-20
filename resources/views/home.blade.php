@@ -134,9 +134,51 @@
 
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
-                <a href="{{route('personnel')}}">
-                    <i class="fa fa-stack-overflow fa-5x"></i>
-                    <h4>Gestion du personnel </h4>
+                <a href="{{ route('mes_bons.refuses') }}">
+                    <i class="fa fa-ban fa-5x"></i>
+                    <h4>Mes bons refuses</h4>
+                </a>
+            </div>
+        </div>
+
+        @if(auth()->user()?->canAccessRoute('validation_bons.pdg'))
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ route('validation_bons.pdg') }}">
+                        <i class="fa fa-check-circle fa-5x"></i>
+                        <h4>Validation des bons PDG</h4>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        @if(auth()->user()?->canAccessRoute('validation_bons.achats'))
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ route('validation_bons.achats') }}">
+                        <i class="fa fa-shopping-cart fa-5x"></i>
+                        <h4>Validation des bons Achats</h4>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        @if(auth()->user()?->canAccessRoute('validation_bons.daf'))
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ route('validation_bons.daf') }}">
+                        <i class="fa fa-calculator fa-5x"></i>
+                        <h4>Validation des bons DAF</h4>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('emploi_temps.index') }}">
+                    <i class="fa fa-users fa-5x"></i>
+                    <h4>Gestion des ressources humaines</h4>
                 </a>
             </div>
 

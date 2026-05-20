@@ -41,6 +41,8 @@
                 <th>Donnee ligne</th>
                 <th>Tranche</th>
                 <th>Facture</th>
+                <th>Reduction</th>
+                <th>Net</th>
                 <th>Paye</th>
                 <th>Reste</th>
                 <th>Statut</th>
@@ -64,18 +66,22 @@
                     <td>{{ $row['donnee_ligne'] ?: '-' }}</td>
                     <td>{{ $row['tranche'] ?: '-' }}</td>
                     <td class="right">{{ number_format($row['facture'], 0, ',', ' ') }}</td>
+                    <td class="right">{{ number_format($row['reduction'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="right">{{ number_format($row['net'] ?? $row['facture'], 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($row['paye'], 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($row['reste'], 0, ',', ' ') }}</td>
                     <td>{{ $row['statut_paiement'] }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="18" style="text-align: center;">Aucune donnee trouvee.</td>
+                    <td colspan="20" style="text-align: center;">Aucune donnee trouvee.</td>
                 </tr>
             @endforelse
             <tr class="totals">
                 <td colspan="14">Totaux</td>
                 <td class="right">{{ number_format($totalFacture, 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($totalReduction ?? 0, 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($totalNet ?? $totalFacture, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($totalPaye, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($totalReste, 0, ',', ' ') }}</td>
                 <td></td>

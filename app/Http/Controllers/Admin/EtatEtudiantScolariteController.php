@@ -144,10 +144,12 @@ class EtatEtudiantScolariteController extends Controller
             ->map(function ($studentFactures) use ($typeRapport, $request) {
                 $first = $studentFactures->first();
                 $factureTotal = $studentFactures->sum('montant_total_facture');
+                $reductionTotal = $studentFactures->sum(fn($facture) => $facture->montant_reduction);
+                $netTotal = $studentFactures->sum(fn($facture) => $facture->montant_net_facture);
                 $reglementTotal = $studentFactures->sum(fn($facture) => $facture->reglement_etudiants->sum('montant_reglement'));
-                $reste = $factureTotal - $reglementTotal;
+                $reste = $netTotal - $reglementTotal;
 
-                $statutPaiement = $factureTotal > 0 && $reglementTotal >= $factureTotal ? 'Payé' : 'Non payé';
+                $statutPaiement = $netTotal > 0 && $reglementTotal >= $netTotal ? 'Paye' : 'Non paye';
 
                 return [
                     'etudiant' => $first->etudiants,
@@ -165,6 +167,8 @@ class EtatEtudiantScolariteController extends Controller
                     'donnee_ligne' => $first->donnee_ligne_budgetaire_entree->donnee_ligne_budgetaire_entree ?? '',
                     'tranche' => $first->tranche_scolarites->nom_tranche ?? '',
                     'facture' => $factureTotal,
+                    'reduction' => $reductionTotal,
+                    'net' => $netTotal,
                     'paye' => $reglementTotal,
                     'reste' => $reste,
                     'statut_paiement' => $statutPaiement,
@@ -172,8 +176,8 @@ class EtatEtudiantScolariteController extends Controller
             })
             ->filter(function ($row) use ($typeRapport) {
                 return match ($typeRapport) {
-                    'tranche_paye', 'scolarite_payee' => $row['statut_paiement'] === 'Payé',
-                    'tranche_non_paye', 'scolarite_non_payee' => $row['statut_paiement'] !== 'Payé',
+                    'tranche_paye', 'scolarite_payee' => $row['statut_paiement'] === 'Paye',
+                    'tranche_non_paye', 'scolarite_non_payee' => $row['statut_paiement'] !== 'Paye',
                     default => true,
                 };
             })
@@ -183,6 +187,8 @@ class EtatEtudiantScolariteController extends Controller
             'rows' => $rows,
             'typeRapport' => $typeRapport,
             'totalFacture' => $rows->sum('facture'),
+            'totalReduction' => $rows->sum('reduction'),
+            'totalNet' => $rows->sum('net'),
             'totalPaye' => $rows->sum('paye'),
             'totalReste' => $rows->sum('reste'),
         ];
@@ -209,6 +215,7 @@ class EtatEtudiantScolariteController extends Controller
                 $q->when($request->date_debut, fn($r) => $r->whereDate('date_reglement', '>=', $request->date_debut))
                     ->when($request->date_fin, fn($r) => $r->whereDate('date_reglement', '<=', $request->date_fin));
             },
+            'reductions',
         ])
             ->when($request->date_debut, fn($q) => $q->whereDate('date_facture', '>=', $request->date_debut))
             ->when($request->date_fin, fn($q) => $q->whereDate('date_facture', '<=', $request->date_fin))
@@ -228,3 +235,4 @@ class EtatEtudiantScolariteController extends Controller
             ->orderBy('date_facture', 'desc');
     }
 }
+
