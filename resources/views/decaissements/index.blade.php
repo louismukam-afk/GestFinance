@@ -78,7 +78,14 @@
 
     <div class="container">
 
-        <h2 class="text-center mb-4">💰 Gestion des Décaissements</h2>
+        <h2 class="text-center mb-4">Bons valides a financer</h2>
+
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
 
         <!-- 🔍 FILTRES -->
         <form method="GET" action="{{ route('decaissements.index') }}" class="row g-3 mb-4">
@@ -105,18 +112,6 @@
                 </select>
             </div>
 
-            <div class="col-md-3">
-                <label>Utilisateur</label>
-                <select name="id_user" class="form-control">
-                    <option value="">-- Tous --</option>
-                    @foreach($users as $u)
-                        <option value="{{ $u->id }}" {{ request('id_user') == $u->id ? 'selected' : '' }}>
-                            {{ $u->name }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-
             <div class="col-md-12 text-center mt-3">
                 <button class="btn btn-primary">🔍 Rechercher</button>
                 <a href="{{ route('decaissements.index') }}" class="btn btn-secondary">♻ Réinitialiser</a>
@@ -126,9 +121,9 @@
 
         <!-- ACTIONS -->
         <div class="mb-3">
-            <a href="{{ route('decaissements.reporting') }}" class="btn btn-info">
-                📊 Reporting
-            </a>
+            <a href="{{ route('decaissements.reporting') }}" class="btn btn-info">Reporting</a>
+            <a href="{{ route('decaissements.etat_realises') }}" class="btn btn-success">Bons realises</a>
+            <a href="{{ route('decaissements.etat_non_finances') }}" class="btn btn-warning">Bons non finances</a>
         </div>
 
         <!-- TABLE -->
@@ -142,7 +137,7 @@
                     <th>Montant Total</th>
                     <th>Décaissé</th>
                     <th>Reste</th>
-                    <th>Statut</th>
+                    <th>Statut financement</th>
                     <th>Personnel</th>
                     <th>Utilisateur</th>
                     <th>Actions</th>
@@ -186,6 +181,15 @@
                             <a href="{{ route('etat_bons.show', $b->id) }}"
                                class="btn btn-info btn-sm">
                                 👁 Détails
+                            </a>
+                            <a href="{{ route('etat_bons.show', $b->id) }}?print=1"
+                               class="btn btn-secondary btn-sm"
+                               target="_blank">
+                                Imprimer
+                            </a>
+                            <a href="{{ route('etat_bons.exportPdfOne', $b->id) }}"
+                               class="btn btn-danger btn-sm">
+                                PDF
                             </a>
                             <form action="{{ route('decaissements.destroy', $b->id) }}" method="POST" style="display:inline;">
                                 @csrf

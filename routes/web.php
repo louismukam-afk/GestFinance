@@ -153,6 +153,8 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/parametres-pvid/{pvid}', [PaiePermanentController::class, 'updateParametrePvid'])->name('parametres_pvid.update');
         Route::delete('/parametres-pvid/{pvid}', [PaiePermanentController::class, 'destroyParametrePvid'])->name('parametres_pvid.destroy');
         Route::post('/etats', [PaiePermanentController::class, 'genererEtatPaie'])->name('etats.generer');
+        Route::post('/etats/{etat}/regenerer', [PaiePermanentController::class, 'regenererEtatPaie'])->name('etats.regenerer');
+        Route::delete('/etats/{etat}', [PaiePermanentController::class, 'destroyEtatPaie'])->name('etats.destroy');
         Route::get('/etats/{etat}', [PaiePermanentController::class, 'showEtatPaie'])->name('etats.show');
         Route::get('/etats/{etat}/pdf', [PaiePermanentController::class, 'exportEtatPaiePdf'])->name('etats.pdf');
         Route::post('/bulletins/valider-global', [PaiePermanentController::class, 'validerGlobal'])->name('bulletins.valider_global');
@@ -201,6 +203,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/export/pdf/{type}', [MesBonCommandeController::class, 'exportPdf'])->name('pdf');
         Route::get('/{bon}/document', [MesBonCommandeController::class, 'document'])->name('document');
         Route::get('/{bon}/document/pdf', [MesBonCommandeController::class, 'documentPdf'])->name('document_pdf');
+
+
+         Route::get('/{bon}/document1', [MesBonCommandeController::class, 'document1'])->name('document1');
+        Route::get('/{bon}/document/pdf1', [MesBonCommandeController::class, 'documentPdf1'])->name('document_pdf1');
     });
 
     Route::prefix('validation-bons')->name('validation_bons.')->group(function () {
@@ -208,6 +214,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/daf', [BonValidationController::class, 'daf'])->name('daf');
         Route::get('/achats', [BonValidationController::class, 'achats'])->name('achats');
         Route::get('/{niveau}', [BonValidationController::class, 'index'])->name('index');
+        Route::post('/daf/{bon}/imputer', [BonValidationController::class, 'imputerDaf'])->name('daf.imputer');
         Route::post('/{niveau}/{bon}/valider', [BonValidationController::class, 'valider'])->name('valider');
         Route::post('/{niveau}/{bon}/refuser', [BonValidationController::class, 'refuser'])->name('refuser');
         Route::get('/{niveau}/export/pdf', [BonValidationController::class, 'exportPdf'])->name('pdf');
@@ -987,6 +994,10 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/delete/{id}', [DecaissementController::class, 'destroy'])->name('destroy');
 
         Route::get('/reporting', [DecaissementController::class, 'reporting'])->name('reporting');
+        Route::get('/etat-bons-realises', [DecaissementController::class, 'etatRealises'])->name('etat_realises');
+        Route::get('/etat-bons-realises/pdf', [DecaissementController::class, 'etatRealisesPdf'])->name('etat_realises.pdf');
+        Route::get('/etat-bons-non-finances', [DecaissementController::class, 'etatNonFinances'])->name('etat_non_finances');
+        Route::get('/etat-bons-non-finances/pdf', [DecaissementController::class, 'etatNonFinancesPdf'])->name('etat_non_finances.pdf');
 
         Route::get('/pdf', [DecaissementController::class, 'exportPdf'])->name('pdf');
         // web.php

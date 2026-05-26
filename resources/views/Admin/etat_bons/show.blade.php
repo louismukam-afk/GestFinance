@@ -1,5 +1,29 @@
 @extends('layouts.app')
 
+@section('styles')
+    <style>
+        @media print {
+            .btn,
+            .breadcrumb,
+            .no-print,
+            nav,
+            aside {
+                display: none !important;
+            }
+
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .card {
+                border: 0 !important;
+                box-shadow: none !important;
+            }
+        }
+    </style>
+@endsection
+
 @section('content')
     <div class="container" style=" font-family: 'Times New Roman'; ">
         <div class="card shadow">
@@ -95,9 +119,10 @@
                     </p>
                 </div>
 
-                <div class="mt-3 d-flex justify-content-between">
+                <div class="mt-3 d-flex justify-content-between no-print">
                     <a href="{{ route('etat_bons.index') }}" class="btn btn-secondary">⬅ Retour</a>
                     <div>
+                        <button type="button" onclick="window.print()" class="btn btn-secondary">Imprimer</button>
                         <a href="{{ route('etat_bons.exportPdfOne', $bon->id) }}" class="btn btn-danger">🖨 Exporter PDF</a>
                         <a href="{{ route('etat_bons.exportExcelOne', $bon->id) }}" class="btn btn-success">📊 Exporter Excel</a>
                     </div>
@@ -105,4 +130,11 @@
             </div>
         </div>
     </div>
+    @if(request('print'))
+        <script>
+            window.addEventListener('load', function () {
+                window.print();
+            });
+        </script>
+    @endif
 @endsection

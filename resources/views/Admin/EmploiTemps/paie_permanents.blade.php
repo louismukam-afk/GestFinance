@@ -238,6 +238,15 @@
                                 <td>
                                     <a href="{{ route('paie_permanents.etats.show', $etatPaie) }}" class="btn btn-xs btn-primary">Voir</a>
                                     <a href="{{ route('paie_permanents.etats.pdf', $etatPaie) }}" class="btn btn-xs btn-danger">PDF</a>
+                                    <form method="POST" action="{{ route('paie_permanents.etats.regenerer', $etatPaie) }}" class="paie-action-form">
+                                        @csrf
+                                        <button class="btn btn-xs btn-warning" onclick="return confirm('Regenerer cet etat avec les bulletins actuels ?')">Regenerer</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('paie_permanents.etats.destroy', $etatPaie) }}" class="paie-action-form">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet etat de paie ?')">Supprimer</button>
+                                    </form>
                                 </td>
                             </tr>
                         @empty

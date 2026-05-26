@@ -421,41 +421,7 @@ class PaiePermanentController extends Controller
                 'id_user' => auth()->id() ?? 0,
             ]);
 
-            foreach ($bulletins as $bulletin) {
-                $gains = $this->detailsLignesEtatPaie($bulletin, 'plus');
-                $retenues = $this->detailsLignesEtatPaie($bulletin, 'moins');
-                $retenuesHorsAcomptesSanctions = max(
-                    $bulletin->total_retenues - $bulletin->total_acomptes - $bulletin->total_sanctions - $bulletin->penalite_biometrie,
-                    0
-                );
-
-                LigneEtatPaie::create([
-                    'id_etat_paie' => $etat->id,
-                    'id_bulletin_paie' => $bulletin->id,
-                    'id_personnel' => $bulletin->id_personnel,
-                    'nom_personnel' => $bulletin->personnel->nom ?? '-',
-                    'salaire_base' => $bulletin->salaire_base,
-                    'total_gains' => $bulletin->total_gains,
-                    'total_retenues' => $retenuesHorsAcomptesSanctions,
-                    'penalite_biometrie' => $bulletin->penalite_biometrie,
-                    'total_sanctions' => $bulletin->total_sanctions,
-                    'total_acomptes' => $bulletin->total_acomptes,
-                    'net_a_payer' => $bulletin->net_a_payer,
-                    'detail_gains' => $gains,
-                    'detail_retenues' => $retenues,
-                ]);
-            }
-
-            $etat->load('lignes');
-            $etat->update([
-                'nombre_employes' => $etat->lignes->count(),
-                'total_gains' => $etat->lignes->sum('total_gains'),
-                'total_retenues' => $etat->lignes->sum('total_retenues'),
-                'total_penalites' => $etat->lignes->sum('penalite_biometrie'),
-                'total_sanctions' => $etat->lignes->sum('total_sanctions'),
-                'total_acomptes' => $etat->lignes->sum('total_acomptes'),
-                'total_net_a_payer' => $etat->lignes->sum('net_a_payer'),
-            ]);
+            $this->remplirEtatPaieDepuisBulletins($etat, $bulletins);
 
             return $etat;
         });
@@ -472,6 +438,8 @@ class PaiePermanentController extends Controller
         return view('Admin.EmploiTemps.etat_paie_show', [
             'title' => 'Etat de paie',
             'etat' => $etat,
+            'colonnesGains' => $this->colonnesEtatPaie($etat, 'detail_gains'),
+            'colonnesRetenues' => $this->colonnesEtatPaie($etat, 'detail_retenues'),
         ]);
     }
 
@@ -481,9 +449,46 @@ class PaiePermanentController extends Controller
 
         $pdf = Pdf::loadView('Admin.EmploiTemps.etat_paie_pdf', [
             'etat' => $etat,
+            'colonnesGains' => $this->colonnesEtatPaie($etat, 'detail_gains'),
+            'colonnesRetenues' => $this->colonnesEtatPaie($etat, 'detail_retenues'),
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download('etat_paie_' . $etat->reference . '.pdf');
+    }
+
+    public function regenererEtatPaie(EtatPaie $etat)
+    {
+        $debut = $etat->periode_debut->copy()->startOfDay();
+        $fin = $etat->periode_fin->copy()->endOfDay();
+        $personnelIds = $this->personnelIdsPourEtatPaie($debut, $fin, $etat->id_annee_academique, $etat->id_entite);
+
+        $bulletins = BulletinPaie::with(['personnel', 'lignes'])
+            ->whereDate('periode_debut', '<=', $fin->toDateString())
+            ->whereDate('periode_fin', '>=', $debut->toDateString())
+            ->when($personnelIds !== null, fn($q) => $q->whereIn('id_personnel', $personnelIds))
+            ->orderBy('id_personnel')
+            ->get();
+
+        if ($bulletins->isEmpty()) {
+            return back()->withErrors(['etat_paie' => 'Aucun bulletin trouve pour regenerer cet etat.']);
+        }
+
+        DB::transaction(function () use ($etat, $bulletins) {
+            $etat->lignes()->delete();
+            $etat->update(['date_generation' => now()]);
+            $this->remplirEtatPaieDepuisBulletins($etat, $bulletins);
+        });
+
+        return back()->with('success', 'Etat de paie regenere avec les bulletins actuels.');
+    }
+
+    public function destroyEtatPaie(EtatPaie $etat)
+    {
+        $etat->delete();
+
+        return redirect()
+            ->route('paie_permanents.index')
+            ->with('success', 'Etat de paie supprime.');
     }
 
     private function personnelsAPayer(Carbon $debut, Carbon $fin, ?int $personnelId)
@@ -500,6 +505,59 @@ class PaiePermanentController extends Controller
             })
             ->orderBy('nom')
             ->get();
+    }
+
+    private function remplirEtatPaieDepuisBulletins(EtatPaie $etat, $bulletins): void
+    {
+        foreach ($bulletins as $bulletin) {
+            $gains = $this->detailsLignesEtatPaie($bulletin, 'plus');
+            $retenues = $this->detailsLignesEtatPaie($bulletin, 'moins');
+            $retenuesHorsAcomptesSanctions = max(
+                $bulletin->total_retenues - $bulletin->total_acomptes - $bulletin->total_sanctions - $bulletin->penalite_biometrie,
+                0
+            );
+
+            LigneEtatPaie::create([
+                'id_etat_paie' => $etat->id,
+                'id_bulletin_paie' => $bulletin->id,
+                'id_personnel' => $bulletin->id_personnel,
+                'nom_personnel' => $bulletin->personnel->nom ?? '-',
+                'salaire_base' => $bulletin->salaire_base,
+                'total_gains' => $bulletin->total_gains,
+                'total_retenues' => $retenuesHorsAcomptesSanctions,
+                'penalite_biometrie' => $bulletin->penalite_biometrie,
+                'total_sanctions' => $bulletin->total_sanctions,
+                'total_acomptes' => $bulletin->total_acomptes,
+                'net_a_payer' => $bulletin->net_a_payer,
+                'detail_gains' => $gains,
+                'detail_retenues' => $retenues,
+            ]);
+        }
+
+        $etat->load('lignes');
+        $etat->update([
+            'nombre_employes' => $etat->lignes->count(),
+            'total_gains' => $etat->lignes->sum('total_gains'),
+            'total_retenues' => $etat->lignes->sum('total_retenues'),
+            'total_penalites' => $etat->lignes->sum('penalite_biometrie'),
+            'total_sanctions' => $etat->lignes->sum('total_sanctions'),
+            'total_acomptes' => $etat->lignes->sum('total_acomptes'),
+            'total_net_a_payer' => $etat->lignes->sum('net_a_payer'),
+        ]);
+    }
+
+    private function colonnesEtatPaie(EtatPaie $etat, string $champ): array
+    {
+        return $etat->lignes
+            ->flatMap(fn($ligne) => collect($ligne->{$champ} ?? []))
+            ->filter(fn($detail) => !empty($detail['code']))
+            ->groupBy('code')
+            ->map(fn($details) => [
+                'code' => $details->first()['code'],
+                'libelle' => $details->first()['libelle'] ?? $details->first()['code'],
+            ])
+            ->values()
+            ->all();
     }
 
     private function personnelIdsPourEtatPaie(Carbon $debut, Carbon $fin, ?int $anneeId, ?int $entiteId): ?array

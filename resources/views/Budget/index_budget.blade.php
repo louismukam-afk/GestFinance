@@ -64,6 +64,24 @@
 
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
+                <a href="{{ route('decaissements.etat_realises') }}" >
+                    <i class="fa fa-check-square-o fa-5x"></i>
+                    <h4>Bons valides realises</h4>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
+                <a href="{{ route('decaissements.etat_non_finances') }}" >
+                    <i class="fa fa-clock-o fa-5x"></i>
+                    <h4>Bons valides non finances</h4>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
                 <a href="{{ route('entrees_speciales.index') }}" >
                     <i class="fa fa-plus-square fa-5x"></i>
                     <h4>Entrees speciales hors factures</h4>

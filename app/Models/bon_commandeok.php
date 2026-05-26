@@ -27,6 +27,13 @@ class bon_commandeok extends Model
         'id_user',
         'statuts',
         'id_entite',
+        'id_budget',
+        'id_ligne_budgetaire_sortie',
+        'id_elements_ligne_budgetaire_sortie',
+        'id_donnee_budgetaire_sortie',
+        'id_donnee_ligne_budgetaire_sortie',
+        'id_annee_academique',
+        'id_entree_speciale',
         'validation_pdg',
         'refus_pdg',
         'motif_refus_pdg',
@@ -87,6 +94,41 @@ class bon_commandeok extends Model
 
     public function decaissements(){
         return $this->hasMany(decaissement::class,'id_bon_commande');
+    }
+
+    public function budget()
+    {
+        return $this->belongsTo(Budget::class, 'id_budget');
+    }
+
+    public function ligne_budgetaire_sortie()
+    {
+        return $this->belongsTo(ligne_budgetaire_sortie::class, 'id_ligne_budgetaire_sortie');
+    }
+
+    public function elements_ligne_budgetaire_sortie()
+    {
+        return $this->belongsTo(element_ligne_budgetaire_sortie::class, 'id_elements_ligne_budgetaire_sortie');
+    }
+
+    public function donnee_budgetaire_sortie()
+    {
+        return $this->belongsTo(donnee_budgetaire_sortie::class, 'id_donnee_budgetaire_sortie');
+    }
+
+    public function donnee_ligne_budgetaire_sortie()
+    {
+        return $this->belongsTo(donnee_ligne_budgetaire_sortie::class, 'id_donnee_ligne_budgetaire_sortie');
+    }
+
+    public function annee_academique()
+    {
+        return $this->belongsTo(annee_academique::class, 'id_annee_academique');
+    }
+
+    public function entree_speciale()
+    {
+        return $this->belongsTo(entree_speciale::class, 'id_entree_speciale');
     }
 
     public function retour_caisses(){

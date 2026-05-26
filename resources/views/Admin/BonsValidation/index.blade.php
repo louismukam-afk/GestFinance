@@ -118,17 +118,77 @@
                         <td style="min-width:260px;">
                             <a href="{{ route('element_bon.index', $bon->id) }}" class="btn btn-xs btn-default">Voir elements</a>
                             <a href="{{ route('element_bon.exportPdf', $bon->id) }}" class="btn btn-xs btn-danger">PDF</a>
+                            @if($niveau === 'daf' && $bon->{$validationField} && !$bon->{$refusField})
+                                <button type="button" class="btn btn-xs btn-info" data-toggle="modal" data-target="#imputationDaf{{ $bon->id }}">
+                                    Imputer / modifier
+                                </button>
+                            @endif
                             @if(!$bon->{$validationField} && !$bon->{$refusField})
-                                <form method="POST" action="{{ route('validation_bons.valider', [$niveau, $bon]) }}" style="display:inline;">
-                                    @csrf
-                                    <button class="btn btn-xs btn-success" onclick="return confirm('Valider ce bon ?')">Valider</button>
-                                </form>
+                                @if($niveau === 'daf')
+                                    <button type="button" class="btn btn-xs btn-success" data-toggle="modal" data-target="#validationDaf{{ $bon->id }}">
+                                        Valider / imputer
+                                    </button>
+                                @else
+                                    <form method="POST" action="{{ route('validation_bons.valider', [$niveau, $bon]) }}" style="display:inline;">
+                                        @csrf
+                                        <button class="btn btn-xs btn-success" onclick="return confirm('Valider ce bon ?')">Valider</button>
+                                    </form>
+                                @endif
                                 <button type="button" class="btn btn-xs btn-warning" data-toggle="modal" data-target="#refusBon{{ $bon->id }}">
                                     Refuser
                                 </button>
                             @endif
                         </td>
                     </tr>
+
+                    @if($niveau === 'daf' && !$bon->{$validationField} && !$bon->{$refusField})
+                        <div class="modal fade" id="validationDaf{{ $bon->id }}" tabindex="-1" role="dialog">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <form method="POST" action="{{ route('validation_bons.valider', [$niveau, $bon]) }}">
+                                        @csrf
+                                        <div class="modal-header">
+                                            <h4 class="modal-title">Validation DAF et imputation budgetaire</h4>
+                                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p><strong>{{ $bon->nom_bon_commande }}</strong> - {{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA</p>
+
+                                            @include('Admin.BonsValidation.partials.imputation_daf_form', ['bon' => $bon])
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+                                            <button class="btn btn-success">Valider DAF</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($niveau === 'daf' && $bon->{$validationField} && !$bon->{$refusField})
+                        <div class="modal fade" id="imputationDaf{{ $bon->id }}" tabindex="-1" role="dialog">
+                            <div class="modal-dialog modal-lg" role="document">
+                                <div class="modal-content">
+                                    <form method="POST" action="{{ route('validation_bons.daf.imputer', $bon) }}">
+                                        @csrf
+                                        <div class="modal-header">
+                                            <h4 class="modal-title">Imputation budgetaire DAF</h4>
+                                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p><strong>{{ $bon->nom_bon_commande }}</strong> - {{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA</p>
+                                            @include('Admin.BonsValidation.partials.imputation_daf_form', ['bon' => $bon])
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+                                            <button class="btn btn-success">Enregistrer imputation</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="modal fade" id="refusBon{{ $bon->id }}" tabindex="-1" role="dialog">
                         <div class="modal-dialog" role="document">
@@ -160,6 +220,103 @@
         </table>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+@if($niveau === 'daf')
+    <script>
+        const dafBudgetBaseUrl = "{{ url('decaissements') }}";
+
+        function resetSelect($select) {
+            $select.html('<option value="">-- Choisir --</option>');
+        }
+
+        function appendOption($select, value, label, selectedValue) {
+            const selected = String(selectedValue || '') === String(value) ? ' selected' : '';
+            $select.append('<option value="' + value + '"' + selected + '>' + label + '</option>');
+        }
+
+        $('.js-budget-daf').on('change', function () {
+            const bon = $(this).data('bon');
+            const budget = $(this).val();
+            const $ligne = $('.js-ligne-daf[data-bon="' + bon + '"]');
+            const $element = $('.js-element-daf[data-bon="' + bon + '"]');
+            const $donneeBudget = $('.js-donnee-budget-daf[data-bon="' + bon + '"]');
+            const $donneeLigne = $('.js-donnee-ligne-daf[data-bon="' + bon + '"]');
+
+            resetSelect($ligne);
+            resetSelect($element);
+            resetSelect($donneeBudget);
+            resetSelect($donneeLigne);
+
+            if (!budget) return;
+
+            $.get(dafBudgetBaseUrl + '/ajax/lignes/' + budget, function (data) {
+                const selected = $ligne.data('selected');
+                data.forEach(function (item) {
+                    appendOption($ligne, item.id, item.libelle_ligne_budgetaire_sortie, selected);
+                });
+                if (selected) {
+                    $ligne.trigger('change');
+                }
+            });
+        });
+
+        $('.js-ligne-daf').on('change', function () {
+            const bon = $(this).data('bon');
+            const ligne = $(this).val();
+            const $element = $('.js-element-daf[data-bon="' + bon + '"]');
+            const $donneeBudget = $('.js-donnee-budget-daf[data-bon="' + bon + '"]');
+            const $donneeLigne = $('.js-donnee-ligne-daf[data-bon="' + bon + '"]');
+
+            resetSelect($element);
+            resetSelect($donneeBudget);
+            resetSelect($donneeLigne);
+
+            if (!ligne) return;
+
+            $.get(dafBudgetBaseUrl + '/ajax/elements/' + ligne, function (data) {
+                const selected = $element.data('selected');
+                data.forEach(function (item) {
+                    appendOption($element, item.id, item.libelle_elements_ligne_budgetaire_sortie, selected);
+                });
+                if (selected) {
+                    $element.trigger('change');
+                }
+            });
+
+            $.get(dafBudgetBaseUrl + '/ajax/donnees-budget/' + ligne, function (data) {
+                const selected = $donneeBudget.data('selected');
+                data.forEach(function (item) {
+                    appendOption($donneeBudget, item.id, item.donnee_ligne_budgetaire_sortie, selected);
+                });
+            });
+        });
+
+        $('.js-element-daf').on('change', function () {
+            const bon = $(this).data('bon');
+            const element = $(this).val();
+            const $donneeLigne = $('.js-donnee-ligne-daf[data-bon="' + bon + '"]');
+
+            resetSelect($donneeLigne);
+
+            if (!element) return;
+
+            $.get(dafBudgetBaseUrl + '/ajax/donnees-ligne/' + element, function (data) {
+                const selected = $donneeLigne.data('selected');
+                data.forEach(function (item) {
+                    appendOption($donneeLigne, item.id, item.donnee_ligne_budgetaire_sortie + ' (' + item.montant + ')', selected);
+                });
+            });
+        });
+
+        $('.js-budget-daf').each(function () {
+            if ($(this).val()) {
+                $(this).trigger('change');
+            }
+        });
+    </script>
+@endif
 @endsection
 
 @section('breadcrumb')

@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\annee_academique;
 use App\Models\bon_commandeok;
+use App\Models\Budget;
+use App\Models\donnee_ligne_budgetaire_sortie;
+use App\Models\entree_speciale;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
@@ -39,6 +43,14 @@ class BonValidationController extends Controller
             'bons' => $this->query($request, $niveau)->get(),
             'niveau' => $niveau,
             'niveauLabel' => $this->niveaux[$niveau],
+            'budgets' => $niveau === 'daf' ? Budget::orderBy('libelle_ligne_budget')->get() : collect(),
+            'annees' => $niveau === 'daf' ? annee_academique::orderByDesc('id')->get() : collect(),
+            'entreesSpeciales' => $niveau === 'daf'
+                ? entree_speciale::whereIn('type_entree', ['dette', 'don', 'apport'])
+                    ->where('statut', 'actif')
+                    ->orderByDesc('date_entree')
+                    ->get()
+                : collect(),
         ]);
     }
 
@@ -53,6 +65,10 @@ class BonValidationController extends Controller
         $motifField = "motif_refus_{$niveau}";
         $dateRefusField = "date_refus_{$niveau}";
 
+        if ($niveau === 'daf') {
+            $this->remplirImputationDaf($request, $bon);
+        }
+
         $bon->{$validationField} = 1;
         $bon->{$refusField} = 0;
         $bon->{$motifField} = null;
@@ -61,6 +77,17 @@ class BonValidationController extends Controller
         $this->updateStatut($bon);
 
         return back()->with('success', 'Validation '.$this->niveaux[$niveau].' effectuee.');
+    }
+
+    public function imputerDaf(Request $request, bon_commandeok $bon)
+    {
+        $this->authorizeNiveau('daf');
+        abort_if($bon->statut_bon_code === 2, 422, 'Ce bon a deja ete refuse.');
+
+        $this->remplirImputationDaf($request, $bon);
+        $bon->save();
+
+        return back()->with('success', 'Imputation DAF enregistree pour ce bon.');
     }
 
     public function refuser(Request $request, string $niveau, bon_commandeok $bon)
@@ -145,6 +172,40 @@ class BonValidationController extends Controller
         }
 
         $bon->save();
+    }
+
+    private function remplirImputationDaf(Request $request, bon_commandeok $bon): void
+    {
+        $data = $request->validate([
+            'id_budget' => 'required|integer|exists:budgets,id',
+            'id_ligne_budgetaire_sortie' => 'required|integer|exists:ligne_budgetaire_sorties,id',
+            'id_elements_ligne_budgetaire_sortie' => 'required|integer|exists:element_ligne_budgetaire_sorties,id',
+            'id_donnee_budgetaire_sortie' => 'required|integer|exists:donnee_budgetaire_sorties,id',
+            'id_donnee_ligne_budgetaire_sortie' => 'required|integer|exists:donnee_ligne_budgetaire_sorties,id',
+            'id_annee_academique' => 'required|integer|exists:annee_academiques,id',
+            'id_entree_speciale' => 'nullable|integer|exists:entree_speciales,id',
+        ]);
+
+        $donnee = donnee_ligne_budgetaire_sortie::where('id', $data['id_donnee_ligne_budgetaire_sortie'])
+            ->where('id_budget', $data['id_budget'])
+            ->where('id_ligne_budgetaire_sortie', $data['id_ligne_budgetaire_sortie'])
+            ->where('id_element_ligne_budgetaire_sortie', $data['id_elements_ligne_budgetaire_sortie'])
+            ->where('id_donnee_budgetaire_sortie', $data['id_donnee_budgetaire_sortie'])
+            ->first();
+
+        if (!$donnee) {
+            abort(422, 'Incoherence budgetaire detectee sur l imputation DAF.');
+        }
+
+        $bon->fill([
+            'id_budget' => $data['id_budget'],
+            'id_ligne_budgetaire_sortie' => $data['id_ligne_budgetaire_sortie'],
+            'id_elements_ligne_budgetaire_sortie' => $data['id_elements_ligne_budgetaire_sortie'],
+            'id_donnee_budgetaire_sortie' => $data['id_donnee_budgetaire_sortie'],
+            'id_donnee_ligne_budgetaire_sortie' => $data['id_donnee_ligne_budgetaire_sortie'],
+            'id_annee_academique' => $data['id_annee_academique'],
+            'id_entree_speciale' => $data['id_entree_speciale'] ?? null,
+        ]);
     }
 
     private function authorizeNiveau(string $niveau): void

@@ -28,11 +28,8 @@ class DecaissementController extends Controller
 
     public function index(Request $request)
     {
-        $query = bon_commandeok::with(['personnels', 'user'])
-            ->where(function ($q) {
-                $q->where('statuts', 1)
-                    ->orWhere('validation_pdg', true);
-            });
+        $query = bon_commandeok::with(['personnels', 'user', 'decaissements'])
+            ->where('statuts', 1);
 
         // 🔍 FILTRES
         if ($request->date_debut) {
@@ -47,14 +44,9 @@ class DecaissementController extends Controller
             $query->where('id_personnel', $request->id_personnel);
         }
 
-        if ($request->id_user) {
-            $query->where('id_user', $request->id_user);
-        }
-
         $bons = $query->get()->map(function ($bon) {
 
-            $total = decaissement::where('id_bon_commande', $bon->id)
-                ->sum('montant');
+            $total = $bon->decaissements->sum('montant');
 
             $bon->total_decaisse = $total;
             $bon->reste = $bon->montant_total - $total;
@@ -64,12 +56,10 @@ class DecaissementController extends Controller
                 : 'Réalisé';
 
             return $bon;
-        });
+        })->filter(fn($bon) => $bon->reste > 0)->values();
 
         $personnels = personnel::all();
-        $users = User::all();
-
-        return view('decaissements.index', compact('bons','personnels','users'));
+        return view('decaissements.index', compact('bons','personnels'));
     }
     public function indexvalide()
     {
@@ -120,7 +110,20 @@ class DecaissementController extends Controller
     // FORMULAIRE FINANCEMENT
     public function create($id)
     {
-        $bon = bon_commandeok::findOrFail($id);
+        $bon = bon_commandeok::with([
+            'budget',
+            'ligne_budgetaire_sortie',
+            'elements_ligne_budgetaire_sortie',
+            'donnee_budgetaire_sortie',
+            'donnee_ligne_budgetaire_sortie',
+            'annee_academique',
+            'entree_speciale',
+        ])->findOrFail($id);
+
+        if (!$bon->statuts || !$bon->id_budget || !$bon->id_donnee_ligne_budgetaire_sortie || !$bon->id_annee_academique) {
+            return redirect()->route('decaissements.index')
+                ->with('error', 'Ce bon doit etre valide et impute par la DAF avant financement.');
+        }
 
         $totalDecaisse = decaissement::where('id_bon_commande', $id)->sum('montant');
         $reste = $bon->montant_total - $totalDecaisse;
@@ -140,12 +143,7 @@ class DecaissementController extends Controller
         return view('decaissements.create', compact(
             'bon',
             'reste',
-            'budgets',
-            'annees',
-            'donnees',
-            'caisses',
-            'caissest',
-            'entreesSpeciales'
+            'caissest'
         ));
     }
     public function getSoldeAjax($id)
@@ -217,16 +215,22 @@ class DecaissementController extends Controller
         $request->validate([
             'id_bon_commande' => 'required',
             'montant' => 'required|numeric|min:1',
-            'id_budget' => 'required',
-            'id_ligne_budgetaire_sortie' => 'required',
-            'id_elements_ligne_budgetaire_sortie' => 'required',
-            'id_donnee_budgetaire_sortie' => 'required',
-            'id_donnee_ligne_budgetaire_sortie' => 'required',
-            'id_annee_academique' => 'required',
-            'id_entree_speciale' => 'nullable|integer',
+            'motif' => 'required|string|max:255',
+            'date_depense' => 'required|date',
+            'id_caisse' => 'nullable|integer',
+            'id_banque' => 'nullable|integer',
+            'id_transfert_caisse' => 'nullable|integer',
         ]);
 
         $bon = bon_commandeok::findOrFail($request->id_bon_commande);
+
+        if ($bon->statuts != 1) {
+            return back()->with('error', 'Bon non valide par tous les niveaux');
+        }
+
+        if (!$bon->id_budget || !$bon->id_ligne_budgetaire_sortie || !$bon->id_elements_ligne_budgetaire_sortie || !$bon->id_donnee_budgetaire_sortie || !$bon->id_donnee_ligne_budgetaire_sortie || !$bon->id_annee_academique) {
+            return back()->with('error', 'Bon non impute par la DAF');
+        }
 
         // 🔒 Vérification validation
         if (!$bon->validation_pdg && $bon->statuts != 1) {
@@ -234,11 +238,11 @@ class DecaissementController extends Controller
         }
 
         // 🔒 Vérification cohérence budgétaire
-        $donnee = donnee_ligne_budgetaire_sortie::where('id', $request->id_donnee_ligne_budgetaire_sortie)
-            ->where('id_budget', $request->id_budget)
-            ->where('id_ligne_budgetaire_sortie', $request->id_ligne_budgetaire_sortie)
-            ->where('id_element_ligne_budgetaire_sortie', $request->id_elements_ligne_budgetaire_sortie)
-            ->where('id_donnee_budgetaire_sortie', $request->id_donnee_budgetaire_sortie)
+        $donnee = donnee_ligne_budgetaire_sortie::where('id', $bon->id_donnee_ligne_budgetaire_sortie)
+            ->where('id_budget', $bon->id_budget)
+            ->where('id_ligne_budgetaire_sortie', $bon->id_ligne_budgetaire_sortie)
+            ->where('id_element_ligne_budgetaire_sortie', $bon->id_elements_ligne_budgetaire_sortie)
+            ->where('id_donnee_budgetaire_sortie', $bon->id_donnee_budgetaire_sortie)
             ->first();
 
 
@@ -254,11 +258,11 @@ class DecaissementController extends Controller
             return back()->with('error', 'Budget insuffisant');
         }
 // 🔒 Vérification bon
-        if ($request->filled('id_entree_speciale')) {
+        if ($bon->id_entree_speciale) {
             $entreeSpeciale = entree_speciale::with(['echeances', 'decaissements'])
                 ->whereIn('type_entree', ['dette', 'don','apport'])
                 ->where('statut', '!=', 'annule')
-                ->find($request->id_entree_speciale);
+                ->find($bon->id_entree_speciale);
 
             if (!$entreeSpeciale) {
                 return back()->with('error', 'Entree speciale invalide');
@@ -373,17 +377,17 @@ class DecaissementController extends Controller
         //dd($bon->id, $request->id_bon_commande);
         decaissement::create([
             'id_bon_commande' => $bon->id,
-            'id_budget' => $request->id_budget,
-            'id_ligne_budgetaire_sortie' => $request->id_ligne_budgetaire_sortie,
-            'id_elements_ligne_budgetaire_sortie' => $request->id_elements_ligne_budgetaire_sortie,
-            'id_donnee_budgetaire_sortie' => $request->id_donnee_budgetaire_sortie,
-            'id_donnee_ligne_budgetaire_sortie' => $request->id_donnee_ligne_budgetaire_sortie,
-            'id_annee_academique' => $request->id_annee_academique,
+            'id_budget' => $bon->id_budget,
+            'id_ligne_budgetaire_sortie' => $bon->id_ligne_budgetaire_sortie,
+            'id_elements_ligne_budgetaire_sortie' => $bon->id_elements_ligne_budgetaire_sortie,
+            'id_donnee_budgetaire_sortie' => $bon->id_donnee_budgetaire_sortie,
+            'id_donnee_ligne_budgetaire_sortie' => $bon->id_donnee_ligne_budgetaire_sortie,
+            'id_annee_academique' => $bon->id_annee_academique,
 
             'id_caisse' => $id_caisse,
             'id_transfert_caisse' => $id_transfert_caisse,
             'id_banque' => $id_banque,
-            'id_entree_speciale' => $request->id_entree_speciale ?? 0,
+            'id_entree_speciale' => $bon->id_entree_speciale ?? 0,
 
             'numero_depense' => 'DEP'.time(),
             'motif' => $request->motif,
@@ -833,6 +837,79 @@ class DecaissementController extends Controller
 
 
     // PDF
+    public function etatRealises(Request $request)
+    {
+        return $this->etatBonsFinancement($request, 'realises');
+    }
+
+    public function etatNonFinances(Request $request)
+    {
+        return $this->etatBonsFinancement($request, 'non_finances');
+    }
+
+    public function etatRealisesPdf(Request $request)
+    {
+        return $this->etatBonsFinancementPdf($request, 'realises');
+    }
+
+    public function etatNonFinancesPdf(Request $request)
+    {
+        return $this->etatBonsFinancementPdf($request, 'non_finances');
+    }
+
+    private function etatBonsFinancement(Request $request, string $type)
+    {
+        return view('decaissements.etat_bons_financement', [
+            'bons' => $this->bonsEtatFinancement($request, $type),
+            'type' => $type,
+            'title' => $type === 'realises' ? 'Bons valides realises' : 'Bons valides non finances',
+            'annees' => annee_academique::orderByDesc('id')->get(),
+            'entites' => entite::orderBy('nom_entite')->get(),
+        ]);
+    }
+
+    private function etatBonsFinancementPdf(Request $request, string $type)
+    {
+        $pdf = PDF::loadView('decaissements.etat_bons_financement_pdf', [
+            'bons' => $this->bonsEtatFinancement($request, $type),
+            'type' => $type,
+            'title' => $type === 'realises' ? 'Bons valides realises' : 'Bons valides non finances',
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download(($type === 'realises' ? 'bons_realises' : 'bons_non_finances').'.pdf');
+    }
+
+    private function bonsEtatFinancement(Request $request, string $type)
+    {
+        $bons = bon_commandeok::with([
+            'personnels',
+            'user',
+            'entites',
+            'decaissements',
+            'element_bon_commandes',
+            'budget',
+            'annee_academique',
+        ])
+            ->where('statuts', 1)
+            ->when($request->date_debut, fn($q) => $q->whereDate('date_validation', '>=', $request->date_debut))
+            ->when($request->date_fin, fn($q) => $q->whereDate('date_validation', '<=', $request->date_fin))
+            ->when($request->id_entite, fn($q) => $q->where('id_entite', $request->id_entite))
+            ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
+            // Vue globale: aucun filtre sur id_user, tous les bons valides sont visibles.
+            ->orderByDesc('date_validation')
+            ->get()
+            ->map(function ($bon) {
+                $bon->total_decaisse = $bon->decaissements->sum('montant');
+                $bon->reste_financement = max($bon->montant_total - $bon->total_decaisse, 0);
+
+                return $bon;
+            });
+
+        return $type === 'realises'
+            ? $bons->filter(fn($bon) => $bon->total_decaisse >= $bon->montant_total)->values()
+            : $bons->filter(fn($bon) => $bon->reste_financement > 0)->values();
+    }
+
     public function exportPdf()
     {
         $bons = bon_commandeok::with('decaissements')->get();

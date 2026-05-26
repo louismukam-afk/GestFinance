@@ -6,6 +6,15 @@
         <h3 class="text-primary">{{ $title }} {{ $etat->reference }}</h3>
         <div>
             <a href="{{ route('paie_permanents.etats.pdf', $etat) }}" class="btn btn-danger">PDF</a>
+            <form method="POST" action="{{ route('paie_permanents.etats.regenerer', $etat) }}" style="display:inline-block;">
+                @csrf
+                <button class="btn btn-warning" onclick="return confirm('Regenerer cet etat avec les bulletins actuels ?')">Regenerer</button>
+            </form>
+            <form method="POST" action="{{ route('paie_permanents.etats.destroy', $etat) }}" style="display:inline-block;">
+                @csrf
+                @method('DELETE')
+                <button class="btn btn-danger" onclick="return confirm('Supprimer cet etat de paie ?')">Supprimer</button>
+            </form>
             <a href="{{ route('paie_permanents.index') }}" class="btn btn-secondary">Retour</a>
         </div>
     </div>
@@ -41,55 +50,57 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Employe permanent</th>
-                        <th class="text-end">Gains</th>
-                        <th class="text-end">Retenues</th>
-                        <th class="text-end">Penalites</th>
-                        <th class="text-end">Sanctions</th>
-                        <th class="text-end">Acomptes</th>
+                        @foreach($colonnesGains as $colonne)
+                            <th class="text-end">{{ $colonne['libelle'] }}</th>
+                        @endforeach
+                        <th class="text-end">Total gains</th>
+                        @foreach($colonnesRetenues as $colonne)
+                            <th class="text-end">{{ $colonne['libelle'] }}</th>
+                        @endforeach
+                        <th class="text-end">Penalite biometrie</th>
+                        <th class="text-end">Sanction</th>
+                        <th class="text-end">Acompte</th>
+                        <th class="text-end">Retenue globale</th>
                         <th class="text-end">Net a payer</th>
-                        <th>Details</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($etat->lignes as $ligne)
+                        @php($gainsLigne = collect($ligne->detail_gains ?? [])->groupBy('code')->map(fn($items) => $items->sum('montant')))
+                        @php($retenuesLigne = collect($ligne->detail_retenues ?? [])->groupBy('code')->map(fn($items) => $items->sum('montant')))
+                        @php($retenueGlobale = $ligne->total_retenues + $ligne->penalite_biometrie + $ligne->total_sanctions + $ligne->total_acomptes)
                         <tr>
                             <td>{{ $ligne->nom_personnel }}</td>
-                            <td class="text-end">{{ number_format($ligne->total_gains, 0, ',', ' ') }}</td>
-                            <td class="text-end">{{ number_format($ligne->total_retenues, 0, ',', ' ') }}</td>
+                            @foreach($colonnesGains as $colonne)
+                                <td class="text-end">{{ number_format($gainsLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
+                            @endforeach
+                            <td class="text-end"><strong>{{ number_format($ligne->total_gains, 0, ',', ' ') }}</strong></td>
+                            @foreach($colonnesRetenues as $colonne)
+                                <td class="text-end">{{ number_format($retenuesLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
+                            @endforeach
                             <td class="text-end">{{ number_format($ligne->penalite_biometrie, 0, ',', ' ') }}</td>
                             <td class="text-end">{{ number_format($ligne->total_sanctions, 0, ',', ' ') }}</td>
                             <td class="text-end">{{ number_format($ligne->total_acomptes, 0, ',', ' ') }}</td>
+                            <td class="text-end"><strong>{{ number_format($retenueGlobale, 0, ',', ' ') }}</strong></td>
                             <td class="text-end"><strong>{{ number_format($ligne->net_a_payer, 0, ',', ' ') }}</strong></td>
-                            <td>
-                                <details>
-                                    <summary>Voir</summary>
-                                    <strong>Gains</strong>
-                                    <ul>
-                                        @foreach($ligne->detail_gains ?? [] as $detail)
-                                            <li>{{ $detail['libelle'] ?? '-' }} : {{ number_format($detail['montant'] ?? 0, 0, ',', ' ') }}</li>
-                                        @endforeach
-                                    </ul>
-                                    <strong>Retenues</strong>
-                                    <ul>
-                                        @foreach($ligne->detail_retenues ?? [] as $detail)
-                                            <li>{{ $detail['libelle'] ?? '-' }} : {{ number_format($detail['montant'] ?? 0, 0, ',', ' ') }}</li>
-                                        @endforeach
-                                    </ul>
-                                </details>
-                            </td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr class="table-secondary fw-bold">
                         <td>Total</td>
+                        @foreach($colonnesGains as $colonne)
+                            <td class="text-end">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_gains ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
+                        @endforeach
                         <td class="text-end">{{ number_format($etat->total_gains, 0, ',', ' ') }}</td>
-                        <td class="text-end">{{ number_format($etat->total_retenues, 0, ',', ' ') }}</td>
+                        @foreach($colonnesRetenues as $colonne)
+                            <td class="text-end">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_retenues ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
+                        @endforeach
                         <td class="text-end">{{ number_format($etat->total_penalites, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($etat->total_sanctions, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($etat->total_acomptes, 0, ',', ' ') }}</td>
+                        <td class="text-end">{{ number_format($etat->total_retenues + $etat->total_penalites + $etat->total_sanctions + $etat->total_acomptes, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($etat->total_net_a_payer, 0, ',', ' ') }}</td>
-                        <td></td>
                     </tr>
                 </tfoot>
             </table>

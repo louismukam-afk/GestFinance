@@ -31,33 +31,54 @@
         <thead>
             <tr>
                 <th>Employe permanent</th>
-                <th class="right">Gains</th>
-                <th class="right">Retenues</th>
-                <th class="right">Penalites</th>
-                <th class="right">Sanctions</th>
-                <th class="right">Acomptes</th>
+                @foreach($colonnesGains as $colonne)
+                    <th class="right">{{ $colonne['libelle'] }}</th>
+                @endforeach
+                <th class="right">Total gains</th>
+                @foreach($colonnesRetenues as $colonne)
+                    <th class="right">{{ $colonne['libelle'] }}</th>
+                @endforeach
+                <th class="right">Penalite biometrie</th>
+                <th class="right">Sanction</th>
+                <th class="right">Acompte</th>
+                <th class="right">Retenue globale</th>
                 <th class="right">Net a payer</th>
             </tr>
         </thead>
         <tbody>
             @foreach($etat->lignes as $ligne)
+                @php($gainsLigne = collect($ligne->detail_gains ?? [])->groupBy('code')->map(fn($items) => $items->sum('montant')))
+                @php($retenuesLigne = collect($ligne->detail_retenues ?? [])->groupBy('code')->map(fn($items) => $items->sum('montant')))
+                @php($retenueGlobale = $ligne->total_retenues + $ligne->penalite_biometrie + $ligne->total_sanctions + $ligne->total_acomptes)
                 <tr>
                     <td>{{ $ligne->nom_personnel }}</td>
+                    @foreach($colonnesGains as $colonne)
+                        <td class="right">{{ number_format($gainsLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
+                    @endforeach
                     <td class="right">{{ number_format($ligne->total_gains, 0, ',', ' ') }}</td>
-                    <td class="right">{{ number_format($ligne->total_retenues, 0, ',', ' ') }}</td>
+                    @foreach($colonnesRetenues as $colonne)
+                        <td class="right">{{ number_format($retenuesLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
+                    @endforeach
                     <td class="right">{{ number_format($ligne->penalite_biometrie, 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($ligne->total_sanctions, 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($ligne->total_acomptes, 0, ',', ' ') }}</td>
+                    <td class="right">{{ number_format($retenueGlobale, 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($ligne->net_a_payer, 0, ',', ' ') }}</td>
                 </tr>
             @endforeach
             <tr class="total">
                 <td>Total</td>
+                @foreach($colonnesGains as $colonne)
+                    <td class="right">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_gains ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
+                @endforeach
                 <td class="right">{{ number_format($etat->total_gains, 0, ',', ' ') }}</td>
-                <td class="right">{{ number_format($etat->total_retenues, 0, ',', ' ') }}</td>
+                @foreach($colonnesRetenues as $colonne)
+                    <td class="right">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_retenues ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
+                @endforeach
                 <td class="right">{{ number_format($etat->total_penalites, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($etat->total_sanctions, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($etat->total_acomptes, 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($etat->total_retenues + $etat->total_penalites + $etat->total_sanctions + $etat->total_acomptes, 0, ',', ' ') }}</td>
                 <td class="right">{{ number_format($etat->total_net_a_payer, 0, ',', ' ') }}</td>
             </tr>
         </tbody>

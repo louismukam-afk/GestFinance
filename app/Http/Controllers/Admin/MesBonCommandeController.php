@@ -132,6 +132,19 @@ class MesBonCommandeController extends Controller
         return $pdf->download('mes_bons_' . $type . '.pdf');
     }
 
+
+     public function document1(bon_commandeok $bon)
+    {
+       // $this->authorizeOwner($bon);
+
+        $bon->load(['personnels', 'entites', 'user', 'element_bon_commandes']);
+
+        return view('Admin.MesBons.document', [
+            'bon' => $bon,
+            'elements' => $bon->element_bon_commandes,
+            'title' => 'Bon de commande',
+        ]);
+    }
     public function document(bon_commandeok $bon)
     {
         $this->authorizeOwner($bon);
@@ -143,6 +156,19 @@ class MesBonCommandeController extends Controller
             'elements' => $bon->element_bon_commandes,
             'title' => 'Bon de commande',
         ]);
+    }
+ public function documentPdf1(bon_commandeok $bon)
+    {
+       // $this->authorizeOwner($bon);
+
+        $bon->load(['personnels', 'entites', 'user', 'element_bon_commandes']);
+
+        $pdf = Pdf::loadView('Admin.MesBons.document_pdf', [
+            'bon' => $bon,
+            'elements' => $bon->element_bon_commandes,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('bon_commande_' . $bon->id . '.pdf');
     }
 
     public function documentPdf(bon_commandeok $bon)
@@ -167,6 +193,25 @@ class MesBonCommandeController extends Controller
             'entites' => entite::orderBy('nom_entite')->get(),
             'personnels' => personnel::orderBy('nom')->get(),
         ]);
+    }
+ private function query1(Request $request, string $type)
+    {
+        return bon_commandeok::with(['personnels', 'entites', 'user'])
+            //->where('id_user', auth()->id())
+            ->when($request->date_debut, fn($q) => $q->whereDate('date_debut', '>=', $request->date_debut))
+            ->when($request->date_fin, fn($q) => $q->whereDate('date_debut', '<=', $request->date_fin))
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($sub) use ($request) {
+                    $sub->where('nom_bon_commande', 'like', '%' . $request->search . '%')
+                        ->orWhere('description_bon_commande', 'like', '%' . $request->search . '%');
+                });
+            })
+            ->when($type === 'valides', fn($q) => $q->where(function ($sub) {
+                $sub->where('statuts', 1);
+            }))
+            ->when($type === 'attente', fn($q) => $q->where('validation_pdg', 0)->where('statuts', 0))
+            ->when($type === 'refuses', fn($q) => $q->where('statuts', 2))
+            ->orderBy('date_debut', 'desc');
     }
 
     private function query(Request $request, string $type)
