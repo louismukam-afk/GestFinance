@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Budget;
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\Budget;
+use App\Models\CaisseUser;
 use App\Models\donnee_budgetaire_entree;
 use App\Models\donnee_budgetaire_sortie;
 use App\Models\donnee_ligne_budgetaire_entree;
@@ -237,6 +238,7 @@ class EtatSortieController extends Controller
         $idBudget = $request->id_budget;
         $idEntite = $request->id_entite;
         $idAnnee = $request->id_annee_academique;
+        $allowedCaisseIds = $idUser ? $this->caissesAffecteesIds((int) $idUser) : null;
 
         $reglements = reglement_etudiant::with([
             'caisse',
@@ -247,9 +249,11 @@ class EtatSortieController extends Controller
             'ligne_budgetaire_entree',
             'element_ligne_budgetaire_entree',
             'donnee_ligne_budgetaire_entree',
+            'etudiants',
         ])
             ->when($dateDebut, fn($q) => $q->whereDate('date_reglement', '>=', $dateDebut))
             ->whereDate('date_reglement', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
@@ -263,6 +267,7 @@ class EtatSortieController extends Controller
                 'operation' => 'Reglement etudiant',
                 'numero' => $r->numero_reglement,
                 'motif' => $r->motif_reglement ?? '',
+                'tiers' => $r->etudiants->nom ?? '',
                 'budget' => $r->budget->libelle_ligne_budget ?? '',
                 'ligne' => $r->ligne_budgetaire_entree->libelle_ligne_budgetaire_entree ?? '',
                 'element' => $r->element_ligne_budgetaire_entree->libelle_elements_ligne_budgetaire_entree ?? '',
@@ -270,6 +275,7 @@ class EtatSortieController extends Controller
                 'entite' => $r->entite->nom_entite ?? '',
                 'annee' => $r->annee_academique->nom ?? '',
                 'utilisateur' => $r->user->name ?? '',
+                'caisse_id' => (int) $r->id_caisse,
                 'entree' => (float) $r->montant_reglement,
                 'retour' => 0,
                 'sortie' => 0,
@@ -279,6 +285,7 @@ class EtatSortieController extends Controller
             ->where('statut', '!=', 'annule')
             ->when($dateDebut, fn($q) => $q->whereDate('date_entree', '>=', $dateDebut))
             ->whereDate('date_entree', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
@@ -298,6 +305,8 @@ class EtatSortieController extends Controller
                 'entite' => '',
                 'annee' => $e->annee_academique->nom ?? '',
                 'utilisateur' => $e->user->name ?? '',
+                'tiers' => $e->nom_tiers ?? '',
+                'caisse_id' => (int) $e->id_caisse,
                 'entree' => (float) $e->montant,
                 'retour' => 0,
                 'sortie' => 0,
@@ -315,6 +324,7 @@ class EtatSortieController extends Controller
         ])
             ->when($dateDebut, fn($q) => $q->whereDate('date_depense', '>=', $dateDebut))
             ->whereDate('date_depense', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
@@ -335,6 +345,8 @@ class EtatSortieController extends Controller
                 'entite' => optional(optional($d->bon)->entites)->nom_entite ?? '',
                 'annee' => $d->annee_academiques->nom ?? '',
                 'utilisateur' => $d->user->name ?? '',
+                'tiers' => optional($d->bon)->nom_bon_commande ?? '',
+                'caisse_id' => (int) $d->id_caisse,
                 'entree' => 0,
                 'retour' => 0,
                 'sortie' => (float) $d->montant,
@@ -349,6 +361,7 @@ class EtatSortieController extends Controller
             ->where('statut', 'payee')
             ->when($dateDebut, fn($q) => $q->whereDate('date_paiement', '>=', $dateDebut))
             ->whereDate('date_paiement', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse_paiement', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse_paiement', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user_paiement', $idUser))
             ->when($idBudget, fn($q) => $q->whereHas('entree_speciale', fn($e) => $e->where('id_budget', $idBudget)))
@@ -368,6 +381,8 @@ class EtatSortieController extends Controller
                 'entite' => '',
                 'annee' => $r->annee_paiement->nom ?? '',
                 'utilisateur' => $r->user_paiement->name ?? '',
+                'tiers' => optional($r->entree_speciale)->nom_tiers ?? '',
+                'caisse_id' => (int) $r->id_caisse_paiement,
                 'entree' => 0,
                 'retour' => 0,
                 'sortie' => (float) $r->montant_paye,
@@ -377,6 +392,7 @@ class EtatSortieController extends Controller
             ->where('type_transfert', '!=', 2)
             ->when($dateDebut, fn($q) => $q->whereDate('date_transfert', '>=', $dateDebut))
             ->whereDate('date_transfert', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse_arrivee', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse_arrivee', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->get()
@@ -394,6 +410,8 @@ class EtatSortieController extends Controller
                 'entite' => '',
                 'annee' => '',
                 'utilisateur' => $t->user->name ?? '',
+                'tiers' => $t->caisseDepart->nom_caisse ?? '',
+                'caisse_id' => (int) $t->id_caisse_arrivee,
                 'entree' => (float) $t->montant_transfert,
                 'retour' => 0,
                 'sortie' => 0,
@@ -403,6 +421,7 @@ class EtatSortieController extends Controller
             ->where('type_transfert', '!=', 2)
             ->when($dateDebut, fn($q) => $q->whereDate('date_transfert', '>=', $dateDebut))
             ->whereDate('date_transfert', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse_depart', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse_depart', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->get()
@@ -420,6 +439,8 @@ class EtatSortieController extends Controller
                 'entite' => '',
                 'annee' => '',
                 'utilisateur' => $t->user->name ?? '',
+                'tiers' => $t->caisseArrivee->nom_caisse ?? '',
+                'caisse_id' => (int) $t->id_caisse_depart,
                 'entree' => 0,
                 'retour' => 0,
                 'sortie' => (float) $t->montant_transfert,
@@ -436,6 +457,7 @@ class EtatSortieController extends Controller
         ])
             ->when($dateDebut, fn($q) => $q->whereDate('date_retour', '>=', $dateDebut))
             ->whereDate('date_retour', '<=', $dateFin)
+            ->when($allowedCaisseIds, fn($q) => $q->whereIn('id_caisse', $allowedCaisseIds))
             ->when($idCaisse, fn($q) => $q->where('id_caisse', $idCaisse))
             ->when($idUser, fn($q) => $q->where('id_user', $idUser))
             ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
@@ -456,6 +478,8 @@ class EtatSortieController extends Controller
                 'entite' => optional(optional($r->bon)->entites)->nom_entite ?? '',
                 'annee' => $r->annee_academique->nom ?? '',
                 'utilisateur' => $r->user->name ?? '',
+                'tiers' => '',
+                'caisse_id' => (int) $r->id_caisse,
                 'entree' => 0,
                 'retour' => (float) $r->montant,
                 'sortie' => 0,
@@ -471,14 +495,39 @@ class EtatSortieController extends Controller
             ->sortBy('date')
             ->values();
 
+        $caissesDisponibles = $allowedCaisseIds
+            ? caisse::whereIn('id', $allowedCaisseIds)->orderBy('nom_caisse')->get()
+            : caisse::orderBy('nom_caisse')->get();
+
+        $caisseSummaries = $operations
+            ->groupBy('caisse')
+            ->map(function ($lignes, $nomCaisse) use ($dateDebut, $dateFin) {
+                $id = (int) ($lignes->first()['caisse_id'] ?? 0);
+                $soldeInitial = $id && $dateDebut
+                    ? $this->soldeCaisseAlaDate($id, \Carbon\Carbon::parse($dateDebut)->subDay()->toDateString())
+                    : 0;
+                $entrees = (float) $lignes->sum('entree') + (float) $lignes->sum('retour');
+                $sorties = (float) $lignes->sum('sortie');
+
+                return [
+                    'caisse' => $nomCaisse,
+                    'solde_initial' => $soldeInitial,
+                    'entrees_periode' => $entrees,
+                    'sorties_periode' => $sorties,
+                    'solde_final' => $soldeInitial + $entrees - $sorties,
+                ];
+            })
+            ->values();
+
         return [
             'operations' => $operations,
             'operationsGrouped' => $operations->groupBy('caisse'),
+            'caisseSummaries' => $caisseSummaries,
             'totalEntrees' => $operations->sum('entree'),
             'totalRetours' => $operations->sum('retour'),
             'totalSorties' => $operations->sum('sortie'),
             'solde' => $operations->sum('entree') + $operations->sum('retour') - $operations->sum('sortie'),
-            'caisses' => caisse::orderBy('nom_caisse')->get(),
+            'caisses' => $caissesDisponibles,
             'users' => User::orderBy('name')->get(),
             'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
             'entites' => entite::orderBy('nom_entite')->get(),
@@ -493,6 +542,52 @@ class EtatSortieController extends Controller
     public function etatCaisse(Request $request)
     {
         return view('Admin.Etats.sorties.etat_caisse', $this->buildEtatCaisseData($request));
+    }
+
+    private function caissesAffecteesIds(int $userId)
+    {
+        return CaisseUser::where('id_user', $userId)
+            ->where('actif', true)
+            ->where(function ($q) {
+                $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+            })
+            ->where(function ($q) {
+                $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+            })
+            ->pluck('id_caisse')
+            ->unique()
+            ->values();
+    }
+
+    private function soldeCaisseAlaDate(int $idCaisse, string $dateFin): float
+    {
+        $reglements = reglement_etudiant::where('id_caisse', $idCaisse)
+            ->whereDate('date_reglement', '<=', $dateFin)
+            ->sum('montant_reglement');
+        $entreesSpeciales = entree_speciale::where('id_caisse', $idCaisse)
+            ->where('statut', '!=', 'annule')
+            ->whereDate('date_entree', '<=', $dateFin)
+            ->sum('montant');
+        $retours = retour_caisse::where('id_caisse', $idCaisse)
+            ->whereDate('date_retour', '<=', $dateFin)
+            ->sum('montant');
+        $transfertsEntrants = Transfert_caisse::where('id_caisse_arrivee', $idCaisse)
+            ->where('type_transfert', '!=', 2)
+            ->whereDate('date_transfert', '<=', $dateFin)
+            ->sum('montant_transfert');
+        $transfertsSortants = Transfert_caisse::where('id_caisse_depart', $idCaisse)
+            ->where('type_transfert', '!=', 2)
+            ->whereDate('date_transfert', '<=', $dateFin)
+            ->sum('montant_transfert');
+        $decaissements = decaissement::where('id_caisse', $idCaisse)
+            ->whereDate('date_depense', '<=', $dateFin)
+            ->sum('montant');
+        $remboursementsDettes = entree_speciale_echeance::where('id_caisse_paiement', $idCaisse)
+            ->where('statut', 'payee')
+            ->whereDate('date_paiement', '<=', $dateFin)
+            ->sum('montant_paye');
+
+        return (float) ($reglements + $entreesSpeciales + $retours + $transfertsEntrants - $transfertsSortants - $decaissements - $remboursementsDettes);
     }
 
     public function monEtatCaisse(Request $request)

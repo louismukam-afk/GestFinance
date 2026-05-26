@@ -7,6 +7,9 @@
         <button class="btn btn-primary" data-toggle="modal" data-backdrop="false" href="#add_caisse">
             ➕ Nouvelle Caisse
         </button>
+        <a href="{{ route('caisses.affectations') }}" class="btn btn-info">
+            Affecter les caisses aux utilisateurs
+        </a>
 
         <div class="table-responsive mt-3">
             <table id="caissesTable" class="table table-bordered table-striped">

@@ -2,6 +2,8 @@
 
 @section('content')
 <div class="container">
+    @include('decaissements.partials.navigation')
+
     <h3>Financer : {{ $bon->nom_bon_commande }}</h3>
 
     @if(session('error'))

@@ -2,6 +2,8 @@
 
 @section('content')
 <div class="container">
+    @include('decaissements.partials.navigation')
+
     <h3>{{ $title }}</h3>
 
     <form method="GET" class="row g-3 mb-4">

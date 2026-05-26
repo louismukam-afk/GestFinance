@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\bon_commandeok;
 use App\Models\Budget;
+use App\Models\CaisseUser;
 use App\Models\caisse;
 use App\Models\decaissement;
 use App\Models\donnee_budgetaire_sortie;
@@ -127,7 +128,7 @@ class DecaissementController extends Controller
 
         $totalDecaisse = decaissement::where('id_bon_commande', $id)->sum('montant');
         $reste = $bon->montant_total - $totalDecaisse;
-        $caissest = caisse::where('type_caisse', 1)->get();
+        $caissest = $this->caissesAffecteesUtilisateur(auth()->id(), 'decaissement');
         // 🔥 DONNÉES
         $budgets = Budget::all();
         $annees = annee_academique::all();
@@ -148,22 +149,11 @@ class DecaissementController extends Controller
     }
     public function getSoldeAjax($id)
     {
-        $entree = Transfert_caisse::where('id_caisse_arrivee', $id)
-            ->sum('montant_transfert');
+        if (!$this->utilisateurAutoriseCaisse(auth()->id(), (int) $id, 'decaissement')) {
+            return response()->json(['solde' => 0, 'message' => 'Caisse non affectee'], 403);
+        }
 
-        $sortie = Transfert_caisse::where('id_caisse_depart', $id)
-            ->sum('montant_transfert');
-
-        $decaisse = decaissement::where('id_caisse', $id)
-            ->sum('montant');
-
-        $entreesSpeciales = entree_speciale::with('echeances')
-            ->where('id_caisse', $id)
-            ->where('statut', '!=', 'annule')
-            ->get()
-            ->sum(fn($e) => $e->montant_net_encaisse);
-
-        $solde = $entree + $entreesSpeciales - $sortie - $decaisse;
+        $solde = $this->soldeCaisse((int) $id);
 
         return response()->json([
             'solde' => $solde
@@ -190,22 +180,61 @@ class DecaissementController extends Controller
     }
     public function getSoldeCaisse($id_caisse)
     {
-        $entree = Transfert_caisse::where('id_caisse_arrivee', $id_caisse)
+        return $this->soldeCaisse((int) $id_caisse);
+    }
+
+    private function soldeCaisse(int $idCaisse): float
+    {
+        $entree = Transfert_caisse::where('id_caisse_arrivee', $idCaisse)
             ->sum('montant_transfert');
 
-        $sortie = Transfert_caisse::where('id_caisse_depart', $id_caisse)
+        $sortie = Transfert_caisse::where('id_caisse_depart', $idCaisse)
             ->sum('montant_transfert');
 
-        $decaisse = decaissement::where('id_caisse', $id_caisse)
+        $decaisse = decaissement::where('id_caisse', $idCaisse)
             ->sum('montant');
 
         $entreesSpeciales = entree_speciale::with('echeances')
-            ->where('id_caisse', $id_caisse)
+            ->where('id_caisse', $idCaisse)
             ->where('statut', '!=', 'annule')
             ->get()
             ->sum(fn($e) => $e->montant_net_encaisse);
 
         return $entree + $entreesSpeciales - $sortie - $decaisse;
+    }
+
+    private function caissesAffecteesUtilisateur(?int $userId, string $operation)
+    {
+        $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
+
+        return caisse::whereHas('affectations', function ($query) use ($userId, $droit) {
+            $query->where('id_user', $userId)
+                ->where('actif', true)
+                ->where($droit, true)
+                ->where(function ($q) {
+                    $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+                });
+        })->orderBy('nom_caisse')->get();
+    }
+
+    private function utilisateurAutoriseCaisse(?int $userId, int $idCaisse, string $operation): bool
+    {
+        $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
+
+        return CaisseUser::where('id_user', $userId)
+            ->where('id_caisse', $idCaisse)
+            ->where('actif', true)
+            ->where($droit, true)
+            ->where(function ($q) {
+                $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+            })
+            ->where(function ($q) {
+                $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+            })
+            ->exists();
     }
     // ENREGISTREMENT
 
@@ -293,35 +322,18 @@ class DecaissementController extends Controller
         // ==========================
         if ($request->filled('id_caisse')) {
 
-            if (!$request->id_transfert_caisse) {
-                return back()->with('error', 'Aucun transfert trouvé');
+            if (!$this->utilisateurAutoriseCaisse(auth()->id(), (int) $request->id_caisse, 'decaissement')) {
+                return back()->with('error', 'Cette caisse ne vous est pas affectee pour les decaissements.');
             }
 
-            $transfert = Transfert_caisse::find($request->id_transfert_caisse);
-
-            if (!$transfert) {
-                return back()->with('error', 'Transfert invalide');
-            }
-
-            $entree = Transfert_caisse::where('id_caisse_arrivee', $transfert->id_caisse_arrivee)
-                ->sum('montant_transfert');
-            $entree += entree_speciale::with('echeances')
-                ->where('id_caisse', $transfert->id_caisse_arrivee)
-                ->where('statut', '!=', 'annule')
-                ->get()
-                ->sum(fn($e) => $e->montant_net_encaisse);
-
-            $sortie = decaissement::where('id_caisse', $transfert->id_caisse_arrivee)
-                ->sum('montant');
-
-            $solde = $entree - $sortie;
+            $solde = $this->soldeCaisse((int) $request->id_caisse);
 
             if ($request->montant > $solde) {
                 return back()->with('error', 'Fonds insuffisants');
             }
 
-            $id_caisse = $transfert->id_caisse_arrivee;
-            $id_transfert_caisse = $transfert->id;
+            $id_caisse = (int) $request->id_caisse;
+            $id_transfert_caisse = (int) ($request->id_transfert_caisse ?? 0);
 
         }
 

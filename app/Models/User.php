@@ -165,6 +165,13 @@ class User extends Authenticatable
         return $this->hasMany(caisse::class,'id_user');
 
     }
+
+    public function caissesAffectees()
+    {
+        return $this->belongsToMany(caisse::class, 'caisse_user', 'id_user', 'id_caisse')
+            ->withPivot(['peut_encaisser', 'peut_decaisser', 'actif', 'date_debut', 'date_fin', 'observation'])
+            ->withTimestamps();
+    }
     public function donnee_budgetaire_sorties()
     {
         return $this->hasMany(donnee_budgetaire_sortie::class,'id_user');

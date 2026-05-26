@@ -78,6 +78,8 @@
 
     <div class="container">
 
+        @include('decaissements.partials.navigation')
+
         <h2 class="text-center mb-4">Bons valides a financer</h2>
 
         @if(session('success'))

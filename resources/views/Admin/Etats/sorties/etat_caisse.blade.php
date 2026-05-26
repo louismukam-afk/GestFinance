@@ -121,6 +121,33 @@
             <strong>Solde :</strong> {{ number_format($solde, 0, ',', ' ') }} FCFA
         </div>
 
+        @if(($caisseSummaries ?? collect())->count())
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                    <tr>
+                        <th>Caisse</th>
+                        <th class="text-end">Solde debut periode</th>
+                        <th class="text-end">Entrees periode</th>
+                        <th class="text-end">Sorties periode</th>
+                        <th class="text-end">Solde fin periode</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($caisseSummaries as $resume)
+                        <tr>
+                            <td>{{ $resume['caisse'] }}</td>
+                            <td class="text-end">{{ number_format($resume['solde_initial'], 0, ',', ' ') }}</td>
+                            <td class="text-end text-success">{{ number_format($resume['entrees_periode'], 0, ',', ' ') }}</td>
+                            <td class="text-end text-danger">{{ number_format($resume['sorties_periode'], 0, ',', ' ') }}</td>
+                            <td class="text-end fw-bold">{{ number_format($resume['solde_final'], 0, ',', ' ') }} FCFA</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
         @forelse($operationsGrouped as $caisse => $lignes)
             <div class="card mb-4">
                 <div class="card-header bg-dark text-white">
@@ -134,6 +161,7 @@
                             <th>Date</th>
                             <th>Operation</th>
                             <th>Numero</th>
+                            <th>Tiers / Etudiant</th>
                             <th>Motif</th>
                             <th>Budget</th>
                             <th>Ligne budgetaire</th>
@@ -159,6 +187,7 @@
                                 <td>{{ $op['date'] }}</td>
                                 <td>{{ $op['operation'] }}</td>
                                 <td>{{ $op['numero'] }}</td>
+                                <td>{{ $op['tiers'] ?? '-' }}</td>
                                 <td>{{ $op['motif'] ?: '-' }}</td>
                                 <td>{{ $op['budget'] ?: '-' }}</td>
                                 <td>{{ $op['ligne'] ?: '-' }}</td>
@@ -173,13 +202,13 @@
                             </tr>
                         @endforeach
                         <tr class="table-secondary fw-bold">
-                            <td colspan="11">TOTAL {{ $caisse }}</td>
+                            <td colspan="12">TOTAL {{ $caisse }}</td>
                             <td class="text-end">{{ number_format($tEntree, 0, ',', ' ') }}</td>
                             <td class="text-end">{{ number_format($tRetour, 0, ',', ' ') }}</td>
                             <td class="text-end">{{ number_format($tSortie, 0, ',', ' ') }}</td>
                         </tr>
                         <tr class="table-info fw-bold">
-                            <td colspan="11">SOLDE {{ $caisse }}</td>
+                            <td colspan="12">SOLDE {{ $caisse }}</td>
                             <td colspan="3" class="text-end">{{ number_format($tEntree + $tRetour - $tSortie, 0, ',', ' ') }} FCFA</td>
                         </tr>
                         </tbody>

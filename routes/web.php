@@ -681,6 +681,12 @@ Route::middleware(['auth'])->group(function () {
 // 📌 Supprimer une caisse
     Route::delete('caisses/{id}', [\App\Http\Controllers\Admin\CaisseController::class, 'destroy'])
         ->name('delete_caisse');
+    Route::get('caisses-affectations', [\App\Http\Controllers\Admin\CaisseController::class, 'affectations'])
+        ->name('caisses.affectations');
+    Route::post('caisses-affectations', [\App\Http\Controllers\Admin\CaisseController::class, 'storeAffectation'])
+        ->name('caisses.affectations.store');
+    Route::delete('caisses-affectations/{id}', [\App\Http\Controllers\Admin\CaisseController::class, 'destroyAffectation'])
+        ->name('caisses.affectations.destroy');
 
     // 📌 Liste des banques
     Route::get('banques', [\App\Http\Controllers\Admin\BanqueController::class, 'index'])

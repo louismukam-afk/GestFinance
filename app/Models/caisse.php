@@ -24,6 +24,18 @@ class caisse extends Model
     {
         return $this->belongsTo(User::class,'id_user');
     }
+
+    public function utilisateurs()
+    {
+        return $this->belongsToMany(User::class, 'caisse_user', 'id_caisse', 'id_user')
+            ->withPivot(['peut_encaisser', 'peut_decaisser', 'actif', 'date_debut', 'date_fin', 'observation'])
+            ->withTimestamps();
+    }
+
+    public function affectations()
+    {
+        return $this->hasMany(CaisseUser::class, 'id_caisse');
+    }
     public function reglement_etudiants()
     {
         return $this->hasMany(reglement_etudiant::class,'id_caisse');
