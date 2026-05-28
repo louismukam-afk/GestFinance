@@ -34,4 +34,26 @@ class banque extends Model
     public function reglement_etudiants(){
         return $this->hasMany(reglement_etudiant::class,'id_banque');
     }
+
+    public function affectations()
+    {
+        return $this->hasMany(BanqueUser::class, 'id_banque');
+    }
+
+    public function utilisateurs()
+    {
+        return $this->belongsToMany(User::class, 'banque_user', 'id_banque', 'id_user')
+            ->withPivot(['peut_encaisser', 'peut_decaisser', 'actif', 'date_debut', 'date_fin', 'observation'])
+            ->withTimestamps();
+    }
+
+    public function transfertsSortants()
+    {
+        return $this->hasMany(Transfert_caisse::class, 'id_banque_depart', 'id');
+    }
+
+    public function transfertsEntrants()
+    {
+        return $this->hasMany(Transfert_caisse::class, 'id_banque_arrivee', 'id');
+    }
 }

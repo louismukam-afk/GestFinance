@@ -20,6 +20,8 @@ class Transfert_caisse extends Model
         'sode_caisse',
         'type_transfert',
         'id_caisse_depart',
+        'id_banque_depart',
+        'id_banque_arrivee',
         'id_entree_speciale',
         'date_transfert',
         'statut_caisse_transfert',
@@ -43,6 +45,15 @@ class Transfert_caisse extends Model
     public function caisseArrivee()
     {
         return $this->belongsTo(caisse::class, 'id_caisse_arrivee', 'id');
+    }
+    public function banqueDepart()
+    {
+        return $this->belongsTo(banque::class, 'id_banque_depart', 'id');
+    }
+
+    public function banqueArrivee()
+    {
+        return $this->belongsTo(banque::class, 'id_banque_arrivee', 'id');
     }
     public function entree_speciale()
     {

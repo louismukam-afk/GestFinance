@@ -8,6 +8,10 @@
             ➕ Nouvelle Banque
         </button>
 
+        <a href="{{ route('banques.affectations') }}" class="btn btn-info">
+            Affecter les banques aux utilisateurs
+        </a>
+
         <div class="table-responsive mt-3">
             <table id="banquesTable" class="table table-bordered table-striped">
                 <thead>

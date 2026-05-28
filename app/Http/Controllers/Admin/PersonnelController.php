@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\PersonnelsTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Imports\PersonnelsImport;
 use App\Models\personnel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
+
 class PersonnelController extends Controller
 {
     public function index()
@@ -13,6 +17,33 @@ class PersonnelController extends Controller
         $personnels = personnel::orderBy('created_at', 'desc')->get();
         $title = "Gestion du Personnel";
         return view('Admin.Personnel.index', compact('personnels', 'title'));
+    }
+
+    public function import()
+    {
+        $title = "Importation des personnels";
+
+        return view('Admin.Personnel.import', compact('title'));
+    }
+
+    public function downloadTemplate()
+    {
+        return Excel::download(new PersonnelsTemplateExport(), 'template_import_personnels.xlsx');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate([
+            'fichier' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ]);
+
+        $import = new PersonnelsImport();
+        Excel::import($import, $request->file('fichier'));
+
+        return redirect()->route('personnels.import')
+            ->with('success', $import->createdCount() . ' personnel(s) importe(s).')
+            ->with('warning', $import->skippedCount() . ' ligne(s) ignoree(s).')
+            ->with('import_errors', $import->errors());
     }
 
     public function store(Request $request)

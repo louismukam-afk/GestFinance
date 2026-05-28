@@ -13,7 +13,7 @@
 <!-- Bootstrap & Custom -->
     <link href="{{ asset('css/bootstrap.min.css') }}" rel="stylesheet"/>
     <link href="{{ asset('css/font-awesome.css') }}" rel="stylesheet"/>
-    <link href="{{ asset('css/custom.css') }}" rel="stylesheet"/>
+    <link href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}" rel="stylesheet"/>
 
     <!-- DataTables Buttons CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css"/>
@@ -32,7 +32,7 @@
             flex-direction: column;
         }
 
-        .content {
+        .page > .content {
             flex: 1; /* ✅ pousse le footer en bas */
         }
         .dataTables_wrapper .dataTables_paginate .paginate_button {
@@ -50,7 +50,7 @@
 
 
         .footer {
-            background: #2e353d;
+            background: #560b18;
             height: 60px;
             text-align: center;
             color: white;
@@ -133,6 +133,65 @@
                 <li>
                     <a href="{{ route('dashboard') }}" class="menu-item"><i class="fa fa-cog fa-lg"></i> Administration</a>
                 </li>
+                <li>
+                    <a href="{{ route('budget') }}" class="menu-item"><i class="fa fa-shopping-cart fa-lg"></i> Gestions budgétaires</a>
+                </li>
+                <li>
+                    <a href="{{ route('etats.index') }}" class="menu-item"><i class="fa fa-bar-chart-o fa-lg"></i> Etats Budgetaires Entrées</a>
+                </li>
+                <li>
+                    <a href="{{ route('etudiant') }}" class="menu-item"><i class="fa fa-maxcdn fa-lg"></i> Gestion des étudiants</a>
+                </li>
+                <li>
+                    <a href="{{ route('etat_sorties.index') }}" class="menu-item"><i class="fa fa-bar-chart-o fa-lg"></i> Etats Budgetaires sorties</a>
+                </li>
+                <li>
+                    <a href="{{ route('etat_sorties.etat_caisse') }}" class="menu-item"><i class="fa fa-money fa-lg"></i> Etats de caisse</a>
+                </li>
+                <li>
+                    <a href="{{ route('etat_sorties.mon_etat_caisse') }}" class="menu-item"><i class="fa fa-calculator fa-lg"></i> Mon etat de caisse</a>
+                </li>
+                <li>
+                    <a href="{{ route('etat_sorties.disponibilite_caisses') }}" class="menu-item"><i class="fa fa-money fa-lg"></i> Disponibilite des caisses</a>
+                </li>
+                <li>
+                    <a href="{{ route('retour_caisses.create') }}" class="menu-item"><i class="fa fa-reply fa-lg"></i> Retour en caisse</a>
+                </li>
+                <li>
+                    <a href="{{ route('mes_bons.attente') }}" class="menu-item"><i class="fa fa-file-text-o fa-lg"></i> Mes bons en attente</a>
+                </li>
+                <li>
+                    <a href="{{ route('mes_bons.valides') }}" class="menu-item"><i class="fa fa-check-square-o fa-lg"></i> Mes bons valides</a>
+                </li>
+                <li>
+                    <a href="{{ route('mes_bons.refuses') }}" class="menu-item"><i class="fa fa-ban fa-lg"></i> Mes bons refuses</a>
+                </li>
+                @if(auth()->user()?->canAccessRoute('validation_bons.pdg'))
+                    <li>
+                        <a href="{{ route('validation_bons.pdg') }}" class="menu-item"><i class="fa fa-check-circle fa-lg"></i> Validation bons PDG</a>
+                    </li>
+                @endif
+                @if(auth()->user()?->canAccessRoute('validation_bons.achats'))
+                    <li>
+                        <a href="{{ route('validation_bons.achats') }}" class="menu-item"><i class="fa fa-shopping-cart fa-lg"></i> Validation bons Achats</a>
+                    </li>
+                @endif
+                @if(auth()->user()?->canAccessRoute('validation_bons.daf'))
+                    <li>
+                        <a href="{{ route('validation_bons.daf') }}" class="menu-item"><i class="fa fa-calculator fa-lg"></i> Validation bons DAF</a>
+                    </li>
+                @endif
+                <li>
+                    <a href="{{ route('emploi_temps.index') }}" class="menu-item"><i class="fa fa-users fa-lg"></i> Ressources humaines</a>
+                </li>
+                @if(auth()->user()?->isSuperAdmin())
+                    <li>
+                        <a href="{{ route('access.index') }}" class="menu-item"><i class="fa fa-lock fa-lg"></i> Roles et permissions</a>
+                    </li>
+                    <li>
+                        <a href="{{ route('audit.index') }}" class="menu-item"><i class="fa fa-history fa-lg"></i> Journal des operations</a>
+                    </li>
+                @endif
                 @auth
                 <li>
                     <a href="{{ route('logout') }}" class="menu-item"

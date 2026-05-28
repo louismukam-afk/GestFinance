@@ -44,6 +44,16 @@
 
     $(document).ready(function () {
         mainApp.main_fun();
+
+        $('table.table').each(function () {
+            var $table = $(this);
+
+            if (!$table.parent().hasClass('table-responsive') && !$table.parent().hasClass('gf-table-scroll')) {
+                $table.wrap('<div class="gf-table-scroll"></div>');
+            }
+        });
+
+        $('form .row').addClass('flex-wrap');
     });
 
 }(jQuery));

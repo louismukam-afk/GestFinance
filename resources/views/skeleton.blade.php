@@ -2,13 +2,13 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ isset($title) ? $title : 'GESFINANCE' }}</title>
 
     <!-- Bootstrap CSS -->
     <link href="{{ asset('css/bootstrap.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('css/font-awesome.css') }}" rel="stylesheet" />
-    <link href="{{ asset('css/custom.css') }}" rel="stylesheet" />
-    <link rel="stylesheet" href="{{asset('css/custom.css')}}">
+    <link href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}" rel="stylesheet" />
 
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="{{ asset('js/datatables/datatables.min.css') }}" />

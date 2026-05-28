@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Disponibilite des caisses</title>
+    <title>Disponibilite des caisses et banques</title>
     <style>
         body {
             font-family: DejaVu Sans;
@@ -50,7 +50,7 @@
 </head>
 <body>
 
-<h3>DISPONIBILITE DES CAISSES</h3>
+<h3>DISPONIBILITE DES CAISSES ET BANQUES</h3>
 
 <p class="summary">
     Date de situation : <strong>{{ $dateFin }}</strong>
@@ -63,7 +63,7 @@
 <table>
     <thead>
     <tr>
-        <th>Caisse</th>
+        <th>Compte</th>
         <th>Type</th>
         <th class="right">Entrees reglements</th>
         <th class="right">Entrees speciales</th>
@@ -79,8 +79,8 @@
     <tbody>
     @foreach($caisses as $ligne)
         <tr>
-            <td>{{ $ligne['caisse']->nom_caisse }}</td>
-            <td>{{ $ligne['caisse']->type_caisse ?? '-' }}</td>
+            <td>{{ $ligne['nom_compte'] ?? $ligne['caisse']->nom_caisse }}</td>
+            <td>{{ $ligne['type_compte'] ?? ($ligne['caisse']->type_caisse ?? '-') }}</td>
             <td class="right">{{ number_format($ligne['entrees_reglements'], 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['entrees_speciales'] ?? 0, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($ligne['entrees_retours'], 0, ',', ' ') }}</td>

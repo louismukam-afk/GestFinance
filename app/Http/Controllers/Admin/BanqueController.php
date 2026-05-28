@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BanqueUser;
 use App\Models\banque;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -83,5 +85,53 @@ class BanqueController extends Controller
 
         return redirect()->route('banque_management')
             ->with('success', 'Banque supprimée avec succès 🗑️');
+    }
+
+    public function affectations()
+    {
+        $affectations = BanqueUser::with(['banque', 'user'])
+            ->orderByDesc('created_at')
+            ->get();
+        $banques = banque::orderBy('nom_banque')->get();
+        $users = User::orderBy('name')->get();
+        $title = 'Affectation des banques aux utilisateurs';
+
+        return view('Admin.Banque.affectations', compact('affectations', 'banques', 'users', 'title'));
+    }
+
+    public function storeAffectation(Request $request)
+    {
+        $data = $request->validate([
+            'id_banque' => 'required|integer|exists:banques,id',
+            'id_user' => 'required|integer|exists:users,id',
+            'peut_encaisser' => 'nullable|boolean',
+            'peut_decaisser' => 'nullable|boolean',
+            'actif' => 'nullable|boolean',
+            'date_debut' => 'nullable|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_debut',
+            'observation' => 'nullable|string',
+        ]);
+
+        $data['peut_encaisser'] = $request->boolean('peut_encaisser');
+        $data['peut_decaisser'] = $request->boolean('peut_decaisser');
+        $data['actif'] = $request->boolean('actif', true);
+
+        if (!$data['peut_encaisser'] && !$data['peut_decaisser']) {
+            return back()->withInput()->with('error', 'Veuillez cocher au moins encaissement ou decaissement.');
+        }
+
+        BanqueUser::updateOrCreate(
+            ['id_banque' => $data['id_banque'], 'id_user' => $data['id_user']],
+            $data
+        );
+
+        return back()->with('success', 'Affectation de banque enregistree.');
+    }
+
+    public function destroyAffectation($id)
+    {
+        BanqueUser::findOrFail($id)->delete();
+
+        return back()->with('success', 'Affectation supprimee.');
     }
 }

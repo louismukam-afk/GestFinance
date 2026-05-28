@@ -113,6 +113,7 @@
                         <td>{{ $d->user->name ?? 'N/A' }}</td>
                         <td>{{ $d->motif }}</td>
                         <td>
+                            <a href="{{ route('decaissements.recu', $d->id) }}" target="_blank" class="btn btn-xs btn-success">Recu</a>
                             <form method="POST" action="{{ route('decaissements.destroy_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" style="display:inline">
                                 @csrf
                                 @method('DELETE')

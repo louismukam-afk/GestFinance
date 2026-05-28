@@ -172,6 +172,13 @@ class User extends Authenticatable
             ->withPivot(['peut_encaisser', 'peut_decaisser', 'actif', 'date_debut', 'date_fin', 'observation'])
             ->withTimestamps();
     }
+
+    public function banquesAffectees()
+    {
+        return $this->belongsToMany(banque::class, 'banque_user', 'id_user', 'id_banque')
+            ->withPivot(['peut_encaisser', 'peut_decaisser', 'actif', 'date_debut', 'date_fin', 'observation'])
+            ->withTimestamps();
+    }
     public function donnee_budgetaire_sorties()
     {
         return $this->hasMany(donnee_budgetaire_sortie::class,'id_user');

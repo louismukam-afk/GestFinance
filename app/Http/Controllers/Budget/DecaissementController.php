@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
 use App\Models\bon_commandeok;
 use App\Models\Budget;
+use App\Models\BanqueUser;
 use App\Models\CaisseUser;
 use App\Models\caisse;
 use App\Models\decaissement;
@@ -236,6 +237,23 @@ class DecaissementController extends Controller
             })
             ->exists();
     }
+
+    private function utilisateurAutoriseBanque(?int $userId, int $idBanque, string $operation): bool
+    {
+        $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
+
+        return BanqueUser::where('id_user', $userId)
+            ->where('id_banque', $idBanque)
+            ->where('actif', true)
+            ->where($droit, true)
+            ->where(function ($q) {
+                $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+            })
+            ->where(function ($q) {
+                $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+            })
+            ->exists();
+    }
     // ENREGISTREMENT
 
     public function store(Request $request)
@@ -342,6 +360,9 @@ class DecaissementController extends Controller
         // ==========================
         else {
             $id_banque = $request->id_banque ?? 0;
+            if (!$this->utilisateurAutoriseBanque(auth()->id(), (int) $id_banque, 'decaissement')) {
+                return back()->with('error', 'Cette banque ne vous est pas affectee pour les decaissements.');
+            }
         }
         $total = decaissement::where('id_bon_commande', $bon->id)->sum('montant');
         $reste = $bon->montant_total - $total;
@@ -387,7 +408,7 @@ class DecaissementController extends Controller
 
         // ✅ INSERT
         //dd($bon->id, $request->id_bon_commande);
-        decaissement::create([
+        $decaissement = decaissement::create([
             'id_bon_commande' => $bon->id,
             'id_budget' => $bon->id_budget,
             'id_ligne_budgetaire_sortie' => $bon->id_ligne_budgetaire_sortie,
@@ -411,8 +432,52 @@ class DecaissementController extends Controller
             'id_personnel' => $bon->id_personnel,
         ]);
 
-        return redirect()->route('decaissements.index')
+        return redirect()->route('decaissements.recu', $decaissement->id)
             ->with('success', 'Décaissement enregistré');
+    }
+
+    public function recu($id)
+    {
+        $decaissement = decaissement::with([
+            'bon.entites',
+            'bon.personnels',
+            'bon.user',
+            'bon.budget',
+            'bon.ligne_budgetaire_sortie',
+            'bon.elements_ligne_budgetaire_sortie',
+            'bon.donnee_budgetaire_sortie',
+            'bon.donnee_ligne_budgetaire_sortie',
+            'bon.annee_academique',
+            'caisses',
+            'banques',
+            'user',
+            'personnels',
+            'budgets',
+            'ligne_budgetaire_sorties',
+            'elements_ligne_budgetaire_sorties',
+            'donnee_budgetaire_sorties',
+            'donnee_ligne_budgetaire_sorties',
+            'annee_academiques',
+        ])->findOrFail($id);
+
+        $bon = $decaissement->bon;
+        $totalDecaisse = decaissement::where('id_bon_commande', $bon->id)->sum('montant');
+        $totalAvant = max(0, $totalDecaisse - (float) $decaissement->montant);
+        $resteApres = max(0, (float) $bon->montant_total - $totalDecaisse);
+        $modePaiement = $decaissement->id_banque
+            ? 'Banque - ' . ($decaissement->banques->nom_banque ?? '')
+            : 'Caisse - ' . ($decaissement->caisses->nom_caisse ?? '');
+
+        $pdf = PDF::loadView('decaissements.recu', compact(
+            'decaissement',
+            'bon',
+            'totalAvant',
+            'totalDecaisse',
+            'resteApres',
+            'modePaiement'
+        ))->setPaper('a4', 'portrait');
+
+        return $pdf->stream('recu_decaissement_'.$decaissement->numero_depense.'.pdf');
     }
 
     public function store2(Request $request)

@@ -12,7 +12,7 @@
                         Etat de caisse global de la periode du {{ $dateDebut ?? 'Debut' }} au {{ $dateFin }}
                     @endif
                 </h3>
-                <p class="text-muted">Synthese des entrees, sorties et soldes par caisse sur une periode.</p>
+                <p class="text-muted">Synthese des entrees, sorties et soldes par caisse et banque sur une periode.</p>
             </div>
             <a href="{{ route('etat_sorties.mon_etat_caisse') }}" class="btn btn-dark">
                 Mon etat de caisse
@@ -27,6 +27,18 @@
                     @foreach($caisses as $c)
                         <option value="{{ $c->id }}" {{ request('id_caisse') == $c->id ? 'selected' : '' }}>
                             {{ $c->nom_caisse }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label>Banque</label>
+                <select name="id_banque" class="form-control">
+                    <option value="">Toutes</option>
+                    @foreach($banques as $bq)
+                        <option value="{{ $bq->id }}" {{ request('id_banque') == $bq->id ? 'selected' : '' }}>
+                            {{ $bq->nom_banque }}
                         </option>
                     @endforeach
                 </select>

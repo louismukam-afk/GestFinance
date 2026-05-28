@@ -38,7 +38,7 @@
 
 
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
+            <div class="div-square div-square-admin">
                 <a href="{{route('dashboard')}}" >
                     <i class="fa fa-cog fa-5x"></i>
                     <h4>Administration </h4>

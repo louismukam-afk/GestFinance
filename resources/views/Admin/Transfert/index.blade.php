@@ -35,8 +35,8 @@
                         <td>{{ $i+1 }}</td>
                         <td>{{ $t->code_transfert }}</td>
 
-                        <td>{{ $t->caisseDepart->nom_caisse ?? '-' }}</td>
-                        <td>{{ $t->caisseArrivee->nom_caisse ?? '-' }}</td>
+                        <td>{{ $t->id_banque_depart ? 'Banque - '.($t->banqueDepart->nom_banque ?? '-') : 'Caisse - '.($t->caisseDepart->nom_caisse ?? '-') }}</td>
+                        <td>{{ $t->id_banque_arrivee ? 'Banque - '.($t->banqueArrivee->nom_banque ?? '-') : 'Caisse - '.($t->caisseArrivee->nom_caisse ?? '-') }}</td>
 
                         <td>{{ number_format($t->montant_transfert, 0, ',', ' ') }}</td>
 
@@ -116,8 +116,16 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Caisse départ</label>
-                            <select name="id_caisse_depart" class="form-control" required>
+                            <label>Type depart</label>
+                            <select name="compte_depart_type" class="form-control">
+                                <option value="caisse">Caisse</option>
+                                <option value="banque">Banque</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Caisse depart</label>
+                            <select name="id_caisse_depart" class="form-control">
                                 @foreach($caisses as $c)
                                     <option value="{{ $c->id }}">{{ $c->nom_caisse }}</option>
                                 @endforeach
@@ -125,8 +133,26 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Caisse arrivée</label>
-                            <select name="id_caisse_arrivee" class="form-control" required>
+                            <label>Banque depart</label>
+                            <select name="id_banque_depart" class="form-control">
+                                <option value="">-- Aucune --</option>
+                                @foreach($banques as $b)
+                                    <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Type arrivee</label>
+                            <select name="compte_arrivee_type" class="form-control">
+                                <option value="caisse">Caisse</option>
+                                <option value="banque">Banque</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Caisse arrivee</label>
+                            <select name="id_caisse_arrivee" class="form-control">
                                 @foreach($caisses as $c)
                                     <option value="{{ $c->id }}">{{ $c->nom_caisse }}</option>
                                 @endforeach
@@ -136,6 +162,16 @@
                         <div class="form-group">
                             <label>Montant</label>
                             <input type="number" name="montant_transfert" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Banque arrivee</label>
+                            <select name="id_banque_arrivee" class="form-control">
+                                <option value="">-- Aucune --</option>
+                                @foreach($banques as $b)
+                                    <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
+                                @endforeach
+                            </select>
                         </div>
 
                         <div class="form-group">
@@ -231,3 +267,4 @@
         <li class="active"><strong>{{ $title }}</strong></li>
     </ol>
 @endsection
+

@@ -4,9 +4,9 @@
     <div class="container">
         <div class="mb-4 d-flex justify-content-between align-items-center">
             <div>
-                <h3>Disponibilite des caisses</h3>
+                <h3>Disponibilite des caisses et banques</h3>
                 <p class="text-muted">
-                    Solde disponible dans chaque caisse avant et apres les transferts.
+                    Solde disponible dans chaque caisse et banque avant et apres les transferts.
                 </p>
             </div>
             <a href="{{ route('etat_sorties.etat_caisse') }}" class="btn btn-dark">
@@ -53,8 +53,8 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 shadow-sm">
                         <div class="card-header bg-dark text-white">
-                            <strong>{{ $ligne['caisse']->nom_caisse }}</strong>
-                            <span class="float-end">{{ $ligne['caisse']->type_caisse ?? '' }}</span>
+                            <strong>{{ $ligne['nom_compte'] ?? $ligne['caisse']->nom_caisse }}</strong>
+                            <span class="float-end">{{ $ligne['type_compte'] ?? ($ligne['caisse']->type_caisse ?? '') }}</span>
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
@@ -108,7 +108,7 @@
             <table class="table table-bordered table-hover">
                 <thead class="table-dark">
                 <tr>
-                    <th>Caisse</th>
+                    <th>Compte</th>
                     <th>Type</th>
                     <th class="text-end">Entrees reglements</th>
                     <th class="text-end">Entrees speciales</th>
@@ -124,8 +124,8 @@
                 <tbody>
                 @foreach($caisses as $ligne)
                     <tr>
-                        <td>{{ $ligne['caisse']->nom_caisse }}</td>
-                        <td>{{ $ligne['caisse']->type_caisse ?? '-' }}</td>
+                        <td>{{ $ligne['nom_compte'] ?? $ligne['caisse']->nom_caisse }}</td>
+                        <td>{{ $ligne['type_compte'] ?? ($ligne['caisse']->type_caisse ?? '-') }}</td>
                         <td class="text-end">{{ number_format($ligne['entrees_reglements'], 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['entrees_speciales'] ?? 0, 0, ',', ' ') }}</td>
                         <td class="text-end">{{ number_format($ligne['entrees_retours'], 0, ',', ' ') }}</td>
@@ -176,7 +176,7 @@
             <a href="{{ route('etat_sorties.index') }}"><strong>Etats budgetaires sorties</strong></a>
         </li>
         <li class="breadcrumb-item active">
-            <strong>Disponibilite des caisses</strong>
+            <strong>Disponibilite des caisses et banques</strong>
         </li>
     </ol>
 @endsection

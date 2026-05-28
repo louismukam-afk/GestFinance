@@ -703,6 +703,12 @@ Route::middleware(['auth'])->group(function () {
 // 📌 Supprimer une banque
     Route::delete('banques/{id}', [\App\Http\Controllers\Admin\BanqueController::class, 'destroy'])
         ->name('delete_banque');
+    Route::get('banques-affectations', [\App\Http\Controllers\Admin\BanqueController::class, 'affectations'])
+        ->name('banques.affectations');
+    Route::post('banques-affectations', [\App\Http\Controllers\Admin\BanqueController::class, 'storeAffectation'])
+        ->name('banques.affectations.store');
+    Route::delete('banques-affectations/{id}', [\App\Http\Controllers\Admin\BanqueController::class, 'destroyAffectation'])
+        ->name('banques.affectations.destroy');
 
     // 📌 Liste des entités
     Route::get('entites', [\App\Http\Controllers\Admin\EntiteController::class, 'index'])
@@ -775,6 +781,15 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('personnels', [\App\Http\Controllers\Admin\PersonnelController::class, 'index'])
         ->name('personnel_management');
+
+    Route::get('personnels/import', [\App\Http\Controllers\Admin\PersonnelController::class, 'import'])
+        ->name('personnels.import');
+
+    Route::get('personnels/import/template', [\App\Http\Controllers\Admin\PersonnelController::class, 'downloadTemplate'])
+        ->name('personnels.import.template');
+
+    Route::post('personnels/import', [\App\Http\Controllers\Admin\PersonnelController::class, 'importStore'])
+        ->name('personnels.import.store');
 
     Route::post('personnels/store', [\App\Http\Controllers\Admin\PersonnelController::class, 'store'])
         ->name('store_personnel');
@@ -1009,6 +1024,8 @@ Route::middleware(['auth'])->group(function () {
         // web.php
         Route::get('/decaissements/bon/{id}', [DecaissementController::class, 'detailBon'])
             ->name('detailBon');
+        Route::get('/recu/{id}', [DecaissementController::class, 'recu'])
+            ->name('recu');
         Route::delete('/bon/{bon}/decaissement/{decaissement}', [DecaissementController::class, 'destroyDecaissement'])
             ->name('destroy_decaissement');
         Route::get('/ajax/lignes/{budget}', [DecaissementController::class, 'getLignes']);

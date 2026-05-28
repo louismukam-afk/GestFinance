@@ -8,6 +8,10 @@
             ➕ Nouveau Personnel
         </button>
 
+        <a href="{{ route('personnels.import') }}" class="btn btn-success">
+            Importer Excel
+        </a>
+
         <div class="table-responsive mt-3">
             <table id="personnelsTable" class="table table-bordered table-striped">
                 <thead>

@@ -7,6 +7,7 @@ use App\Models\annee_academique;
 use App\Models\banque;
 use App\Models\Budget;
 use App\Models\CaisseUser;
+use App\Models\BanqueUser;
 use App\Models\caisse;
 use App\Models\cycle;
 use App\Models\donnee_budgetaire_entree;
@@ -435,12 +436,6 @@ class ReglementEtudiantController extends Controller
     /** INDEX : liste des règlements d’une facture + résumé */
     public function indexByFacture($factureId)
     {
-        if ($r->type_versement === 'espece' && !$this->utilisateurAutoriseCaisse(Auth::id(), (int) $r->id_caisse, 'encaissement')) {
-            return back()->withInput()->withErrors([
-                'id_caisse' => 'Cette caisse ne vous est pas affectee pour les encaissements.'
-            ]);
-        }
-
         $facture = facture_etudiant::with([
             'etudiants','cycles','filieres','niveaux','specialites',
             'scolarites','frais','budget','Annee_academique','reductions','reglement_etudiants'
@@ -520,6 +515,16 @@ class ReglementEtudiantController extends Controller
             'id_banque.required_if' => 'La banque est obligatoire pour un règlement bancaire.',
         ]);
 
+        if ($r->type_versement === 'espece' && !$this->utilisateurAutoriseCaisse(Auth::id(), (int) $r->id_caisse, 'encaissement')) {
+            return back()->withInput()->withErrors([
+                'id_caisse' => 'Cette caisse ne vous est pas affectee pour les encaissements.'
+            ]);
+        }
+        if ($r->type_versement === 'bancaire' && !$this->utilisateurAutoriseBanque(Auth::id(), (int) $r->id_banque, 'encaissement')) {
+            return back()->withInput()->withErrors([
+                'id_banque' => 'Cette banque ne vous est pas affectee pour les encaissements.'
+            ]);
+        }
 
         // 1. on récupère la facture AVEC toutes les infos nécessaires
         $facture = facture_etudiant::with([
@@ -836,6 +841,17 @@ class ReglementEtudiantController extends Controller
             'id_caisse.required_if' => 'La caisse est obligatoire pour un règlement en espèces.',
             'id_banque.required_if' => 'La banque est obligatoire pour un règlement bancaire.',
         ]);
+
+        if ($r->type_versement === 'espece' && !$this->utilisateurAutoriseCaisse(Auth::id(), (int) $r->id_caisse, 'encaissement')) {
+            return back()->withInput()->withErrors([
+                'id_caisse' => 'Cette caisse ne vous est pas affectee pour les encaissements.'
+            ]);
+        }
+        if ($r->type_versement === 'bancaire' && !$this->utilisateurAutoriseBanque(Auth::id(), (int) $r->id_banque, 'encaissement')) {
+            return back()->withInput()->withErrors([
+                'id_banque' => 'Cette banque ne vous est pas affectee pour les encaissements.'
+            ]);
+        }
 
         $reg = reglement_etudiant::findOrFail($r->id);
         $facture = facture_etudiant::with([
@@ -1321,6 +1337,23 @@ class ReglementEtudiantController extends Controller
 
         return CaisseUser::where('id_user', $userId)
             ->where('id_caisse', $idCaisse)
+            ->where('actif', true)
+            ->where($droit, true)
+            ->where(function ($q) {
+                $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+            })
+            ->where(function ($q) {
+                $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+            })
+            ->exists();
+    }
+
+    private function utilisateurAutoriseBanque(?int $userId, int $idBanque, string $operation): bool
+    {
+        $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
+
+        return BanqueUser::where('id_user', $userId)
+            ->where('id_banque', $idBanque)
             ->where('actif', true)
             ->where($droit, true)
             ->where(function ($q) {

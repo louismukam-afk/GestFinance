@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\banque;
 use App\Models\caisse;
 use App\Models\Transfert_caisse;
 use Illuminate\Http\Request;
@@ -12,7 +13,7 @@ class TransfertCaisseController extends Controller
 {
     public function index()
     {
-        $transferts = Transfert_caisse::with(['caisseDepart', 'caisseArrivee'])
+        $transferts = Transfert_caisse::with(['caisseDepart', 'caisseArrivee', 'banqueDepart', 'banqueArrivee'])
             ->latest()
             ->get();
         $caisses1 = caisse::all()->map(function ($caisse) {
@@ -20,9 +21,10 @@ class TransfertCaisseController extends Controller
             return $caisse;
         });
         $caisses = caisse::all();
+        $banques = banque::orderBy('nom_banque')->get();
         $title = "Gestion des Transferts";
 
-        return view('Admin.Transfert.index', compact('transferts', 'caisses','caisses1', 'title'));
+        return view('Admin.Transfert.index', compact('transferts', 'caisses','caisses1', 'banques', 'title'));
     }
 
     /**
@@ -60,24 +62,76 @@ class TransfertCaisseController extends Controller
 
         return $entrees + $transfertsEntrants - $transfertsSortants;
     }
-    public function store(Request $request)
+
+    private function getSoldeBanque($banqueId)
+    {
+        $entrees = \App\Models\reglement_etudiant::where('id_banque', $banqueId)
+            ->sum('montant_reglement');
+
+        $sorties = \App\Models\decaissement::where('id_banque', $banqueId)
+            ->sum('montant');
+
+        $transfertsEntrants = \App\Models\Transfert_caisse::where('id_banque_arrivee', $banqueId)
+            ->sum('montant_transfert');
+
+        $transfertsSortants = \App\Models\Transfert_caisse::where('id_banque_depart', $banqueId)
+            ->sum('montant_transfert');
+
+        return $entrees + $transfertsEntrants - $transfertsSortants - $sorties;
+    }
+
+    private function getSoldeCompte($type, $id)
+    {
+        return $type === 'banque'
+            ? $this->getSoldeBanque((int) $id)
+            : $this->getSoldeCaisse((int) $id);
+    }
+
+    private function validateCompteTransfert(Request $request)
     {
         $request->validate([
             'code_transfert' => 'required|unique:transfert_caisses,code_transfert',
-            'id_caisse_depart' => 'required|different:id_caisse_arrivee',
-            'id_caisse_arrivee' => 'required',
+            'compte_depart_type' => 'required|in:caisse,banque',
+            'compte_arrivee_type' => 'required|in:caisse,banque',
             'montant_transfert' => 'required|numeric|min:1',
         ]);
 
+        $departId = $request->compte_depart_type === 'banque'
+            ? (int) $request->id_banque_depart
+            : (int) $request->id_caisse_depart;
+        $arriveeId = $request->compte_arrivee_type === 'banque'
+            ? (int) $request->id_banque_arrivee
+            : (int) $request->id_caisse_arrivee;
+
+        if (!$departId || !$arriveeId) {
+            throw new \RuntimeException('Veuillez choisir le compte de depart et le compte d arrivee.');
+        }
+
+        if ($request->compte_depart_type === $request->compte_arrivee_type && $departId === $arriveeId) {
+            throw new \RuntimeException('Le compte de depart doit etre different du compte d arrivee.');
+        }
+
+        $caisseDepart = $request->compte_depart_type === 'caisse' ? caisse::findOrFail($departId) : null;
+        $caisseArrivee = $request->compte_arrivee_type === 'caisse' ? caisse::findOrFail($arriveeId) : null;
+
+        if ($request->compte_depart_type !== $request->compte_arrivee_type
+            && (($caisseDepart && (int) $caisseDepart->type_caisse !== 2) || ($caisseArrivee && (int) $caisseArrivee->type_caisse !== 2))) {
+            throw new \RuntimeException('Les transferts banque <-> caisse doivent passer par une caisse centrale.');
+        }
+
+        return [$departId, $arriveeId];
+    }
+
+    public function store(Request $request)
+    {
         DB::beginTransaction();
 
         try {
 
-            $depart = caisse::findOrFail($request->id_caisse_depart);
-            $arrivee = caisse::findOrFail($request->id_caisse_arrivee);
+            [$departId, $arriveeId] = $this->validateCompteTransfert($request);
 
             // 🔥 SOLDE CALCULÉ
-            $soldeDepart = $this->getSoldeCaisse($depart->id);
+            $soldeDepart = $this->getSoldeCompte($request->compte_depart_type, $departId);
 
             // 🔒 SÉCURITÉ
             $montant = (float) $request->montant_transfert;
@@ -102,8 +156,10 @@ class TransfertCaisseController extends Controller
                 'sode_caisse' => $soldeDepart - $request->montant_transfert,
 
                 'montant_transfert' => $request->montant_transfert,
-                'id_caisse_depart' => $depart->id,
-                'id_caisse_arrivee' => $arrivee->id,
+                'id_caisse_depart' => $request->compte_depart_type === 'caisse' ? $departId : 0,
+                'id_caisse_arrivee' => $request->compte_arrivee_type === 'caisse' ? $arriveeId : 0,
+                'id_banque_depart' => $request->compte_depart_type === 'banque' ? $departId : 0,
+                'id_banque_arrivee' => $request->compte_arrivee_type === 'banque' ? $arriveeId : 0,
 
                 'date_transfert' => now(),
 
@@ -138,10 +194,11 @@ class TransfertCaisseController extends Controller
 
             $ancienMontant = $transfert->montant_transfert;
 
-            $depart = caisse::findOrFail($transfert->id_caisse_depart);
+            $departType = (int) ($transfert->id_banque_depart ?? 0) > 0 ? 'banque' : 'caisse';
+            $departId = $departType === 'banque' ? (int) $transfert->id_banque_depart : (int) $transfert->id_caisse_depart;
 
             // 🔁 RECONSTITUER SOLDE AVANT TRANSFERT
-            $soldeAvant = $this->getSoldeCaisse($depart->id) + $ancienMontant;
+            $soldeAvant = $this->getSoldeCompte($departType, $departId) + $ancienMontant;
 
             // 🔒 VÉRIFICATION NOUVEAU MONTANT
             if ($soldeAvant < $request->montant_transfert) {
@@ -174,6 +231,8 @@ class TransfertCaisseController extends Controller
     }
     public function update1(Request $request)
     {
+        return $this->update($request);
+
         $transfert = Transfert_caisse::findOrFail($request->id);
 
         DB::beginTransaction();
@@ -181,9 +240,6 @@ class TransfertCaisseController extends Controller
         try {
 
             $ancien_montant = $transfert->montant_transfert;
-
-            $depart = caisse::findOrFail($transfert->id_caisse_depart);
-            $arrivee = caisse::findOrFail($transfert->id_caisse_arrivee);
 
             // 🔁 ANNULER ancien transfert
             $depart->sode_caisse += $ancien_montant;
@@ -229,16 +285,7 @@ class TransfertCaisseController extends Controller
 
             $transfert = Transfert_caisse::findOrFail($id);
 
-            $depart = caisse::findOrFail($transfert->id_caisse_depart);
-            $arrivee = caisse::findOrFail($transfert->id_caisse_arrivee);
-
             // 🔁 ANNULATION DU TRANSFERT
-            $depart->sode_caisse += $transfert->montant_transfert;
-            $arrivee->sode_caisse -= $transfert->montant_transfert;
-
-            $depart->save();
-            $arrivee->save();
-
             $transfert->delete();
 
             DB::commit();
@@ -257,7 +304,7 @@ class TransfertCaisseController extends Controller
      */
     public function show($id)
     {
-        $transfert = Transfert_caisse::with(['caisseDepart', 'caisseArrivee', 'user'])
+        $transfert = Transfert_caisse::with(['caisseDepart', 'caisseArrivee', 'banqueDepart', 'banqueArrivee', 'user'])
             ->findOrFail($id);
 
         return view('Admin.Transfert.show', compact('transfert'));

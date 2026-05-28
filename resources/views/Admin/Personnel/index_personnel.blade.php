@@ -15,6 +15,15 @@
         </div>
         <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
             <div class="div-square">
+                <a href="{{ route('personnels.import') }}" >
+                    <i class="fa fa-file-excel-o fa-5x"></i>
+                    <h4>Importer les personnels</h4>
+                </a>
+            </div>
+
+        </div>
+        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+            <div class="div-square">
                 <a href="{{route('fonction_management')}}" >
                     <i class="fa fa-file-archive-o fa-5x"></i>
                     <h4>Enregistrer une fonction </h4>
