@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\bon_commandeok;
 use App\Models\entite;
 use App\Models\personnel;
+use App\Models\User;
+use App\Notifications\BonCommandeActivityNotification;
+use App\Notifications\BonCommandeValidatorNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class MesBonCommandeController extends Controller
@@ -94,6 +98,8 @@ class MesBonCommandeController extends Controller
         }
 
         $bon->save();
+        $this->notifierEmetteur($bon->fresh(['user']), 'valide', 'Emetteur');
+        $this->notifierValidateurs($bon->fresh(['user']));
 
         return back()->with('success', 'Validation emetteur effectuee avec succes.');
     }
@@ -113,6 +119,7 @@ class MesBonCommandeController extends Controller
         $bon->statuts = 2;
         $bon->date_validation = null;
         $bon->save();
+        $this->notifierEmetteur($bon->fresh(['user']), 'refuse', 'Emetteur', $data['motif_refus']);
 
         return back()->with('success', 'Bon refuse par l emetteur.');
     }
@@ -257,5 +264,64 @@ class MesBonCommandeController extends Controller
     private function authorizeOwner(bon_commandeok $bon): void
     {
         abort_if((int) $bon->id_user !== (int) auth()->id(), 403, 'Ce bon ne vous appartient pas.');
+    }
+
+    private function notifierEmetteur(bon_commandeok $bon, string $action, string $niveau, ?string $motif = null): void
+    {
+        $emetteur = $bon->user;
+
+        if (!$emetteur || !$emetteur->email) {
+            return;
+        }
+
+        try {
+            $emetteur->notify(new BonCommandeActivityNotification(
+                $bon,
+                $action,
+                $niveau,
+                $motif,
+                auth()->user()?->name
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Notification mail bon emetteur non envoyee', [
+                'bon_id' => $bon->id,
+                'niveau' => $niveau,
+                'action' => $action,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifierValidateurs(bon_commandeok $bon): void
+    {
+        $niveaux = [
+            'PDG' => 'validation_bons.pdg',
+            'DAF' => 'validation_bons.daf',
+            'Achats' => 'validation_bons.achats',
+        ];
+
+        foreach ($niveaux as $label => $routeName) {
+            User::query()
+                ->whereNotNull('email')
+                ->where('statut_utilisateur', 'actif')
+                ->get()
+                ->filter(fn(User $user) => $user->canAccessRoute($routeName))
+                ->each(function (User $user) use ($bon, $label) {
+                    try {
+                        $user->notify(new BonCommandeValidatorNotification(
+                            $bon,
+                            $label,
+                            auth()->user()?->name
+                        ));
+                    } catch (\Throwable $e) {
+                        Log::warning('Notification validateur bon non envoyee', [
+                            'bon_id' => $bon->id,
+                            'niveau' => $label,
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                });
+        }
     }
 }

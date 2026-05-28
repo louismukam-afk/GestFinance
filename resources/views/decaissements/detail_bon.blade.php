@@ -113,7 +113,10 @@
                         <td>{{ $d->user->name ?? 'N/A' }}</td>
                         <td>{{ $d->motif }}</td>
                         <td>
-                            <a href="{{ route('decaissements.recu', $d->id) }}" target="_blank" class="btn btn-xs btn-success">Recu</a>
+                            <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a4']) }}" target="_blank" class="btn btn-xs btn-success">Recu A4</a>
+                            <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a5']) }}" target="_blank" class="btn btn-xs btn-warning">Recu A5</a>
+                            <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a4', 'print' => 1]) }}" target="_blank" class="btn btn-xs btn-info">Imprimer A4</a>
+                            <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a5', 'print' => 1]) }}" target="_blank" class="btn btn-xs btn-default">Imprimer A5</a>
                             <form method="POST" action="{{ route('decaissements.destroy_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" style="display:inline">
                                 @csrf
                                 @method('DELETE')

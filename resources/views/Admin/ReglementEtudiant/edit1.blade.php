@@ -209,7 +209,10 @@
             <div class="mb-3">
                 <button class="btn btn-success">💾 Enregistrer</button>
                 <a class="btn btn-default" href="{{ route('reglement_by_facture', $reglement->id_facture_etudiant) }}">Annuler</a>
-                <a class="btn btn-default" target="_blank" href="{{ route('reglement_pdf', $reglement->id) }}">🧾 PDF</a>
+                <a class="btn btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a4']) }}">PDF A4</a>
+                <a class="btn btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a5']) }}">PDF A5</a>
+                <a class="btn btn-info" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a4', 'print' => 1]) }}">Imprimer A4</a>
+                <a class="btn btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a5', 'print' => 1]) }}">Imprimer A5</a>
             </div>
         </form>
     </div>
@@ -528,7 +531,10 @@
             <div class="mb-3">
                 <button class="btn btn-success">💾 Enregistrer</button>
                 <a href="{{ route('reglement_by_facture', $reglement->id_facture_etudiant) }}" class="btn btn-secondary">↩ Retour</a>
-                <a class="btn btn-default" target="_blank" href="{{ route('reglement_pdf', $reglement->id) }}">🧾 PDF</a>
+                <a class="btn btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a4']) }}">PDF A4</a>
+                <a class="btn btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a5']) }}">PDF A5</a>
+                <a class="btn btn-info" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a4', 'print' => 1]) }}">Imprimer A4</a>
+                <a class="btn btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $reglement->id, 'format' => 'a5', 'print' => 1]) }}">Imprimer A5</a>
             </div>
         </form>
     </div>

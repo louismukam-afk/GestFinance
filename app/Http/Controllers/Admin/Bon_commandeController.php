@@ -6,9 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\bon_commandeok;
 use App\Models\entite;
 use App\Models\personnel;
+use App\Models\User;
+use App\Notifications\BonCommandeActivityNotification;
+use App\Notifications\BonCommandeValidatorNotification;
 use Encore\Admin\Admin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class Bon_commandeController extends Controller
 {
@@ -232,6 +236,7 @@ class Bon_commandeController extends Controller
         $commande->validation_pdg = 1;
         $this->clearRefus($commande, 'pdg');
         $this->updateStatut($commande);
+        $this->notifierEmetteur($commande->fresh(['user']), 'valide', 'PDG');
         admin_toastr('Validation PDG réussie', 'success');
         return redirect(admin_url('bon_commande'));
     }
@@ -241,6 +246,7 @@ class Bon_commandeController extends Controller
         $commande->validation_daf = 1;
         $this->clearRefus($commande, 'daf');
         $this->updateStatut($commande);
+        $this->notifierEmetteur($commande->fresh(['user']), 'valide', 'DAF');
         admin_toastr('Validation DAF réussie', 'success');
         return redirect(admin_url('bon_commande'));
     }
@@ -251,6 +257,7 @@ class Bon_commandeController extends Controller
         $commande->validation_achats = 1;
         $this->clearRefus($commande, 'achats');
         $this->updateStatut($commande);
+        $this->notifierEmetteur($commande->fresh(['user']), 'valide', 'Achats');
         admin_toastr('Validation Achats réussie', 'success');
         return redirect(admin_url('bon_commande'));
     }
@@ -261,6 +268,8 @@ class Bon_commandeController extends Controller
         $commande->validation_emetteur = 1;
         $this->clearRefus($commande, 'emetteur');
         $this->updateStatut($commande);
+        $this->notifierEmetteur($commande->fresh(['user']), 'valide', 'Emetteur');
+        $this->notifierValidateurs($commande->fresh(['user']));
         admin_toastr('Validation Émetteur réussie', 'success');
         return redirect(admin_url('bon_commande'));
     }
@@ -302,6 +311,66 @@ class Bon_commandeController extends Controller
         $commande->{"motif_refus_{$niveau}"} = null;
         $commande->{"date_refus_{$niveau}"} = null;
     }
+
+    private function notifierEmetteur(bon_commandeok $bon, string $action, string $niveau, ?string $motif = null): void
+    {
+        $emetteur = $bon->user;
+
+        if (!$emetteur || !$emetteur->email) {
+            return;
+        }
+
+        try {
+            $emetteur->notify(new BonCommandeActivityNotification(
+                $bon,
+                $action,
+                $niveau,
+                $motif,
+                Auth::user()?->name
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Notification mail bon admin non envoyee', [
+                'bon_id' => $bon->id,
+                'niveau' => $niveau,
+                'action' => $action,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function notifierValidateurs(bon_commandeok $bon): void
+    {
+        $niveaux = [
+            'PDG' => 'validation_bons.pdg',
+            'DAF' => 'validation_bons.daf',
+            'Achats' => 'validation_bons.achats',
+        ];
+
+        foreach ($niveaux as $label => $routeName) {
+            User::query()
+                ->whereNotNull('email')
+                ->where('statut_utilisateur', 'actif')
+                ->get()
+                ->filter(fn (User $user) => $user->canAccessRoute($routeName))
+                ->each(function (User $user) use ($bon, $label) {
+                    try {
+                        $user->notify(new BonCommandeValidatorNotification(
+                            $bon,
+                            $label,
+                            Auth::user()?->name
+                        ));
+                    } catch (\Throwable $e) {
+                        Log::warning('Notification mail validateur bon admin non envoyee', [
+                            'bon_id' => $bon->id,
+                            'niveau' => $label,
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                });
+        }
+    }
+
     public function destroy($id)
     {
         $bon = bon_commandeok::findOrFail($id);

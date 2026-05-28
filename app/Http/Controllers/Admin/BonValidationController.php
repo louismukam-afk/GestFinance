@@ -8,8 +8,10 @@ use App\Models\bon_commandeok;
 use App\Models\Budget;
 use App\Models\donnee_ligne_budgetaire_sortie;
 use App\Models\entree_speciale;
+use App\Notifications\BonCommandeActivityNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class BonValidationController extends Controller
 {
@@ -75,6 +77,7 @@ class BonValidationController extends Controller
         $bon->{$dateRefusField} = null;
 
         $this->updateStatut($bon);
+        $this->notifierEmetteur($bon->fresh(['user']), 'valide', $niveau);
 
         return back()->with('success', 'Validation '.$this->niveaux[$niveau].' effectuee.');
     }
@@ -111,6 +114,7 @@ class BonValidationController extends Controller
         $bon->statuts = 2;
         $bon->date_validation = null;
         $bon->save();
+        $this->notifierEmetteur($bon->fresh(['user']), 'refuse', $niveau, $data['motif_refus']);
 
         return back()->with('success', 'Bon refuse par '.$this->niveaux[$niveau].'.');
     }
@@ -214,6 +218,32 @@ class BonValidationController extends Controller
 
         if (!auth()->user()?->canAccessRoute($routeName)) {
             abort(403, "Acces non autorise pour la validation {$this->niveaux[$niveau]}.");
+        }
+    }
+
+    private function notifierEmetteur(bon_commandeok $bon, string $action, string $niveau, ?string $motif = null): void
+    {
+        $emetteur = $bon->user;
+
+        if (!$emetteur || !$emetteur->email) {
+            return;
+        }
+
+        try {
+            $emetteur->notify(new BonCommandeActivityNotification(
+                $bon,
+                $action,
+                $this->niveaux[$niveau] ?? $niveau,
+                $motif,
+                auth()->user()?->name
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Notification mail bon non envoyee', [
+                'bon_id' => $bon->id,
+                'niveau' => $niveau,
+                'action' => $action,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

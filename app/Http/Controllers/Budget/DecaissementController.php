@@ -436,7 +436,7 @@ class DecaissementController extends Controller
             ->with('success', 'Décaissement enregistré');
     }
 
-    public function recu($id)
+    public function recu(Request $request, $id)
     {
         $decaissement = decaissement::with([
             'bon.entites',
@@ -468,16 +468,36 @@ class DecaissementController extends Controller
             ? 'Banque - ' . ($decaissement->banques->nom_banque ?? '')
             : 'Caisse - ' . ($decaissement->caisses->nom_caisse ?? '');
 
+        $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
+        $paper = $format === 'a5' ? 'a5' : 'a4';
+        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+        $autoPrint = $request->boolean('print');
+
+        if ($autoPrint) {
+            return view('decaissements.recu', compact(
+                'decaissement',
+                'bon',
+                'totalAvant',
+                'totalDecaisse',
+                'resteApres',
+                'modePaiement',
+                'format',
+                'autoPrint'
+            ));
+        }
+
         $pdf = PDF::loadView('decaissements.recu', compact(
             'decaissement',
             'bon',
             'totalAvant',
             'totalDecaisse',
             'resteApres',
-            'modePaiement'
-        ))->setPaper('a4', 'portrait');
+            'modePaiement',
+            'format',
+            'autoPrint'
+        ))->setPaper($paper, $orientation);
 
-        return $pdf->stream('recu_decaissement_'.$decaissement->numero_depense.'.pdf');
+        return $pdf->stream('recu_decaissement_'.$format.'_'.$decaissement->numero_depense.'.pdf');
     }
 
     public function store2(Request $request)

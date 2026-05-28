@@ -4,31 +4,37 @@
     <meta charset="utf-8">
     <title>Règlement N° {{ $reg->numero_reglement ?? '-' }}</title>
     @php
+        $isA5 = ($format ?? 'a4') === 'a5';
         $logo = optional($reg->entite)->logo;
     @endphp
     <style>
+        @page {
+            size: {{ $isA5 ? 'A5 landscape' : 'A4 portrait' }};
+            margin: {{ $isA5 ? '8px' : '24px' }};
+        }
         * { font-family: DejaVu Sans, Arial, sans-serif; }
         html, body { margin:0; padding:0; }
-        .page   { width: 100%; padding: 12px 16px; box-sizing: border-box; }
-        .copy   { position: relative; width: 100%; min-height: 480px; padding: 12px 16px; box-sizing: border-box; border:1px solid #bbb; }
-        .bar    { height: 6px; background:#c00; margin-bottom: 6px; }
+        body { font-size: {{ $isA5 ? '8px' : '12px' }}; line-height: {{ $isA5 ? '1.15' : '1.35' }}; }
+        .page   { width: 100%; padding: {{ $isA5 ? '2px 4px' : '12px 16px' }}; box-sizing: border-box; }
+        .copy   { position: relative; width: 100%; min-height: {{ $isA5 ? '0' : '480px' }}; padding: {{ $isA5 ? '5px 7px' : '12px 16px' }}; box-sizing: border-box; border:1px solid #bbb; }
+        .bar    { height: {{ $isA5 ? '3px' : '6px' }}; background:#c00; margin-bottom: {{ $isA5 ? '3px' : '6px' }}; }
         .entete { display:flex; justify-content: space-between; align-items:flex-start; }
-        .h1     { font-size:16px; font-weight:700; margin:2px 0 4px 0; }
-        .muted  { color:#666; font-size: 11px; }
-        .grid2  { display:grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-top:6px; }
-        .table  { width:100%; border-collapse: collapse; margin-top:8px; }
-        .table th, .table td { border:1px solid #333; padding:6px; font-size: 12px; }
+        .h1     { font-size:{{ $isA5 ? '11px' : '16px' }}; font-weight:700; margin:1px 0 2px 0; }
+        .muted  { color:#666; font-size: {{ $isA5 ? '7px' : '11px' }}; }
+        .grid2  { display:grid; grid-template-columns: 1fr 1fr; gap: {{ $isA5 ? '3px 8px' : '6px 14px' }}; margin-top:{{ $isA5 ? '3px' : '6px' }}; }
+        .table  { width:100%; border-collapse: collapse; margin-top:{{ $isA5 ? '3px' : '8px' }}; table-layout: fixed; }
+        .table th, .table td { border:1px solid #333; padding:{{ $isA5 ? '2px' : '6px' }}; font-size: {{ $isA5 ? '7.5px' : '12px' }}; word-wrap: break-word; overflow-wrap: break-word; }
         .right  { text-align:right; }
         .center { text-align:center; }
-        .sep    { margin: 10px 0; border-top:1px dashed #999; }
-        .small  { font-size:11px; }
+        .sep    { margin: {{ $isA5 ? '3px 0' : '10px 0' }}; border-top:1px dashed #999; }
+        .small  { font-size:{{ $isA5 ? '7px' : '11px' }}; }
         .wm     { /* filigrane */
             position:absolute; inset:0;
             background-image: url('{{ $logo ? asset($logo) : asset("uploads/images/1759420569_logo.jpg") }}');
             {{--background-image: url('{{ $reg->entite->logo ? asset($reg->entite->logo) : asset('uploads/images/1759420569_logo.jpg') }}');--}}
             background-repeat:no-repeat;
             background-position:center center;
-            background-size: 60%;
+            background-size: {{ $isA5 ? '42%' : '60%' }};
             opacity:0.06;
             z-index:0;
 /*
@@ -166,7 +172,7 @@
                 </div>
                 <div class="right">
                     <div class="muted">Signature & cachet</div>
-                    <div style="height:60px;border:1px dashed #aaa"></div>
+                    <div style="height:{{ $isA5 ? '20px' : '60px' }};border:1px dashed #aaa"></div>
                 </div>
             </div>
 
@@ -203,6 +209,7 @@
 
     </div>
 
+    @if(!$isA5)
     <div class="sep"></div>
 
     {{-- 2ème souche (Établissement) --}}
@@ -324,6 +331,14 @@
             <div class="center small muted" style="margin-top:10px;">Souche Établissement</div>
         </div>
     </div>
+    @endif
 </div>
+@if($autoPrint ?? false)
+    <script>
+        window.addEventListener('load', function () {
+            window.print();
+        });
+    </script>
+@endif
 </body>
 </html>

@@ -1309,7 +1309,7 @@ class ReglementEtudiantController extends Controller
     }
 
     // --------- PDF (facultatif si déjà fait ailleurs) ----------
-    public function showPdf($id)
+    public function showPdf(Request $request, $id)
     {
         $reg = reglement_etudiant::with([
             'etudiants','caisse','banque','user',
@@ -1317,18 +1317,35 @@ class ReglementEtudiantController extends Controller
             'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree',
         ])->findOrFail($id);
 
-        return view('Admin.ReglementEtudiant.pdf', compact('reg'));
+        $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
+        $paper = $format === 'a5' ? 'a5' : 'a4';
+        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+        $autoPrint = $request->boolean('print');
+
+        if ($autoPrint || !class_exists(\PDF::class)) {
+            return view('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'autoPrint'));
+        }
+
+        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'autoPrint'))
+            ->setPaper($paper, $orientation);
+
+        return $pdf->stream('Reglement_'.$format.'_'.$reg->numero_reglement.'.pdf');
     }
 
-    public function downloadPdf($id)
+    public function downloadPdf(Request $request, $id)
     {
         if (!class_exists(\PDF::class)) {
             return redirect()->route('reglement_pdf', $id);
         }
         $reg = reglement_etudiant::with(['etudiants'])->findOrFail($id);
-        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg'))
-            ->setPaper('a4','portrait');
-        return $pdf->download('Reglement_'.$reg->numero_reglement.'.pdf');
+        $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
+        $paper = $format === 'a5' ? 'a5' : 'a4';
+        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+
+        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format'))
+            ->setPaper($paper, $orientation);
+
+        return $pdf->download('Reglement_'.$format.'_'.$reg->numero_reglement.'.pdf');
     }
 
     private function utilisateurAutoriseCaisse(?int $userId, int $idCaisse, string $operation): bool
