@@ -70,7 +70,7 @@
                             <a href="{{ route('etat_bons.show', $bon->id) }}" class="btn btn-info btn-sm">
                                 Details
                             </a>
-                               <a href="{{ route('decaissements.create', $bon->id) }}"
+                        <a href="{{ route('decaissements.create', $bon->id) }}"
                                class="btn btn-primary btn-sm">
                                 💸 Financer
                             </a>
