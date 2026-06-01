@@ -5,11 +5,12 @@
     <title>Règlement N° {{ $reg->numero_reglement ?? '-' }}</title>
     @php
         $isA5 = ($format ?? 'a4') === 'a5';
+        $printOrientation = in_array(($orientation ?? 'portrait'), ['portrait', 'landscape'], true) ? $orientation : 'portrait';
         $logo = optional($reg->entite)->logo;
     @endphp
     <style>
         @page {
-            size: {{ $isA5 ? 'A5 landscape' : 'A4 portrait' }};
+            size: {{ $isA5 ? 'A5 '.$printOrientation : 'A4 portrait' }};
             margin: {{ $isA5 ? '8px' : '24px' }};
         }
         * { font-family: DejaVu Sans, Arial, sans-serif; }

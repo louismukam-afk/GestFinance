@@ -470,7 +470,9 @@ class DecaissementController extends Controller
 
         $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
         $paper = $format === 'a5' ? 'a5' : 'a4';
-        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+        $orientation = in_array($request->query('orientation'), ['portrait', 'landscape'], true)
+            ? $request->query('orientation')
+            : 'portrait';
         $autoPrint = $request->boolean('print');
 
         if ($autoPrint) {
@@ -482,6 +484,7 @@ class DecaissementController extends Controller
                 'resteApres',
                 'modePaiement',
                 'format',
+                'orientation',
                 'autoPrint'
             ));
         }
@@ -494,6 +497,7 @@ class DecaissementController extends Controller
             'resteApres',
             'modePaiement',
             'format',
+            'orientation',
             'autoPrint'
         ))->setPaper($paper, $orientation);
 

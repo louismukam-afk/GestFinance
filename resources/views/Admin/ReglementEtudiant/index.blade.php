@@ -355,9 +355,10 @@
                         <td>{{ $r->user->name ?? '—' }}</td>
                         <td>
                             <a class="btn btn-xs btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a4']) }}">PDF A4</a>
-                            <a class="btn btn-xs btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5']) }}">PDF A5</a>
+                            <a class="btn btn-xs btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'portrait']) }}">PDF A5 portrait</a>
+                            <a class="btn btn-xs btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'landscape']) }}">PDF A5 paysage</a>
                             <a class="btn btn-xs btn-info" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a4', 'print' => 1]) }}">Imprimer A4</a>
-                            <a class="btn btn-xs btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'print' => 1]) }}">Imprimer A5</a>
+                            <a class="btn btn-xs btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'portrait', 'print' => 1]) }}">Imprimer A5 portrait</a>
                         </td>
                         <td>
                             <a class="btn btn-xs btn-warning"
@@ -488,9 +489,10 @@
                         <td>{{ $r->user->name ?? '—' }}</td>
                         <td>
                             <a class="btn btn-xs btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a4']) }}">PDF A4</a>
-                            <a class="btn btn-xs btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5']) }}">PDF A5</a>
+                            <a class="btn btn-xs btn-warning" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'portrait']) }}">PDF A5 portrait</a>
+                            <a class="btn btn-xs btn-default" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'landscape']) }}">PDF A5 paysage</a>
                             <a class="btn btn-xs btn-info" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a4', 'print' => 1]) }}">Imprimer A4</a>
-                            <a class="btn btn-xs btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'print' => 1]) }}">Imprimer A5</a>
+                            <a class="btn btn-xs btn-success" target="_blank" href="{{ route('reglement_pdf', ['id' => $r->id, 'format' => 'a5', 'orientation' => 'portrait', 'print' => 1]) }}">Imprimer A5 portrait</a>
                         </td>
                         <td>
                             <a class="btn btn-xs btn-warning" href="{{ route('edit_reglement', $r->id) }}">✏️</a>

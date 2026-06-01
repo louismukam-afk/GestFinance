@@ -94,6 +94,7 @@ class TransfertCaisseController extends Controller
             'compte_depart_type' => 'required|in:caisse,banque',
             'compte_arrivee_type' => 'required|in:caisse,banque',
             'montant_transfert' => 'required|numeric|min:1',
+            'date_transfert' => 'required|date',
         ]);
 
         $departId = $request->compte_depart_type === 'banque'
@@ -161,7 +162,7 @@ class TransfertCaisseController extends Controller
                 'id_banque_depart' => $request->compte_depart_type === 'banque' ? $departId : 0,
                 'id_banque_arrivee' => $request->compte_arrivee_type === 'banque' ? $arriveeId : 0,
 
-                'date_transfert' => now(),
+                'date_transfert' => $request->date_transfert,
 
                 // sortie = négatif
                 'statut_caisse_transfert' => 0,
@@ -186,6 +187,13 @@ class TransfertCaisseController extends Controller
 
     public function update(Request $request)
     {
+        $request->validate([
+            'id' => 'required|integer|exists:transfert_caisses,id',
+            'montant_transfert' => 'required|numeric|min:1',
+            'date_transfert' => 'required|date',
+            'observation' => 'nullable|string',
+        ]);
+
         $transfert = Transfert_caisse::findOrFail($request->id);
 
         DB::beginTransaction();
@@ -209,6 +217,7 @@ class TransfertCaisseController extends Controller
             $transfert->update([
                 'observation' => $request->observation,
                 'montant_transfert' => $request->montant_transfert,
+                'date_transfert' => $request->date_transfert,
 
                 // nouveau snapshot
                 'sode_caisse' => $soldeAvant - $request->montant_transfert,

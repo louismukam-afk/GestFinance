@@ -40,14 +40,19 @@ class ReglementEtudiantController extends Controller
     /** Montant en lettres (fr) */
     protected function amountToWords1(float $amount): string
     {
-        $fmt = new \NumberFormatter('fr', \NumberFormatter::SPELLOUT);
-        $euros = floor($amount);
-        $cents = round(($amount - $euros) * 100);
+        return $this->amountToWords($amount);
+    }
 
-        $txt = trim($fmt->format($euros)) . ' franc' . ($euros > 1 ? 's' : '');
+    protected function amountToWords(float $amount): string
+    {
+        $integer = (int) floor(abs($amount));
+        $cents = (int) round((abs($amount) - $integer) * 100);
+
+        $txt = $this->toWordsFr($integer) . ' franc' . ($integer > 1 ? 's' : '') . ' CFA';
         if ($cents > 0) {
-            $txt .= ' et ' . trim($fmt->format($cents)) . ' centime' . ($cents > 1 ? 's' : '');
+            $txt .= ' et ' . $this->toWordsFr($cents) . ' centime' . ($cents > 1 ? 's' : '');
         }
+
         return ucfirst($txt);
     }
 
@@ -616,7 +621,7 @@ class ReglementEtudiantController extends Controller
                 // montant / motif
                 'montant_reglement'                   => (float)$r->montant_reglement,
                 'motif_reglement'                     => $r->motif_reglement,
-                'lettre'                              => $this->toWordsFr((float)$r->montant_reglement).' francs CFA',
+                'lettre'                              => $this->amountToWords((float)$r->montant_reglement),
 
                 // traçabilité
                 'id_user'                             => Auth::id() ?? 0,
@@ -931,7 +936,7 @@ class ReglementEtudiantController extends Controller
             // montant
             'montant_reglement'                   => (float)$r->montant_reglement,
             'motif_reglement'                     => $r->motif_reglement,
-            'lettre'                              => $this->toWordsFr((float)$r->montant_reglement).' francs CFA',
+            'lettre'                              => $this->amountToWords((float)$r->montant_reglement),
         ]);
 
         return redirect()
@@ -1059,7 +1064,7 @@ class ReglementEtudiantController extends Controller
 
                 'montant_reglement'                   => (float)$r->montant_reglement,
                 'motif_reglement'                     => $r->motif_reglement,
-                'lettre'                              => $this->toWordsFr((float)$r->montant_reglement).' francs CFA',
+                'lettre'                              => $this->amountToWords((float)$r->montant_reglement),
                 'id_user'                              => Auth::id() ?? 0,
             ];
 
@@ -1172,7 +1177,7 @@ class ReglementEtudiantController extends Controller
             // Montant / libellés
             'montant_reglement'                   => (float)$r->montant_reglement,
             'motif_reglement'                     => $r->motif_reglement,
-            'lettre'                              => $this->toWordsFr((float)$r->montant_reglement).' francs CFA',
+            'lettre'                              => $this->amountToWords((float)$r->montant_reglement),
 
             // Traçabilité (on peut laisser tel quel ; pas forcément changer)
             // 'id_user'                           => Auth::id() ?? $reg->id_user,
@@ -1213,7 +1218,7 @@ class ReglementEtudiantController extends Controller
             'id_tranche_scolarite'                => (int)($r->id_tranche_scolarite ?? 0),
             'montant_reglement'                   => (float)$r->montant_reglement,
             'motif_reglement'                     => $r->motif_reglement,
-            'lettre'                              => $this->toWordsFr((float)$r->montant_reglement).' francs CFA',
+            'lettre'                              => $this->amountToWords((float)$r->montant_reglement),
         ]);
 
         return back()->with('success', 'Règlement modifié ✏️');
@@ -1240,19 +1245,144 @@ class ReglementEtudiantController extends Controller
     }
     protected function toWordsFr(float $n): string
     {
-        if (!class_exists('\NumberFormatter')) {
-            return "Erreur : extension intl non activée";
+        $n = (int) floor(abs($n));
+
+        if ($n === 0) {
+            return 'zero';
         }
 
-        $formatter = new \NumberFormatter("fr", \NumberFormatter::SPELLOUT);
-        $parts = explode('.', number_format($n, 2, '.', ''));
+        return trim($this->numberToFrenchWords($n));
+    }
 
-        $lettres = $formatter->format((int)$parts[0]) . ' francs';
-        if ((int)$parts[1] > 0) {
-            $lettres .= ' et ' . $formatter->format((int)$parts[1]) . ' centimes';
+    private function numberToFrenchWords(int $n): string
+    {
+        $units = [
+            0 => '',
+            1 => 'un',
+            2 => 'deux',
+            3 => 'trois',
+            4 => 'quatre',
+            5 => 'cinq',
+            6 => 'six',
+            7 => 'sept',
+            8 => 'huit',
+            9 => 'neuf',
+            10 => 'dix',
+            11 => 'onze',
+            12 => 'douze',
+            13 => 'treize',
+            14 => 'quatorze',
+            15 => 'quinze',
+            16 => 'seize',
+        ];
+
+        if ($n < 17) {
+            return $units[$n];
         }
 
-        return ucfirst($lettres);
+        if ($n < 20) {
+            return 'dix-' . $units[$n - 10];
+        }
+
+        if ($n < 100) {
+            return $this->twoDigitsToFrenchWords($n);
+        }
+
+        if ($n < 1000) {
+            $hundreds = intdiv($n, 100);
+            $rest = $n % 100;
+            $prefix = $hundreds === 1 ? 'cent' : $units[$hundreds] . ' cent';
+
+            if ($rest === 0) {
+                return $hundreds > 1 ? $prefix . 's' : $prefix;
+            }
+
+            return $prefix . ' ' . $this->numberToFrenchWords($rest);
+        }
+
+        foreach ([
+            1000000000 => 'milliard',
+            1000000 => 'million',
+            1000 => 'mille',
+        ] as $value => $label) {
+            if ($n >= $value) {
+                $count = intdiv($n, $value);
+                $rest = $n % $value;
+                $prefix = $value === 1000 && $count === 1
+                    ? $label
+                    : $this->numberToFrenchWords($count) . ' ' . $label . ($count > 1 && $value !== 1000 ? 's' : '');
+
+                return trim($prefix . ($rest > 0 ? ' ' . $this->numberToFrenchWords($rest) : ''));
+            }
+        }
+
+        return (string) $n;
+    }
+
+    private function twoDigitsToFrenchWords(int $n): string
+    {
+        $units = [
+            1 => 'un',
+            2 => 'deux',
+            3 => 'trois',
+            4 => 'quatre',
+            5 => 'cinq',
+            6 => 'six',
+            7 => 'sept',
+            8 => 'huit',
+            9 => 'neuf',
+            10 => 'dix',
+            11 => 'onze',
+            12 => 'douze',
+            13 => 'treize',
+            14 => 'quatorze',
+            15 => 'quinze',
+            16 => 'seize',
+        ];
+
+        $tens = [
+            20 => 'vingt',
+            30 => 'trente',
+            40 => 'quarante',
+            50 => 'cinquante',
+            60 => 'soixante',
+        ];
+
+        if ($n < 17) {
+            return $units[$n];
+        }
+
+        if ($n < 20) {
+            return 'dix-' . $units[$n - 10];
+        }
+
+        if ($n < 70) {
+            $ten = intdiv($n, 10) * 10;
+            $rest = $n % 10;
+
+            if ($rest === 0) {
+                return $tens[$ten];
+            }
+
+            return $tens[$ten] . ($rest === 1 ? ' et ' : '-') . $units[$rest];
+        }
+
+        if ($n < 80) {
+            return 'soixante-' . $this->twoDigitsToFrenchWords($n - 60);
+        }
+
+        if ($n === 80) {
+            return 'quatre-vingts';
+        }
+
+        return 'quatre-vingt-' . $this->twoDigitsToFrenchWords($n - 80);
+    }
+
+    private function ensureReglementLetter(reglement_etudiant $reg): void
+    {
+        if (!$reg->lettre || stripos((string) $reg->lettre, 'erreur') !== false) {
+            $reg->lettre = $this->amountToWords((float) $reg->montant_reglement);
+        }
     }
 
 
@@ -1316,17 +1446,20 @@ class ReglementEtudiantController extends Controller
             'budget','ligne_budgetaire_entree','element_ligne_budgetaire_entree',
             'donnee_budgetaire_entree','donnee_ligne_budgetaire_entree',
         ])->findOrFail($id);
+        $this->ensureReglementLetter($reg);
 
         $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
         $paper = $format === 'a5' ? 'a5' : 'a4';
-        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+        $orientation = in_array($request->query('orientation'), ['portrait', 'landscape'], true)
+            ? $request->query('orientation')
+            : 'portrait';
         $autoPrint = $request->boolean('print');
 
         if ($autoPrint || !class_exists(\PDF::class)) {
-            return view('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'autoPrint'));
+            return view('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'orientation', 'autoPrint'));
         }
 
-        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'autoPrint'))
+        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'orientation', 'autoPrint'))
             ->setPaper($paper, $orientation);
 
         return $pdf->stream('Reglement_'.$format.'_'.$reg->numero_reglement.'.pdf');
@@ -1340,9 +1473,12 @@ class ReglementEtudiantController extends Controller
         $reg = reglement_etudiant::with(['etudiants'])->findOrFail($id);
         $format = $request->query('format') === 'a5' ? 'a5' : 'a4';
         $paper = $format === 'a5' ? 'a5' : 'a4';
-        $orientation = $format === 'a5' ? 'landscape' : 'portrait';
+        $orientation = in_array($request->query('orientation'), ['portrait', 'landscape'], true)
+            ? $request->query('orientation')
+            : 'portrait';
+        $this->ensureReglementLetter($reg);
 
-        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format'))
+        $pdf = \PDF::loadView('Admin.ReglementEtudiant.pdf', compact('reg', 'format', 'orientation'))
             ->setPaper($paper, $orientation);
 
         return $pdf->download('Reglement_'.$format.'_'.$reg->numero_reglement.'.pdf');

@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <title>Recu de decaissement</title>
-    @php $isA5 = ($format ?? 'a4') === 'a5'; @endphp
+    @php
+        $isA5 = ($format ?? 'a4') === 'a5';
+        $printOrientation = in_array(($orientation ?? 'portrait'), ['portrait', 'landscape'], true) ? $orientation : 'portrait';
+    @endphp
     <style>
         @page {
-            size: {{ $isA5 ? 'A5 landscape' : 'A4 portrait' }};
+            size: {{ $isA5 ? 'A5 '.$printOrientation : 'A4 portrait' }};
             margin: {{ $isA5 ? '8px' : '28px' }};
         }
         body { font-family: DejaVu Sans, sans-serif; font-size: {{ $isA5 ? '8.2px' : '12px' }}; color: #111; line-height: {{ $isA5 ? '1.15' : '1.35' }}; }

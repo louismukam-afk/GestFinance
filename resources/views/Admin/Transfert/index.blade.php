@@ -64,6 +64,7 @@
                                {{ $t->id_caisse_depart }},
                                {{ $t->id_caisse_arrivee }},
                                {{ $t->montant_transfert }},
+                                       '{{ \Carbon\Carbon::parse($t->date_transfert)->format('Y-m-d') }}',
                                        '{{ $t->observation }}'
                                        )"
                                class="btn btn-xs btn-warning">✏️</a>
@@ -165,6 +166,11 @@
                         </div>
 
                         <div class="form-group">
+                            <label>Date du transfert</label>
+                            <input type="date" name="date_transfert" class="form-control" value="{{ old('date_transfert', now()->toDateString()) }}" required>
+                        </div>
+
+                        <div class="form-group">
                             <label>Banque arrivee</label>
                             <select name="id_banque_arrivee" class="form-control">
                                 <option value="">-- Aucune --</option>
@@ -216,6 +222,11 @@
                         </div>
 
                         <div class="form-group">
+                            <label>Date du transfert</label>
+                            <input type="date" name="date_transfert" id="edit-date-transfert" class="form-control" required>
+                        </div>
+
+                        <div class="form-group">
                             <label>Observation</label>
                             <textarea name="observation" id="edit-observation" class="form-control"></textarea>
                         </div>
@@ -234,10 +245,11 @@
 
 @section('scripts')
     <script>
-        function editTransfert(id, code, depart, arrivee, montant, observation){
+        function editTransfert(id, code, depart, arrivee, montant, dateTransfert, observation){
             $('#edit-id').val(id);
             $('#edit-code').val(code);
             $('#edit-montant').val(montant);
+            $('#edit-date-transfert').val(dateTransfert);
             $('#edit-observation').val(observation);
         }
 
