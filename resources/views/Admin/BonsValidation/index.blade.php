@@ -85,12 +85,12 @@
                     <th>Personnel</th>
                     <th class="text-end">Montant</th>
                     <th>Statut global</th>
+                    <th>Actions</th>
                     <th>PDG</th>
                     <th>DAF</th>
                     <th>Achats</th>
                     <th>Emetteur</th>
                     <th>Motif refus</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -110,11 +110,6 @@
                         <td>{{ $bon->personnels->nom ?? '-' }}</td>
                         <td class="text-end">{{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA</td>
                         <td>{!! $bon->statut_badge !!}</td>
-                        <td>{!! validation_badge($bon->validationState('pdg')) !!}</td>
-                        <td>{!! validation_badge($bon->validationState('daf')) !!}</td>
-                        <td>{!! validation_badge($bon->validationState('achats')) !!}</td>
-                        <td>{!! validation_badge($bon->validationState('emetteur')) !!}</td>
-                        <td>{{ $bon->{$motifField} ?: $bon->motif_refus ?: '-' }}</td>
                         <td style="min-width:260px;">
                             <a href="{{ route('element_bon.index', $bon->id) }}" class="btn btn-xs btn-default">Voir elements</a>
                             <a href="{{ route('element_bon.exportPdf', $bon->id) }}" class="btn btn-xs btn-danger">PDF</a>
@@ -139,6 +134,11 @@
                                 </button>
                             @endif
                         </td>
+                        <td>{!! validation_badge($bon->validationState('pdg')) !!}</td>
+                        <td>{!! validation_badge($bon->validationState('daf')) !!}</td>
+                        <td>{!! validation_badge($bon->validationState('achats')) !!}</td>
+                        <td>{!! validation_badge($bon->validationState('emetteur')) !!}</td>
+                        <td>{{ $bon->{$motifField} ?: $bon->motif_refus ?: '-' }}</td>
                     </tr>
 
                     @if($niveau === 'daf' && !$bon->{$validationField} && !$bon->{$refusField})
