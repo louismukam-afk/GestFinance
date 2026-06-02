@@ -29,6 +29,7 @@
                     <th>Matricule</th>
                     <th>Téléphone WhatsApp</th>
                     <th>Date/Lieu Naissance</th>
+                  <th>Actions</th>
                     <th>Sexe</th>
                     <th>Email</th>
                     <th>Adresse</th>
@@ -38,7 +39,7 @@
                     <th>Mère (Nom/Tél)</th>
                     <th>Dernier Établissement</th>
                     <th>Date création</th>
-                    <th>Actions</th>
+                  
                 </tr>
                 </thead>
                 <tbody>
@@ -56,16 +57,7 @@
                         <td>{{ $e->matricule }}</td>
                         <td>{{ $e->telephone_whatsapp }}</td>
                         <td>{{ \Carbon\Carbon::parse($e->date_naissance)->format('d/m/Y') }}<br><small>{{ $e->lieu_naissance }}</small></td>
-                        <td>{{ $e->sexe }}</td>
-                        <td>{{ $e->email }}</td>
-                        <td>{{ $e->adresse }}</td>
-                        <td>{{ $e->departement_origine }} / {{ $e->region_origine }}</td>
-                        <td>{{ $e->nom_tuteur }}<br><small>{{ $e->telephone_tuteur }}</small></td>
-                        <td>{{ $e->nom_pere }}<br><small>{{ $e->telephone_whatsapp_pere }}</small></td>
-                        <td>{{ $e->nom_mere }}<br><small>{{ $e->telephone_2_etudiants }}</small></td>
-                        <td>{{ $e->dernier_etablissement_frequente }}</td>
-                        <td>{{ $e->created_at->format('d/m/Y') }}</td>
-                        <td>
+                 <td>
                             <a href="#edit_etudiant" data-toggle="modal" data-backdrop="false"
                                onclick="editEtudiant({{ $e->id }},
                                        `{{ $e->nom }}`,
@@ -97,6 +89,16 @@
                                 <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet étudiant ?')">🗑️</button>
                             </form>
                         </td>
+                        <td>{{ $e->sexe }}</td>
+                        <td>{{ $e->email }}</td>
+                        <td>{{ $e->adresse }}</td>
+                        <td>{{ $e->departement_origine }} / {{ $e->region_origine }}</td>
+                        <td>{{ $e->nom_tuteur }}<br><small>{{ $e->telephone_tuteur }}</small></td>
+                        <td>{{ $e->nom_pere }}<br><small>{{ $e->telephone_whatsapp_pere }}</small></td>
+                        <td>{{ $e->nom_mere }}<br><small>{{ $e->telephone_2_etudiants }}</small></td>
+                        <td>{{ $e->dernier_etablissement_frequente }}</td>
+                        <td>{{ $e->created_at->format('d/m/Y') }}</td>
+                       
                     </tr>
                 @endforeach
                 </tbody>
