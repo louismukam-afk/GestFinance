@@ -39,6 +39,7 @@ class TransfertCaisseController extends Controller
         }*/
 
         $entrees = \App\Models\reglement_etudiant::where('id_caisse', $caisseId)
+            ->whereHas('facture_etudiants')
             ->sum('montant_reglement');
 
         $transfertsEntrants = \App\Models\Transfert_caisse::where('id_caisse_arrivee', $caisseId)
@@ -52,6 +53,7 @@ class TransfertCaisseController extends Controller
     private function getSoldeCaisse1($caisseId)
     {
         $entrees = \App\Models\reglement_etudiant::where('id_caisse', $caisseId)
+            ->whereHas('facture_etudiants')
             ->sum('montant_reglement');
 
         $transfertsEntrants = \App\Models\Transfert_caisse::where('id_caisse_arrivee', $caisseId)
@@ -66,6 +68,7 @@ class TransfertCaisseController extends Controller
     private function getSoldeBanque($banqueId)
     {
         $entrees = \App\Models\reglement_etudiant::where('id_banque', $banqueId)
+            ->whereHas('facture_etudiants')
             ->sum('montant_reglement');
 
         $sorties = \App\Models\decaissement::where('id_banque', $banqueId)

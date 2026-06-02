@@ -57,6 +57,15 @@
             </thead>
             <tbody>
                 @forelse($bons as $bon)
+                    @php
+                        $user = auth()->user();
+                        $canViewCorrections = $user
+                            && $user->canAccessRoute('decaissements.detailBon')
+                            && (
+                                $user->canAccessRoute('decaissements.edit_decaissement')
+                                || $user->canAccessRoute('decaissements.destroy_decaissement')
+                            );
+                    @endphp
                     <tr>
                         <td>{{ $bon->date_validation ? \Carbon\Carbon::parse($bon->date_validation)->format('d/m/Y') : '-' }}</td>
                         <td>{{ $bon->nom_bon_commande }}</td>
@@ -70,6 +79,11 @@
                             <a href="{{ route('etat_bons.show', $bon->id) }}" class="btn btn-info btn-sm">
                                 Details
                             </a>
+                            @if($type === 'realises' && $canViewCorrections)
+                                <a href="{{ route('decaissements.detailBon', $bon->id) }}" class="btn btn-warning btn-sm">
+                                    Modifier / Supprimer
+                                </a>
+                            @endif
                         <a href="{{ route('decaissements.create', $bon->id) }}"
                                class="btn btn-primary btn-sm">
                                 💸 Financer

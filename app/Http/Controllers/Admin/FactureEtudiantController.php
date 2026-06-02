@@ -17,6 +17,7 @@ use App\Models\filiere;
 use App\Models\frais;
 use App\Models\ligne_budgetaire_Entree;
 use App\Models\niveau;
+use App\Models\reglement_etudiant;
 use App\Models\scolarite;
 use App\Models\specialite;
 use App\Models\tranche_scolarite;
@@ -436,6 +437,11 @@ public function destroy($id)
         $donneeBudgetaireId = $facture->id_donnee_budgetaire_entree;
         $donneeLigneId = $facture->id_donnee_ligne_budgetaire_entree;
 
+        $reglementsCount = reglement_etudiant::where('id_facture_etudiant', $facture->id)->count();
+        if ($reglementsCount > 0) {
+            return back()->with('error', "Impossible de supprimer cette facture : {$reglementsCount} reglement(s) y sont rattache(s). Veuillez d'abord annuler ou supprimer les reglements lies.");
+        }
+
         $facture->delete();
 
         $this->refreshMontantsPrevisionnelsEntree(
@@ -448,7 +454,13 @@ public function destroy($id)
 }
     public function destroy2($id)
     {
-        facture_etudiant::findOrFail($id)->delete();
+        $facture = facture_etudiant::findOrFail($id);
+        $reglementsCount = reglement_etudiant::where('id_facture_etudiant', $facture->id)->count();
+        if ($reglementsCount > 0) {
+            return back()->with('error', "Impossible de supprimer cette facture : {$reglementsCount} reglement(s) y sont rattache(s). Veuillez d'abord annuler ou supprimer les reglements lies.");
+        }
+
+        $facture->delete();
         return back()->with('success', 'Facture supprimée 🗑️');
     }
 

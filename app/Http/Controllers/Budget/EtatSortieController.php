@@ -255,6 +255,7 @@ class EtatSortieController extends Controller
             'donnee_ligne_budgetaire_entree',
             'etudiants',
         ])
+            ->whereHas('facture_etudiants')
             ->when($dateDebut, fn($q) => $q->whereDate('date_reglement', '>=', $dateDebut))
             ->whereDate('date_reglement', '<=', $dateFin)
             ->where('id_caisse', '>', 0)
@@ -299,6 +300,7 @@ class EtatSortieController extends Controller
             'donnee_ligne_budgetaire_entree',
             'etudiants',
         ])
+            ->whereHas('facture_etudiants')
             ->when($dateDebut, fn($q) => $q->whereDate('date_reglement', '>=', $dateDebut))
             ->whereDate('date_reglement', '<=', $dateFin)
             ->where('id_banque', '>', 0)
@@ -762,6 +764,7 @@ class EtatSortieController extends Controller
     private function soldeCaisseAlaDate(int $idCaisse, string $dateFin): float
     {
         $reglements = reglement_etudiant::where('id_caisse', $idCaisse)
+            ->whereHas('facture_etudiants')
             ->whereDate('date_reglement', '<=', $dateFin)
             ->sum('montant_reglement');
         $entreesSpeciales = entree_speciale::where('id_caisse', $idCaisse)
@@ -793,6 +796,7 @@ class EtatSortieController extends Controller
     private function soldeBanqueAlaDate(int $idBanque, string $dateFin): float
     {
         $reglements = reglement_etudiant::where('id_banque', $idBanque)
+            ->whereHas('facture_etudiants')
             ->whereDate('date_reglement', '<=', $dateFin)
             ->sum('montant_reglement');
         $decaissements = decaissement::where('id_banque', $idBanque)
@@ -857,6 +861,7 @@ class EtatSortieController extends Controller
 
         $caisses = caisse::orderBy('nom_caisse')->get()->map(function ($caisse) use ($dateFin) {
             $entreesReglements = reglement_etudiant::where('id_caisse', $caisse->id)
+                ->whereHas('facture_etudiants')
                 ->whereDate('date_reglement', '<=', $dateFin)
                 ->sum('montant_reglement');
 
@@ -908,6 +913,7 @@ class EtatSortieController extends Controller
 
         $banques = banque::orderBy('nom_banque')->get()->map(function ($banque) use ($dateFin) {
             $entreesReglements = reglement_etudiant::where('id_banque', $banque->id)
+                ->whereHas('facture_etudiants')
                 ->whereDate('date_reglement', '<=', $dateFin)
                 ->sum('montant_reglement');
 

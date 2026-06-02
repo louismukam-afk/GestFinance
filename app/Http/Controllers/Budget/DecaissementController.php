@@ -722,6 +722,124 @@ class DecaissementController extends Controller
         return back()->with('success', 'Decaissement supprime');
     }
 
+    public function editDecaissement($bonId, $decaissementId)
+    {
+        $bon = bon_commandeok::with([
+            'budget',
+            'ligne_budgetaire_sortie',
+            'elements_ligne_budgetaire_sortie',
+            'annee_academique',
+        ])->findOrFail($bonId);
+
+        $decaissement = decaissement::where('id_bon_commande', $bon->id)
+            ->where('id', $decaissementId)
+            ->firstOrFail();
+
+        $totalAutres = decaissement::where('id_bon_commande', $bon->id)
+            ->where('id', '<>', $decaissement->id)
+            ->sum('montant');
+        $resteDisponible = max(0, (float) $bon->montant_total - (float) $totalAutres);
+        $caissest = $this->caissesAffecteesUtilisateur(auth()->id(), 'decaissement');
+
+        return view('decaissements.edit_decaissement', compact(
+            'bon',
+            'decaissement',
+            'resteDisponible',
+            'caissest'
+        ));
+    }
+
+    public function updateDecaissement(Request $request, $bonId, $decaissementId)
+    {
+        $request->validate([
+            'montant' => 'required|numeric|min:1',
+            'motif' => 'required|string|max:255',
+            'date_depense' => 'required|date',
+            'id_caisse' => 'nullable|integer',
+            'id_banque' => 'nullable|integer',
+            'id_transfert_caisse' => 'nullable|integer',
+        ]);
+
+        $bon = bon_commandeok::findOrFail($bonId);
+        $decaissement = decaissement::where('id_bon_commande', $bon->id)
+            ->where('id', $decaissementId)
+            ->firstOrFail();
+
+        $totalAutresBon = decaissement::where('id_bon_commande', $bon->id)
+            ->where('id', '<>', $decaissement->id)
+            ->sum('montant');
+        $resteBon = (float) $bon->montant_total - (float) $totalAutresBon;
+
+        if ((float) $request->montant > $resteBon) {
+            return back()->withInput()->with('error', 'Montant depasse le reste disponible du bon.');
+        }
+
+        $donnee = donnee_ligne_budgetaire_sortie::where('id', $bon->id_donnee_ligne_budgetaire_sortie)
+            ->where('id_budget', $bon->id_budget)
+            ->where('id_ligne_budgetaire_sortie', $bon->id_ligne_budgetaire_sortie)
+            ->where('id_element_ligne_budgetaire_sortie', $bon->id_elements_ligne_budgetaire_sortie)
+            ->where('id_donnee_budgetaire_sortie', $bon->id_donnee_budgetaire_sortie)
+            ->first();
+
+        if (!$donnee) {
+            return back()->withInput()->with('error', 'Incoherence budgetaire detectee.');
+        }
+
+        $dejaBudget = decaissement::where('id_donnee_ligne_budgetaire_sortie', $donnee->id)
+            ->where('id', '<>', $decaissement->id)
+            ->sum('montant');
+        $resteBudget = (float) $donnee->montant - (float) $dejaBudget;
+
+        if ((float) $request->montant > $resteBudget) {
+            return back()->withInput()->with('error', 'Budget insuffisant pour cette correction.');
+        }
+
+        $idCaisse = 0;
+        $idTransfertCaisse = 0;
+        $idBanque = 0;
+
+        if ($request->filled('id_caisse')) {
+            if (!$this->utilisateurAutoriseCaisse(auth()->id(), (int) $request->id_caisse, 'decaissement')) {
+                return back()->withInput()->with('error', 'Cette caisse ne vous est pas affectee pour les decaissements.');
+            }
+
+            $solde = $this->soldeCaisse((int) $request->id_caisse);
+            if ((int) $decaissement->id_caisse === (int) $request->id_caisse) {
+                $solde += (float) $decaissement->montant;
+            }
+
+            if ((float) $request->montant > $solde) {
+                return back()->withInput()->with('error', 'Fonds insuffisants pour cette correction.');
+            }
+
+            $idCaisse = (int) $request->id_caisse;
+            $idTransfertCaisse = (int) ($request->id_transfert_caisse ?? 0);
+        } else {
+            $idBanque = (int) ($request->id_banque ?? 0);
+            if (!$this->utilisateurAutoriseBanque(auth()->id(), $idBanque, 'decaissement')) {
+                return back()->withInput()->with('error', 'Cette banque ne vous est pas affectee pour les decaissements.');
+            }
+        }
+
+        $resteApres = max(0, (float) $bon->montant_total - ((float) $totalAutresBon + (float) $request->montant));
+        $statut = $resteApres > 0 ? 'En cours de realisation' : 'Bon realise';
+
+        $decaissement->update([
+            'id_caisse' => $idCaisse,
+            'id_transfert_caisse' => $idTransfertCaisse,
+            'id_banque' => $idBanque,
+            'motif' => $request->motif,
+            'date_depense' => $request->date_depense,
+            'reste' => $resteApres,
+            'statut_financement' => $statut,
+            'montant' => $request->montant,
+        ]);
+
+        return redirect()
+            ->route('decaissements.detailBon', $bon->id)
+            ->with('success', 'Decaissement modifie avec succes.');
+    }
+
     // REPORTING
 
 

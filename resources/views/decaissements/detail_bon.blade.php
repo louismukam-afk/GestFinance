@@ -8,6 +8,13 @@
             💰 Détails des décaissements du bon : {{ $bon->nom_bon_commande }} Numero : BC{{$bon->id}}
         </h2>
 
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
         <!-- INFOS BON -->
         <div class="alert alert-info">
             <strong>Montant total :</strong> {{ number_format($bon->montant_total,0,',',' ') }} FCFA <br>
@@ -104,6 +111,11 @@
 
                 <tbody>
                 @forelse($decaissements as $i => $d)
+                    @php
+                        $user = auth()->user();
+                        $canEditDecaissement = $user && $user->canAccessRoute('decaissements.edit_decaissement');
+                        $canDeleteDecaissement = $user && $user->canAccessRoute('decaissements.destroy_decaissement');
+                    @endphp
                     <tr>
                         <td>{{ $i+1 }}</td>
                         <td>{{ $d->date_depense }}</td>
@@ -117,11 +129,16 @@
                             <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a5']) }}" target="_blank" class="btn btn-xs btn-warning">Recu A5</a>
                             <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a4', 'print' => 1]) }}" target="_blank" class="btn btn-xs btn-info">Imprimer A4</a>
                             <a href="{{ route('decaissements.recu', ['id' => $d->id, 'format' => 'a5', 'print' => 1]) }}" target="_blank" class="btn btn-xs btn-default">Imprimer A5</a>
-                            <form method="POST" action="{{ route('decaissements.destroy_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" style="display:inline">
-                                @csrf
-                                @method('DELETE')
-                                <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer ce decaissement ?')">Supprimer</button>
-                            </form>
+                            @if($canEditDecaissement)
+                                <a href="{{ route('decaissements.edit_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" class="btn btn-xs btn-primary">Modifier</a>
+                            @endif
+                            @if($canDeleteDecaissement)
+                                <form method="POST" action="{{ route('decaissements.destroy_decaissement', ['bon' => $bon->id, 'decaissement' => $d->id]) }}" style="display:inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer ce decaissement ?')">Supprimer</button>
+                                </form>
+                            @endif
                         </td>
                         <td>{{ $d->bon->entites->nom_entite ?? 'N/A' }}</td>
                     </tr>

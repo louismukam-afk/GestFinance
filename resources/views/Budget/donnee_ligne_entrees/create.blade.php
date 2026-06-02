@@ -8,6 +8,17 @@
             <span class="text-primary">{{ $donnee->donnee_ligne_budgetaire_entree }}</span>
         </h3>
 
+        @php($montantDejaAffecte = \App\Models\donnee_ligne_budgetaire_entree::where('id_donnee_budgetaire_entree', $donnee->id)->sum('montant'))
+        @php($montantDisponible = max(0, (float) $donnee->montant - (float) $montantDejaAffecte))
+        <div class="alert alert-info">
+            Montant de la donnee : <strong>{{ number_format($donnee->montant, 0, ',', ' ') }} FCFA</strong>.
+            Deja affecte : <strong>{{ number_format($montantDejaAffecte, 0, ',', ' ') }} FCFA</strong>.
+            Disponible : <strong>{{ number_format($montantDisponible, 0, ',', ' ') }} FCFA</strong>.
+        </div>
+        @if($errors->any())
+            <div class="alert alert-danger">{{ $errors->first() }}</div>
+        @endif
+
         <form method="POST" action="{{ route('donnee_ligne_entrees.store', $donnee->id) }}">
             @csrf
 

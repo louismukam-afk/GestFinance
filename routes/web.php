@@ -1026,6 +1026,10 @@ Route::middleware(['auth'])->group(function () {
             ->name('detailBon');
         Route::get('/recu/{id}', [DecaissementController::class, 'recu'])
             ->name('recu');
+        Route::get('/bon/{bon}/decaissement/{decaissement}/edit', [DecaissementController::class, 'editDecaissement'])
+            ->name('edit_decaissement');
+        Route::post('/bon/{bon}/decaissement/{decaissement}/update', [DecaissementController::class, 'updateDecaissement'])
+            ->name('update_decaissement');
         Route::delete('/bon/{bon}/decaissement/{decaissement}', [DecaissementController::class, 'destroyDecaissement'])
             ->name('destroy_decaissement');
         Route::get('/ajax/lignes/{budget}', [DecaissementController::class, 'getLignes']);

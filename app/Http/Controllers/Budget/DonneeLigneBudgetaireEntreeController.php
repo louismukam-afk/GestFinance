@@ -147,6 +147,9 @@ class DonneeLigneBudgetaireEntreeController extends Controller
         ]);
 
         // Mise à jour
+        $donnee = donnee_budgetaire_entree::findOrFail($request->id_donnee_budgetaire_entree);
+        $this->validateMontantDisponible($donnee, (float) $request->montant, (int) $ligne->id);
+
         $ligne->update([
             'donnee_ligne_budgetaire_entree'  => $request->libelle,
             'code_donnee_ligne_budgetaire_entree' => $request->code,
@@ -237,6 +240,31 @@ class DonneeLigneBudgetaireEntreeController extends Controller
         return response()->json($elements);
     }
 
+    private function totalLignesPourDonnee(int $donneeId, ?int $excludeId = null): float
+    {
+        return (float) donnee_ligne_budgetaire_entree::where('id_donnee_budgetaire_entree', $donneeId)
+            ->when($excludeId, fn($query) => $query->where('id', '<>', $excludeId))
+            ->sum('montant');
+    }
+
+    private function validateMontantDisponible(donnee_budgetaire_entree $donnee, float $montantAjoute, ?int $excludeId = null): void
+    {
+        $dejaAffecte = $this->totalLignesPourDonnee((int) $donnee->id, $excludeId);
+        $totalApres = $dejaAffecte + $montantAjoute;
+        $montantAutorise = (float) $donnee->montant;
+
+        if ($totalApres > $montantAutorise) {
+            $disponible = max(0, $montantAutorise - $dejaAffecte);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'montant' => 'Le montant saisi excede le montant autorise sur cette donnee budgetaire. Disponible : '
+                    . number_format($disponible, 0, ',', ' ')
+                    . ' FCFA. Montant de la donnee : '
+                    . number_format($montantAutorise, 0, ',', ' ')
+                    . ' FCFA.',
+            ]);
+        }
+    }
+
 
 
     /** Enregistrement multiple */
@@ -251,10 +279,16 @@ class DonneeLigneBudgetaireEntreeController extends Controller
             'compte.*'         => 'required|string|max:50',
             'description.*'    => 'nullable|string',
             'date_creation.*'  => 'required|date',
-            'montant.*'  => 'required',
+            'montant.*'  => 'required|numeric|min:0',
             // l’élément est obligatoire ET doit exister
             'id_element_ligne_budgetaire_entree.*' => 'required|integer|exists:element_ligne_budgetaire_entrees,id',
         ]);
+
+        $montantTotalSaisi = collect((array) $request->montant)
+            ->map(fn($montant) => (float) $montant)
+            ->sum();
+
+        $this->validateMontantDisponible($donnee, $montantTotalSaisi);
 
         foreach ((array) $request->libelle as $i => $val) {
             donnee_ligne_budgetaire_entree::create([
@@ -262,7 +296,7 @@ class DonneeLigneBudgetaireEntreeController extends Controller
                 'code_donnee_ligne_budgetaire_entree'    => $request->code[$i] ?? null,
                 'numero_donne_ligne_budgetaire_entree'   => $request->compte[$i] ?? null,
                 'description'                            => $request->description[$i] ?? null,
-                'montant'                            => $request->montant[$i] ?? null,
+                'montant'                            => $request->montant[$i] ?? 0,
                 'date_creation'                          => $request->date_creation[$i] ?? now()->toDateString(),
 
                 // 🔗 FK héritées de la donnée parente

@@ -5,6 +5,14 @@
         <h3 class="text-primary">💳 {{ $title }}</h3>
         <p><strong>Étudiant :</strong> {{ $etudiant->nom }} — Matricule: {{ $etudiant->matricule ?? '-' }}</p>
 
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
         <button class="btn btn-primary" data-toggle="modal" data-backdrop="false" href="#add_facture">
             ➕ Nouvelle Facture
         </button>

@@ -3,6 +3,9 @@
 
 @section('content')
     <div class="container">
+        @if($errors->any())
+            <div class="alert alert-danger">{{ $errors->first() }}</div>
+        @endif
         <h3>✏️ Modifier la donnée ligne budgétaire</h3>
 
         <form method="POST" action="{{ route('donnee_ligne_entrees.update', $donneeLigne->id) }}">
