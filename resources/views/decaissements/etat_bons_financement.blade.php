@@ -8,11 +8,11 @@
 
     <form method="GET" class="row g-3 mb-4">
         <div class="col-md-3">
-            <label>Date debut validation</label>
+            <label>{{ $type === 'realises' ? 'Date debut realisation' : 'Date debut du bon' }}</label>
             <input type="date" name="date_debut" value="{{ request('date_debut') }}" class="form-control">
         </div>
         <div class="col-md-3">
-            <label>Date fin validation</label>
+            <label>{{ $type === 'realises' ? 'Date fin realisation' : 'Date fin du bon' }}</label>
             <input type="date" name="date_fin" value="{{ request('date_fin') }}" class="form-control">
         </div>
         <div class="col-md-3">
@@ -44,7 +44,7 @@
         <table class="table table-bordered table-striped">
             <thead>
                 <tr>
-                    <th>Date validation</th>
+                    <th>{{ $type === 'realises' ? 'Date realisation' : 'Date du bon' }}</th>
                     <th>Bon</th>
                     <th>Entite</th>
                     <th>Annee</th>
@@ -67,7 +67,7 @@
                             );
                     @endphp
                     <tr>
-                        <td>{{ $bon->date_validation ? \Carbon\Carbon::parse($bon->date_validation)->format('d/m/Y') : '-' }}</td>
+                        <td>{{ $bon->date_etat_financement ? \Carbon\Carbon::parse($bon->date_etat_financement)->format('d/m/Y') : '-' }}</td>
                         <td>{{ $bon->nom_bon_commande }}</td>
                         <td>{{ $bon->entites->nom_entite ?? '-' }}</td>
                         <td>{{ $bon->annee_academique->nom ?? '-' }}</td>

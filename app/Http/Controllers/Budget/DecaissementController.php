@@ -1110,23 +1110,38 @@ class DecaissementController extends Controller
             'annee_academique',
         ])
             ->where('statuts', 1)
-            ->when($request->date_debut, fn($q) => $q->whereDate('date_validation', '>=', $request->date_debut))
-            ->when($request->date_fin, fn($q) => $q->whereDate('date_validation', '<=', $request->date_fin))
             ->when($request->id_entite, fn($q) => $q->where('id_entite', $request->id_entite))
             ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
             // Vue globale: aucun filtre sur id_user, tous les bons valides sont visibles.
-            ->orderByDesc('date_validation')
             ->get()
-            ->map(function ($bon) {
+            ->map(function ($bon) use ($type) {
                 $bon->total_decaisse = $bon->decaissements->sum('montant');
                 $bon->reste_financement = max($bon->montant_total - $bon->total_decaisse, 0);
+                $dateDecaissement = $bon->decaissements->max('date_depense');
+                $bon->date_etat_financement = $type === 'realises'
+                    ? ($dateDecaissement ?: $bon->date_debut ?: $bon->date_validation)
+                    : ($bon->date_debut ?: $bon->date_validation);
 
                 return $bon;
             });
 
-        return $type === 'realises'
-            ? $bons->filter(fn($bon) => $bon->total_decaisse >= $bon->montant_total)->values()
-            : $bons->filter(fn($bon) => $bon->reste_financement > 0)->values();
+        $bons = $type === 'realises'
+            ? $bons->filter(fn($bon) => $bon->total_decaisse >= $bon->montant_total)
+            : $bons->filter(fn($bon) => $bon->reste_financement > 0);
+
+        if ($request->date_debut) {
+            $dateDebut = \Carbon\Carbon::parse($request->date_debut)->startOfDay();
+            $bons = $bons->filter(fn($bon) => $bon->date_etat_financement && \Carbon\Carbon::parse($bon->date_etat_financement)->gte($dateDebut));
+        }
+
+        if ($request->date_fin) {
+            $dateFin = \Carbon\Carbon::parse($request->date_fin)->endOfDay();
+            $bons = $bons->filter(fn($bon) => $bon->date_etat_financement && \Carbon\Carbon::parse($bon->date_etat_financement)->lte($dateFin));
+        }
+
+        return $bons
+            ->sortByDesc(fn($bon) => $bon->date_etat_financement ?: $bon->date_validation ?: $bon->created_at)
+            ->values();
     }
 
     public function exportPdf()

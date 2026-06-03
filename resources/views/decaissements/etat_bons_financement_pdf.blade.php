@@ -18,7 +18,7 @@
 <table>
     <thead>
         <tr>
-            <th>Date validation</th>
+            <th>{{ $type === 'realises' ? 'Date realisation' : 'Date du bon' }}</th>
             <th>Bon</th>
             <th>Entite</th>
             <th>Annee</th>
@@ -32,7 +32,7 @@
     <tbody>
         @foreach($bons as $bon)
             <tr>
-                <td>{{ $bon->date_validation ? \Carbon\Carbon::parse($bon->date_validation)->format('d/m/Y') : '-' }}</td>
+                <td>{{ $bon->date_etat_financement ? \Carbon\Carbon::parse($bon->date_etat_financement)->format('d/m/Y') : '-' }}</td>
                 <td>{{ $bon->nom_bon_commande }}</td>
                 <td>{{ $bon->entites->nom_entite ?? '-' }}</td>
                 <td>{{ $bon->annee_academique->nom ?? '-' }}</td>

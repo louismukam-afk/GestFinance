@@ -13,9 +13,20 @@ use Illuminate\Support\Facades\Auth; // si tu utilises barryvdh/laravel-dompdf
 
 class ElementBonCommandeController extends Controller
 {
-    public function create($bon_id)
+    public function create(Request $request, $bon_id)
     {
         $bon = bon_commandeok::findOrFail($bon_id);
+        $nombre = (int) $request->query('nombre_lignes', 0);
+        $oldLignes = old('nom_element_bon_commande', []);
+
+        if (is_array($oldLignes) && count($oldLignes) > $nombre) {
+            $nombre = count($oldLignes);
+        }
+
+        if ($nombre > 0) {
+            return view('Admin.element_bon.create', compact('bon', 'nombre'));
+        }
+
         return view('Admin.element_bon.choose_lines', compact('bon'));
     }
 
@@ -26,10 +37,10 @@ class ElementBonCommandeController extends Controller
             'nombre_lignes' => 'required|integer|min:1'
         ]);
 
-        $bon = bon_commandeok::findOrFail($bon_id);
-        $nombre = $request->nombre_lignes;
-
-        return view('Admin.element_bon.create', compact('bon', 'nombre'));
+        return redirect()->route('element_bon.create', [
+            'bon' => $bon_id,
+            'nombre_lignes' => (int) $request->nombre_lignes,
+        ]);
     }
 
     public function manage($bon_id)
@@ -163,7 +174,7 @@ class ElementBonCommandeController extends Controller
         if ($nouveau_total > $bon->montant_total) {
 
             return redirect()
-                ->route('element_bon.editForm', $bon->id)
+                ->back()
                 ->withInput()
                 ->with('error', "⚠️ Le montant total dépasse le montant du bon !");
         }

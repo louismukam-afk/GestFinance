@@ -5,6 +5,18 @@
         <h3>Remplir les éléments du Bon : {{ $bon->nom_bon_commande }}</h3>
         <p><strong>Montant attendu : </strong> {{ number_format($bon->montant_total, 0, ',', ' ') }} FCFA</p>
 
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert alert-danger">{{ $errors->first() }}</div>
+        @endif
+
         <form method="POST" action="{{ route('element_bon.store', $bon->id) }}">
             @csrf
             <table class="table table-bordered">
@@ -21,12 +33,12 @@
                 <tbody>
                 @for($i=0; $i < $nombre; $i++)
                     <tr>
-                        <td><input type="text" name="nom_element_bon_commande[]" class="form-control" required></td>
-                        <td><input type="text" name="description_elements_bon_commande[]" class="form-control"></td>
-                        <td><input type="number" name="quantite_element_bon_commande[]" class="form-control qte" required></td>
-                        <td><input type="number" step="0.01" name="prix_unitaire_element_bon_commande[]" class="form-control pu" required></td>
-                        <td><input type="text" name="montant_total_element_bon_commande[]" class="form-control total" readonly></td>
-                        <td><input type="date" name="date_realisation[]" class="form-control" required></td>
+                        <td><input type="text" name="nom_element_bon_commande[]" value="{{ old('nom_element_bon_commande.'.$i) }}" class="form-control" required></td>
+                        <td><input type="text" name="description_elements_bon_commande[]" value="{{ old('description_elements_bon_commande.'.$i) }}" class="form-control"></td>
+                        <td><input type="number" name="quantite_element_bon_commande[]" value="{{ old('quantite_element_bon_commande.'.$i) }}" class="form-control qte" required></td>
+                        <td><input type="number" step="0.01" name="prix_unitaire_element_bon_commande[]" value="{{ old('prix_unitaire_element_bon_commande.'.$i) }}" class="form-control pu" required></td>
+                        <td><input type="text" name="montant_total_element_bon_commande[]" value="{{ old('montant_total_element_bon_commande.'.$i) }}" class="form-control total" readonly></td>
+                        <td><input type="date" name="date_realisation[]" value="{{ old('date_realisation.'.$i) }}" class="form-control" required></td>
                     </tr>
                 @endfor
                 </tbody>
@@ -57,6 +69,8 @@
             document.querySelectorAll(".qte, .pu").forEach(function(input) {
                 input.addEventListener("input", calculer);
             });
+
+            calculer();
         });
     </script>
 @endsection
