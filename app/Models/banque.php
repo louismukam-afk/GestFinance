@@ -35,6 +35,11 @@ class banque extends Model
         return $this->hasMany(reglement_etudiant::class,'id_banque');
     }
 
+    public function entree_speciales()
+    {
+        return $this->hasMany(entree_speciale::class, 'id_banque');
+    }
+
     public function affectations()
     {
         return $this->hasMany(BanqueUser::class, 'id_banque');

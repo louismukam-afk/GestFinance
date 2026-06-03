@@ -50,7 +50,8 @@
 
         <div id="banque_bloc" style="display:none;">
             <label>Banque</label>
-            <select name="id_banque" class="form-control">
+            <select id="banque" name="id_banque" class="form-control">
+                <option value="">-- Choisir --</option>
                 @foreach(\App\Models\banque::all() as $b)
                     <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
                 @endforeach
@@ -91,10 +92,12 @@
             $('#caisse_bloc').hide();
             $('#caisse').val('');
             $('#id_transfert_caisse').val('');
-            $('#solde_info').html('Solde : paiement banque');
+            $('#solde_info').html('Solde : 0');
         } else {
             $('#banque_bloc').hide();
             $('#caisse_bloc').show();
+            $('#banque').val('');
+            $('#montant').data('solde', 0);
         }
     });
 
@@ -112,12 +115,22 @@
         });
     });
 
+    $('#banque').change(function () {
+        let id = $(this).val();
+        if (!id) return;
+
+        $.get(baseUrl + '/ajax/solde-banque/' + id, function (data) {
+            $('#solde_info').html('Solde : ' + data.solde);
+            $('#montant').data('solde', data.solde);
+        });
+    });
+
     $('#montant').on('keyup change', function () {
         let montant = parseFloat($(this).val());
         let solde = parseFloat($(this).data('solde') || 0);
         let reste = parseFloat($(this).attr('max') || 0);
 
-        if ($('#type_paiement').val() === 'caisse' && solde > 0 && montant > solde) {
+        if (solde > 0 && montant > solde) {
             alert('Fonds insuffisants');
             $(this).val('');
             return;

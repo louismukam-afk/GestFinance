@@ -210,7 +210,12 @@ class Bon_commandeController extends Controller
 //            'statuts' => 'required|integer'
         ]);
 
-        $bon = bon_commandeok::find($request->id);
+        $bon = bon_commandeok::findOrFail($request->id);
+        $montantRealise = (float) $bon->decaissements()->sum('montant');
+        if ($montantRealise <= 0) {
+            $montantRealise = (float) $request->input('montant_realise', 0);
+        }
+
         $bon->nom_bon_commande = $request->input('nom_bon_commande');
         $bon->description_bon_commande = $request->input('description_bon_commande');
         $bon->date_debut = $request->input('date_debut');
@@ -218,8 +223,8 @@ class Bon_commandeController extends Controller
         $bon->date_entree_signature = $request->input('date_entree_signature');
 //        $bon->date_validation = $request->input('date_validation');
         $bon->montant_total = $request->input('montant_total');
-        $bon->montant_realise = $request->input('montant_realise', 0);
-        $bon->reste = $request->input('reste', 0);
+        $bon->montant_realise = $montantRealise;
+        $bon->reste = max((float) $bon->montant_total - $montantRealise, 0);
         $bon->montant_lettre = $request->input('montant_lettre');
         $bon->id_personnel = $request->input('id_personnel');
        // $bon->id_user = $request->input('id_user');

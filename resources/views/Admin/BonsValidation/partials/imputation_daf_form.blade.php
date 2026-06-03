@@ -48,6 +48,7 @@
             @foreach($entreesSpeciales as $entreeSpeciale)
                 <option value="{{ $entreeSpeciale->id }}" {{ $bon->id_entree_speciale == $entreeSpeciale->id ? 'selected' : '' }}>
                     {{ ucfirst($entreeSpeciale->type_entree) }} - {{ $entreeSpeciale->libelle }}
+                    ({{ $entreeSpeciale->id_banque ? 'Banque - '.optional($entreeSpeciale->banque)->nom_banque : 'Caisse - '.optional($entreeSpeciale->caisse)->nom_caisse }})
                 </option>
             @endforeach
         </select>

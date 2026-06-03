@@ -161,6 +161,16 @@
             </span>
             @endif
 
+            @if(isset($banqueNom) && $banqueNom)
+                <span class="badge bg-info">
+                Banque : {{ $banqueNom }}
+            </span>
+            @else
+                <span class="badge bg-info">
+                Toutes les banques
+            </span>
+            @endif
+
         </div>
 
         {{-- ============================= --}}

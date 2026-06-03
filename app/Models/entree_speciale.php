@@ -25,6 +25,7 @@ class entree_speciale extends Model
         'nombre_echeances',
         'montant',
         'id_caisse',
+        'id_banque',
         'id_budget',
         'id_annee_academique',
         'id_annee_academique_utilisation',
@@ -45,6 +46,11 @@ class entree_speciale extends Model
     public function caisse()
     {
         return $this->belongsTo(caisse::class, 'id_caisse');
+    }
+
+    public function banque()
+    {
+        return $this->belongsTo(banque::class, 'id_banque');
     }
 
     public function budget()

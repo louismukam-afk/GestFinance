@@ -67,6 +67,14 @@
                     @endforeach
                 </select>
             </div>
+            <div class="col-md-2">
+                <label>Compte</label>
+                <select name="compte_recepteur_type" class="form-control">
+                    <option value="">Tous</option>
+                    <option value="caisse" {{ request('compte_recepteur_type') === 'caisse' ? 'selected' : '' }}>Caisse</option>
+                    <option value="banque" {{ request('compte_recepteur_type') === 'banque' ? 'selected' : '' }}>Banque</option>
+                </select>
+            </div>
             <div class="col-md-12 text-center mt-3">
                 <button class="btn btn-success">Rechercher</button>
                 <a href="{{ route('entrees_speciales.index') }}" class="btn btn-default">Reinitialiser</a>
@@ -90,7 +98,7 @@
                     <th>Code</th>
                     <th>Libelle</th>
                     <th>Tiers</th>
-                    <th>Caisse</th>
+                    <th>Compte</th>
                     <th>Budget</th>
                     <th>Annee utilisation</th>
                     <th>Annee remboursement</th>
@@ -109,7 +117,13 @@
                         <td>{{ $entree->code_entree }}</td>
                         <td>{{ $entree->libelle }}</td>
                         <td>{{ $entree->nom_tiers }}</td>
-                        <td>{{ optional($entree->caisse)->nom_caisse }}</td>
+                        <td>
+                            @if($entree->id_banque)
+                                Banque - {{ optional($entree->banque)->nom_banque }}
+                            @else
+                                Caisse - {{ optional($entree->caisse)->nom_caisse }}
+                            @endif
+                        </td>
                         <td>{{ optional($entree->budget)->libelle_ligne_budget }}</td>
                         <td>{{ optional($entree->annee_utilisation)->nom }}</td>
                         <td>{{ optional($entree->annee_remboursement)->nom }}</td>

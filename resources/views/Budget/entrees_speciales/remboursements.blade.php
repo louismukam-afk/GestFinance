@@ -93,6 +93,7 @@
                     <th>Dette</th>
                     <th>Creancier</th>
                     <th>Budget</th>
+                    <th>Compte entree</th>
                     <th>Annee utilisation</th>
                     <th>Annee remboursement</th>
                     <th>Echeance</th>
@@ -116,6 +117,13 @@
                         </td>
                         <td>{{ $dette->nom_tiers }}</td>
                         <td>{{ optional($dette->budget)->libelle_ligne_budget }}</td>
+                        <td>
+                            @if($dette->id_banque)
+                                Banque - {{ optional($dette->banque)->nom_banque }}
+                            @else
+                                Caisse - {{ optional($dette->caisse)->nom_caisse }}
+                            @endif
+                        </td>
                         <td>{{ optional($dette->annee_utilisation)->nom }}</td>
                         <td>{{ optional($dette->annee_remboursement)->nom }}</td>
                         <td>{{ $echeance->nom_echeance }}</td>
@@ -174,7 +182,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="text-center">Aucune echeance trouvee.</td>
+                        <td colspan="12" class="text-center">Aucune echeance trouvee.</td>
                     </tr>
                 @endforelse
                 </tbody>

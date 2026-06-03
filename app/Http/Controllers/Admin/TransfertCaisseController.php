@@ -43,12 +43,20 @@ class TransfertCaisseController extends Controller
             ->sum('montant_reglement');
 
         $transfertsEntrants = \App\Models\Transfert_caisse::where('id_caisse_arrivee', $caisseId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
         $transfertsSortants = \App\Models\Transfert_caisse::where('id_caisse_depart', $caisseId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
-        return $entrees + $transfertsEntrants - $transfertsSortants;
+        $entreesSpeciales = \App\Models\entree_speciale::with('echeances')
+            ->where('id_caisse', $caisseId)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        return $entrees + $entreesSpeciales + $transfertsEntrants - $transfertsSortants;
     }
     private function getSoldeCaisse1($caisseId)
     {
@@ -57,12 +65,20 @@ class TransfertCaisseController extends Controller
             ->sum('montant_reglement');
 
         $transfertsEntrants = \App\Models\Transfert_caisse::where('id_caisse_arrivee', $caisseId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
         $transfertsSortants = \App\Models\Transfert_caisse::where('id_caisse_depart', $caisseId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
-        return $entrees + $transfertsEntrants - $transfertsSortants;
+        $entreesSpeciales = \App\Models\entree_speciale::with('echeances')
+            ->where('id_caisse', $caisseId)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        return $entrees + $entreesSpeciales + $transfertsEntrants - $transfertsSortants;
     }
 
     private function getSoldeBanque($banqueId)
@@ -71,16 +87,24 @@ class TransfertCaisseController extends Controller
             ->whereHas('facture_etudiants')
             ->sum('montant_reglement');
 
+        $entreesSpeciales = \App\Models\entree_speciale::with('echeances')
+            ->where('id_banque', $banqueId)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
         $sorties = \App\Models\decaissement::where('id_banque', $banqueId)
             ->sum('montant');
 
         $transfertsEntrants = \App\Models\Transfert_caisse::where('id_banque_arrivee', $banqueId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
         $transfertsSortants = \App\Models\Transfert_caisse::where('id_banque_depart', $banqueId)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
-        return $entrees + $transfertsEntrants - $transfertsSortants - $sorties;
+        return $entrees + $entreesSpeciales + $transfertsEntrants - $transfertsSortants - $sorties;
     }
 
     private function getSoldeCompte($type, $id)

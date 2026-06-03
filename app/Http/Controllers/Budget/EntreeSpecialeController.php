@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
 use App\Models\annee_academique;
+use App\Models\banque;
 use App\Models\Budget;
 use App\Models\caisse;
 use App\Models\entree_speciale;
@@ -18,13 +19,13 @@ class EntreeSpecialeController extends Controller
     private array $types = [
         'dette' => 'Dette',
         'don' => 'Don',
-        'apport' => 'Apport en caisse',
+        'apport' => 'Apport',
     ];
 
     public function index(Request $request)
     {
         $entrees = $this->filteredQuery($request)
-            ->with(['caisse', 'budget', 'annee_utilisation', 'annee_remboursement', 'echeances'])
+            ->with(['caisse', 'banque', 'budget', 'annee_utilisation', 'annee_remboursement', 'echeances'])
             ->orderByDesc('date_entree')
             ->get();
 
@@ -67,7 +68,7 @@ class EntreeSpecialeController extends Controller
 
     public function show($id)
     {
-        $entree = entree_speciale::with(['caisse', 'budget', 'annee_utilisation', 'annee_remboursement', 'echeances'])
+        $entree = entree_speciale::with(['caisse', 'banque', 'budget', 'annee_utilisation', 'annee_remboursement', 'echeances'])
             ->findOrFail($id);
 
         return view('Budget.entrees_speciales.show', $this->viewData([
@@ -134,6 +135,7 @@ class EntreeSpecialeController extends Controller
         $query = entree_speciale_echeance::with([
             'entree_speciale.budget',
             'entree_speciale.caisse',
+            'entree_speciale.banque',
             'entree_speciale.annee_utilisation',
             'entree_speciale.annee_remboursement',
             'annee_paiement',
@@ -249,7 +251,15 @@ class EntreeSpecialeController extends Controller
             ->when($request->filled('id_annee_academique'), fn($q) => $q->where('id_annee_academique_remboursement', $request->id_annee_academique))
             ->when($request->filled('id_annee_academique_utilisation'), fn($q) => $q->where('id_annee_academique_utilisation', $request->id_annee_academique_utilisation))
             ->when($request->filled('id_budget'), fn($q) => $q->where('id_budget', $request->id_budget))
-            ->when($request->filled('id_caisse'), fn($q) => $q->where('id_caisse', $request->id_caisse));
+            ->when($request->filled('compte_recepteur_type'), function ($q) use ($request) {
+                if ($request->compte_recepteur_type === 'banque') {
+                    $q->where('id_banque', '>', 0);
+                } elseif ($request->compte_recepteur_type === 'caisse') {
+                    $q->where('id_caisse', '>', 0);
+                }
+            })
+            ->when($request->filled('id_caisse'), fn($q) => $q->where('id_caisse', $request->id_caisse))
+            ->when($request->filled('id_banque'), fn($q) => $q->where('id_banque', $request->id_banque));
     }
 
     private function validatedData(Request $request): array
@@ -267,7 +277,9 @@ class EntreeSpecialeController extends Controller
             'remboursement_multiple' => 'nullable|boolean',
             'nombre_echeances' => 'nullable|integer|min:0',
             'montant' => 'required|numeric|min:0',
-            'id_caisse' => 'required|integer|min:1',
+            'compte_recepteur_type' => 'required|in:caisse,banque',
+            'id_caisse' => 'nullable|required_if:compte_recepteur_type,caisse|integer|min:1',
+            'id_banque' => 'nullable|required_if:compte_recepteur_type,banque|integer|min:1',
             'id_budget' => 'required|integer|min:1',
             'id_annee_academique_utilisation' => 'required|integer|min:1',
             'id_annee_academique_remboursement' => 'nullable|required_if:type_entree,dette|integer|min:1',
@@ -281,6 +293,9 @@ class EntreeSpecialeController extends Controller
         );
         $data['remboursement_multiple'] = (bool) ($data['remboursement_multiple'] ?? false);
         $data['nombre_echeances'] = (int) ($data['nombre_echeances'] ?? 0);
+        $data['id_caisse'] = $data['compte_recepteur_type'] === 'caisse' ? (int) ($data['id_caisse'] ?? 0) : 0;
+        $data['id_banque'] = $data['compte_recepteur_type'] === 'banque' ? (int) ($data['id_banque'] ?? 0) : 0;
+        unset($data['compte_recepteur_type']);
 
         if ($data['type_entree'] !== 'dette') {
             $data['date_contraction_dette'] = null;
@@ -329,7 +344,7 @@ class EntreeSpecialeController extends Controller
 
     private function echeancesARappeler()
     {
-        return entree_speciale_echeance::with('entree_speciale.budget', 'entree_speciale.caisse')
+        return entree_speciale_echeance::with('entree_speciale.budget', 'entree_speciale.caisse', 'entree_speciale.banque')
             ->where('statut', 'en_attente')
             ->whereDate('date_echeance', '>=', now()->format('Y-m-d'))
             ->whereDate('date_echeance', '<=', now()->addDays(7)->format('Y-m-d'))
@@ -360,7 +375,10 @@ class EntreeSpecialeController extends Controller
         }
 
         $code = 'ES-' . $entree->id . '-' . $entree->code_entree;
-        $soldeAvant = $this->soldeTransfertCaisse($entree->id_caisse, $entree->transfert_caisse?->id);
+        $isBanque = (int) $entree->id_banque > 0;
+        $soldeAvant = $isBanque
+            ? $this->soldeTransfertBanque((int) $entree->id_banque, $entree->transfert_caisse?->id)
+            : $this->soldeTransfertCaisse((int) $entree->id_caisse, $entree->transfert_caisse?->id);
 
         Transfert_caisse::updateOrCreate(
             ['id_entree_speciale' => $entree->id],
@@ -371,7 +389,9 @@ class EntreeSpecialeController extends Controller
                 'sode_caisse' => $soldeAvant + (float) $entree->montant,
                 'montant_transfert' => (float) $entree->montant,
                 'id_caisse_depart' => 0,
-                'id_caisse_arrivee' => $entree->id_caisse,
+                'id_caisse_arrivee' => $isBanque ? 0 : (int) $entree->id_caisse,
+                'id_banque_depart' => 0,
+                'id_banque_arrivee' => $isBanque ? (int) $entree->id_banque : 0,
                 'date_transfert' => $entree->date_entree,
                 'statut_caisse_transfert' => 1,
                 'id_user' => $entree->id_user ?: Auth::id(),
@@ -393,12 +413,26 @@ class EntreeSpecialeController extends Controller
         return (float) $entrants - (float) $sortants;
     }
 
+    private function soldeTransfertBanque(int $banqueId, ?int $ignoreTransfertId = null): float
+    {
+        $entrants = Transfert_caisse::where('id_banque_arrivee', $banqueId)
+            ->when($ignoreTransfertId, fn($q) => $q->where('id', '<>', $ignoreTransfertId))
+            ->sum('montant_transfert');
+
+        $sortants = Transfert_caisse::where('id_banque_depart', $banqueId)
+            ->when($ignoreTransfertId, fn($q) => $q->where('id', '<>', $ignoreTransfertId))
+            ->sum('montant_transfert');
+
+        return (float) $entrants - (float) $sortants;
+    }
+
     private function viewData(array $data = []): array
     {
         return $data + [
             'types' => $this->types,
             'budgets' => Budget::orderBy('libelle_ligne_budget')->get(),
             'caisses' => caisse::orderBy('nom_caisse')->get(),
+            'banques' => banque::orderBy('nom_banque')->get(),
             'annees' => annee_academique::orderBy('nom', 'desc')->get(),
         ];
     }

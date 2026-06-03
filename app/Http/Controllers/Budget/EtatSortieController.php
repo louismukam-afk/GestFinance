@@ -368,6 +368,40 @@ class EtatSortieController extends Controller
                 'sortie' => 0,
             ]);
 
+        $entreesSpecialesBanque = entree_speciale::with(['banque', 'budget', 'annee_academique', 'user', 'echeances'])
+            ->where('statut', '!=', 'annule')
+            ->when($dateDebut, fn($q) => $q->whereDate('date_entree', '>=', $dateDebut))
+            ->whereDate('date_entree', '<=', $dateFin)
+            ->where('id_banque', '>', 0)
+            ->when($allowedBanqueIds, fn($q) => $q->whereIn('id_banque', $allowedBanqueIds))
+            ->when($idBanque, fn($q) => $q->where('id_banque', $idBanque))
+            ->when($idCaisse, fn($q) => $q->whereRaw('1 = 0'))
+            ->when($idUser, fn($q) => $q->where('id_user', $idUser))
+            ->when($idBudget, fn($q) => $q->where('id_budget', $idBudget))
+            ->when($idAnnee, fn($q) => $q->where('id_annee_academique', $idAnnee))
+            ->get()
+            ->map(fn($e) => [
+                'caisse' => 'Banque - ' . ($e->banque->nom_banque ?? 'Non definie'),
+                'date' => $e->date_entree,
+                'type' => 'Entree',
+                'operation' => 'Entree speciale banque - ' . ucfirst($e->type_entree),
+                'numero' => $e->code_entree,
+                'motif' => $e->libelle,
+                'budget' => $e->budget->libelle_ligne_budget ?? '',
+                'ligne' => 'Hors facture',
+                'element' => '',
+                'donnee' => $e->nom_tiers,
+                'entite' => '',
+                'annee' => $e->annee_academique->nom ?? '',
+                'utilisateur' => $e->user->name ?? '',
+                'tiers' => $e->nom_tiers ?? '',
+                'caisse_id' => (int) $e->id_banque,
+                'compte_type' => 'banque',
+                'entree' => (float) $e->montant,
+                'retour' => 0,
+                'sortie' => 0,
+            ]);
+
         $decaissements = decaissement::with([
             'caisses',
             'user',
@@ -664,6 +698,7 @@ class EtatSortieController extends Controller
         $operations = $reglements
             ->concat($reglementsBanque)
             ->concat($entreesSpeciales)
+            ->concat($entreesSpecialesBanque)
             ->concat($decaissements)
             ->concat($decaissementsBanque)
             ->concat($remboursementsDettes)
@@ -799,6 +834,10 @@ class EtatSortieController extends Controller
             ->whereHas('facture_etudiants')
             ->whereDate('date_reglement', '<=', $dateFin)
             ->sum('montant_reglement');
+        $entreesSpeciales = entree_speciale::where('id_banque', $idBanque)
+            ->where('statut', '!=', 'annule')
+            ->whereDate('date_entree', '<=', $dateFin)
+            ->sum('montant');
         $decaissements = decaissement::where('id_banque', $idBanque)
             ->whereDate('date_depense', '<=', $dateFin)
             ->sum('montant');
@@ -811,7 +850,7 @@ class EtatSortieController extends Controller
             ->whereDate('date_transfert', '<=', $dateFin)
             ->sum('montant_transfert');
 
-        return (float) ($reglements + $transfertsEntrants - $transfertsSortants - $decaissements);
+        return (float) ($reglements + $entreesSpeciales + $transfertsEntrants - $transfertsSortants - $decaissements);
     }
 
     public function monEtatCaisse(Request $request)
@@ -917,6 +956,12 @@ class EtatSortieController extends Controller
                 ->whereDate('date_reglement', '<=', $dateFin)
                 ->sum('montant_reglement');
 
+            $entreesSpeciales = entree_speciale::with('echeances')
+                ->where('id_banque', $banque->id)
+                ->where('statut', '!=', 'annule')
+                ->whereDate('date_entree', '<=', $dateFin)
+                ->sum('montant');
+
             $sortiesDecaissements = decaissement::where('id_banque', $banque->id)
                 ->whereDate('date_depense', '<=', $dateFin)
                 ->sum('montant');
@@ -931,7 +976,7 @@ class EtatSortieController extends Controller
                 ->whereDate('date_transfert', '<=', $dateFin)
                 ->sum('montant_transfert');
 
-            $soldeAvantTransfert = $entreesReglements - $sortiesDecaissements;
+            $soldeAvantTransfert = $entreesReglements + $entreesSpeciales - $sortiesDecaissements;
             $soldeApresTransfert = $soldeAvantTransfert + $transfertsEntrants - $transfertsSortants;
 
             return [
@@ -940,7 +985,7 @@ class EtatSortieController extends Controller
                 'type_compte' => 'Banque',
                 'entrees_reglements' => $entreesReglements,
                 'entrees_retours' => 0,
-                'entrees_speciales' => 0,
+                'entrees_speciales' => $entreesSpeciales,
                 'sorties_decaissements' => $sortiesDecaissements,
                 'remboursements_dettes' => 0,
                 'transferts_entrants' => $transfertsEntrants,

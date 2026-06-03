@@ -3,6 +3,18 @@
 
 <div class="col-md-12">
 
+    @if(session('success'))
+        <div class="alert alert-success">{{ is_array(session('success')) ? implode(' ', session('success')) : session('success') }}</div>
+    @endif
+
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
+    @if($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
     <button class="btn btn-primary" data-toggle="modal" data-backdrop="false" href="#add_bon">
         <span class="glyphicon glyphicon-plus"></span> Nouveau Bon de Commande
     </button>
@@ -94,7 +106,9 @@
                             <td>{{ $bon->entites->nom_entite ?? 'N/A' }}</td>
 
                             <td>
-                                @if($bon->statuts == 0)
+                                @if($bon->statuts == 1 && $bon->reste > 0)
+                                    <span class="label label-warning">En attente financement</span>
+                                @elseif($bon->statuts == 0)
                                     <span class="label label-warning">En attente</span>
                                 @elseif($bon->statuts == 1)
                                     <span class="label label-success">Validé</span>
@@ -147,21 +161,24 @@
                             </td>
 
                             <td>
+                                @php
+                                    $bonEditData = [
+                                        'id' => $bon->id,
+                                        'nom' => $bon->nom_bon_commande,
+                                        'description' => $bon->description_bon_commande,
+                                        'date_debut' => $bon->date_debut,
+                                        'date_fin' => $bon->date_fin,
+                                        'date_entree' => $bon->date_entree_signature,
+                                        'montant_total' => $bon->montant_total,
+                                        'montant_realise' => $bon->montant_realise,
+                                        'reste' => $bon->reste,
+                                        'montant_lettre' => $bon->montant_lettre,
+                                        'personnel' => $bon->id_personnel,
+                                        'entite' => $bon->id_entite,
+                                    ];
+                                @endphp
                                 <a href="#edit_bon" data-toggle="modal" data-backdrop="false"
-                                   onclick="edit_bon(
-                                       {{ $bon->id }},
-                                       '{{ addslashes($bon->nom_bon_commande) }}',
-                                       '{{ addslashes($bon->description_bon_commande) }}',
-                                       '{{ $bon->date_debut }}',
-                                       '{{ $bon->date_fin }}',
-                                       '{{ $bon->date_entree_signature }}',
-                                       '{{ $bon->montant_total }}',
-                                       '{{ $bon->montant_realise }}',
-                                       '{{ $bon->reste }}',
-                                       '{{ addslashes($bon->montant_lettre) }}',
-                                       '{{ $bon->id_personnel }}',
-                                       '{{ $bon->id_entite }}'
-                                   )"
+                                   data-bon='@json($bonEditData)'
                                    class="btn btn-xs btn-primary">
                                     <span class="glyphicon glyphicon-edit"></span>
                                 </a>
@@ -467,20 +484,33 @@
         bindCalculReste('edit-montant-total', 'edit-montant-realise', 'edit-reste');
     });
 
-    function edit_bon(id, nom, description, date_debut, date_fin, date_entree_signature, montant_total, montant_realise, reste_value, montant_lettre, id_personnel, id_entite) {
-        $('#edit-id').val(id);
-        $('#edit-nom').val(nom);
-        $('#edit-desc').val(description);
-        $('#edit-date-debut').val(date_debut);
-        $('#edit-date-fin').val(date_fin);
-        $('#edit-date-entree').val(date_entree_signature);
-        $('#edit-montant-total').val(montant_total);
-        $('#edit-montant-realise').val(montant_realise);
-        $('#edit-reste').val(reste_value);
-        $('#edit-montant-lettre').val(montant_lettre);
-        $('#edit-personnel').val(id_personnel);
-        $('#edit-entite').val(id_entite);
-    }
+    $('#edit_bon').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        let bon = button.data('bon') || {};
+
+        if (typeof bon === 'string') {
+            try {
+                bon = JSON.parse(bon);
+            } catch (e) {
+                bon = {};
+            }
+        }
+
+        $('#edit-id').val(bon.id || '');
+        $('#edit-nom').val(bon.nom || '');
+        $('#edit-desc').val(bon.description || '');
+        $('#edit-date-debut').val(bon.date_debut || '');
+        $('#edit-date-fin').val(bon.date_fin || '');
+        $('#edit-date-entree').val(bon.date_entree || '');
+        $('#edit-montant-total').val(bon.montant_total || 0);
+        $('#edit-montant-realise').val(bon.montant_realise || 0);
+        $('#edit-reste').val(bon.reste || 0);
+        $('#edit-montant-lettre').val(bon.montant_lettre || '');
+        $('#edit-personnel').val(bon.personnel || '');
+        $('#edit-entite').val(bon.entite || '');
+
+        $('#edit-montant-total').trigger('input');
+    });
 
     document.addEventListener('DOMContentLoaded', function () {
         const searchInput = document.getElementById("searchProduit");

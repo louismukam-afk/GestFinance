@@ -1037,6 +1037,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/ajax/donnees-budget/{ligne}', [DecaissementController::class, 'getDonneesBudget']);
         Route::get('/ajax/donnees-ligne/{element}', [DecaissementController::class, 'getDonneesLigne']);
         Route::get('/ajax/solde-caisse/{id}', [DecaissementController::class, 'getSoldeAjax']);
+        Route::get('/ajax/solde-banque/{id}', [DecaissementController::class, 'getSoldeBanqueAjax']);
         Route::get('/ajax/transfert-caisse/{id}', [DecaissementController::class, 'getTransfertCaisse']);
 
 

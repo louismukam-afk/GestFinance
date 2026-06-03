@@ -49,6 +49,7 @@ class BonValidationController extends Controller
             'annees' => $niveau === 'daf' ? annee_academique::orderByDesc('id')->get() : collect(),
             'entreesSpeciales' => $niveau === 'daf'
                 ? entree_speciale::whereIn('type_entree', ['dette', 'don', 'apport'])
+                    ->with(['caisse', 'banque'])
                     ->where('statut', 'actif')
                     ->orderByDesc('date_entree')
                     ->get()

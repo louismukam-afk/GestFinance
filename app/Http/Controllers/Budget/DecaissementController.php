@@ -160,6 +160,17 @@ class DecaissementController extends Controller
             'solde' => $solde
         ]);
     }
+
+    public function getSoldeBanqueAjax($id)
+    {
+        if (!$this->utilisateurAutoriseBanque(auth()->id(), (int) $id, 'decaissement')) {
+            return response()->json(['solde' => 0, 'message' => 'Banque non affectee'], 403);
+        }
+
+        return response()->json([
+            'solde' => $this->soldeBanque((int) $id),
+        ]);
+    }
     public function getSoldeAjax1($id_caisse)
     {
         $entree = Transfert_caisse::where('id_caisse_arrivee', $id_caisse)
@@ -187,9 +198,11 @@ class DecaissementController extends Controller
     private function soldeCaisse(int $idCaisse): float
     {
         $entree = Transfert_caisse::where('id_caisse_arrivee', $idCaisse)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
         $sortie = Transfert_caisse::where('id_caisse_depart', $idCaisse)
+            ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
 
         $decaisse = decaissement::where('id_caisse', $idCaisse)
@@ -197,6 +210,28 @@ class DecaissementController extends Controller
 
         $entreesSpeciales = entree_speciale::with('echeances')
             ->where('id_caisse', $idCaisse)
+            ->where('statut', '!=', 'annule')
+            ->get()
+            ->sum(fn($e) => $e->montant_net_encaisse);
+
+        return $entree + $entreesSpeciales - $sortie - $decaisse;
+    }
+
+    private function soldeBanque(int $idBanque): float
+    {
+        $entree = Transfert_caisse::where('id_banque_arrivee', $idBanque)
+            ->where('type_transfert', '!=', 2)
+            ->sum('montant_transfert');
+
+        $sortie = Transfert_caisse::where('id_banque_depart', $idBanque)
+            ->where('type_transfert', '!=', 2)
+            ->sum('montant_transfert');
+
+        $decaisse = decaissement::where('id_banque', $idBanque)
+            ->sum('montant');
+
+        $entreesSpeciales = entree_speciale::with('echeances')
+            ->where('id_banque', $idBanque)
             ->where('statut', '!=', 'annule')
             ->get()
             ->sum(fn($e) => $e->montant_net_encaisse);
@@ -362,6 +397,11 @@ class DecaissementController extends Controller
             $id_banque = $request->id_banque ?? 0;
             if (!$this->utilisateurAutoriseBanque(auth()->id(), (int) $id_banque, 'decaissement')) {
                 return back()->with('error', 'Cette banque ne vous est pas affectee pour les decaissements.');
+            }
+
+            $solde = $this->soldeBanque((int) $id_banque);
+            if ($request->montant > $solde) {
+                return back()->with('error', 'Fonds insuffisants en banque');
             }
         }
         $total = decaissement::where('id_bon_commande', $bon->id)->sum('montant');

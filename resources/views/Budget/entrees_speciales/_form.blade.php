@@ -1,6 +1,7 @@
 @php
     $isEdit = $entree->exists;
     $oldType = old('type_entree', $entree->type_entree ?? 'dette');
+    $oldCompteType = old('compte_recepteur_type', ($entree->id_banque ?? 0) > 0 ? 'banque' : 'caisse');
     $oldMultiple = old('remboursement_multiple', $entree->remboursement_multiple ? 1 : 0);
     $dateEntree = old('date_entree', $entree->date_entree ? $entree->date_entree->format('Y-m-d') : now()->format('Y-m-d'));
     $echeances = old('echeances', $entree->echeances ? $entree->echeances->map(function ($e) {
@@ -59,7 +60,7 @@
 
     <div class="row mt-3">
         <div class="col-md-3">
-            <label>Date d'entree en caisse</label>
+            <label>Date d'entree</label>
             <input type="date" name="date_entree" value="{{ $dateEntree }}" class="form-control" required>
         </div>
 
@@ -81,8 +82,16 @@
 
     <div class="row mt-3">
         <div class="col-md-4">
+            <label>Type de compte recepteur</label>
+            <select name="compte_recepteur_type" id="compte_recepteur_type" class="form-control" required>
+                <option value="caisse" {{ $oldCompteType === 'caisse' ? 'selected' : '' }}>Caisse</option>
+                <option value="banque" {{ $oldCompteType === 'banque' ? 'selected' : '' }}>Banque</option>
+            </select>
+        </div>
+
+        <div class="col-md-4 compte-caisse-field">
             <label>Caisse receptrice</label>
-            <select name="id_caisse" class="form-control" required>
+            <select name="id_caisse" id="id_caisse" class="form-control">
                 <option value="">-- Choisir --</option>
                 @foreach($caisses as $caisse)
                     <option value="{{ $caisse->id }}" {{ old('id_caisse', $entree->id_caisse) == $caisse->id ? 'selected' : '' }}>
@@ -92,6 +101,21 @@
             </select>
         </div>
 
+        <div class="col-md-4 compte-banque-field">
+            <label>Banque receptrice</label>
+            <select name="id_banque" id="id_banque" class="form-control">
+                <option value="">-- Choisir --</option>
+                @foreach($banques as $banque)
+                    <option value="{{ $banque->id }}" {{ old('id_banque', $entree->id_banque) == $banque->id ? 'selected' : '' }}>
+                        {{ $banque->nom_banque }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
+    </div>
+
+    <div class="row mt-3">
         <div class="col-md-4">
             <label>Budget d'utilisation</label>
             <select name="id_budget" class="form-control" required>
@@ -188,6 +212,9 @@
     <script>
         (function () {
             var typeSelect = document.getElementById('type_entree');
+            var compteTypeSelect = document.getElementById('compte_recepteur_type');
+            var caisseSelect = document.getElementById('id_caisse');
+            var banqueSelect = document.getElementById('id_banque');
             var multipleSelect = document.getElementById('remboursement_multiple');
             var wrapper = document.getElementById('echeances-wrapper');
             var template = document.getElementById('echeance-template').innerHTML;
@@ -198,6 +225,21 @@
                 document.querySelectorAll('.dette-field').forEach(function (el) {
                     el.style.display = isDette ? '' : 'none';
                 });
+            }
+
+            function toggleCompteFields() {
+                var isBanque = compteTypeSelect.value === 'banque';
+                document.querySelectorAll('.compte-caisse-field').forEach(function (el) {
+                    el.style.display = isBanque ? 'none' : '';
+                });
+                document.querySelectorAll('.compte-banque-field').forEach(function (el) {
+                    el.style.display = isBanque ? '' : 'none';
+                });
+                if (isBanque) {
+                    caisseSelect.value = '';
+                } else {
+                    banqueSelect.value = '';
+                }
             }
 
             function refreshIndexes() {
@@ -243,6 +285,7 @@
             });
 
             typeSelect.addEventListener('change', toggleDetteFields);
+            compteTypeSelect.addEventListener('change', toggleCompteFields);
             if (multipleSelect) {
                 multipleSelect.addEventListener('change', function () {
                     document.getElementById('nombre_echeances').value = multipleSelect.value === '1'
@@ -254,6 +297,7 @@
             document.getElementById('nombre_echeances').addEventListener('change', ensureEcheanceCount);
             document.getElementById('nombre_echeances').addEventListener('input', ensureEcheanceCount);
             toggleDetteFields();
+            toggleCompteFields();
         })();
     </script>
 @endsection

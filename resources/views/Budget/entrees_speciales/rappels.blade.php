@@ -19,7 +19,7 @@
                     <th>Dette</th>
                     <th>Creancier</th>
                     <th>Budget</th>
-                    <th>Caisse</th>
+                    <th>Compte entree</th>
                     <th>Montant</th>
                     <th>Action</th>
                 </tr>
@@ -35,7 +35,13 @@
                         </td>
                         <td>{{ optional($rappel->entree_speciale)->nom_tiers }}</td>
                         <td>{{ optional(optional($rappel->entree_speciale)->budget)->libelle_ligne_budget }}</td>
-                        <td>{{ optional(optional($rappel->entree_speciale)->caisse)->nom_caisse }}</td>
+                        <td>
+                            @if(optional($rappel->entree_speciale)->id_banque)
+                                Banque - {{ optional(optional($rappel->entree_speciale)->banque)->nom_banque }}
+                            @else
+                                Caisse - {{ optional(optional($rappel->entree_speciale)->caisse)->nom_caisse }}
+                            @endif
+                        </td>
                         <td>{{ number_format($rappel->montant, 0, ',', ' ') }}</td>
                         <td>
                             <form action="{{ route('entrees_speciales.echeances.payer', $rappel->id) }}" method="POST">

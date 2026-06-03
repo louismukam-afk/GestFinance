@@ -14,7 +14,16 @@
             <tr><th>Date entree</th><td>{{ optional($entree->date_entree)->format('d/m/Y') }}</td></tr>
             <tr><th>Date contraction dette</th><td>{{ optional($entree->date_contraction_dette)->format('d/m/Y') }}</td></tr>
             <tr><th>Date remboursement final</th><td>{{ optional($entree->date_remboursement)->format('d/m/Y') }}</td></tr>
-            <tr><th>Caisse</th><td>{{ optional($entree->caisse)->nom_caisse }}</td></tr>
+            <tr>
+                <th>Compte recepteur</th>
+                <td>
+                    @if($entree->id_banque)
+                        Banque - {{ optional($entree->banque)->nom_banque }}
+                    @else
+                        Caisse - {{ optional($entree->caisse)->nom_caisse }}
+                    @endif
+                </td>
+            </tr>
             <tr><th>Budget</th><td>{{ optional($entree->budget)->libelle_ligne_budget }}</td></tr>
             <tr><th>Annee utilisation</th><td>{{ optional($entree->annee_utilisation)->nom }}</td></tr>
             <tr><th>Annee remboursement</th><td>{{ optional($entree->annee_remboursement)->nom }}</td></tr>

@@ -73,6 +73,8 @@
     @if($anneeNom) Année académique : <strong>{{ $anneeNom }}</strong> @else Toutes les années @endif
     |
     @if($caisseNom) Caisse : <strong>{{ $caisseNom }}</strong> @else Toutes les caisses @endif
+    |
+    @if(isset($banqueNom) && $banqueNom) Banque : <strong>{{ $banqueNom }}</strong> @else Toutes les banques @endif
 </p>
 
 {{-- TABLEAUX PAR ENTITÉ --}}

@@ -30,7 +30,17 @@
                 <select name="caisse" class="form-control">
                     <option value="">-- Toutes --</option>
                     @foreach($caisses as $c)
-                        <option value="{{ $c->id }}">{{ $c->nom_caisse }}</option>
+                        <option value="{{ $c->id }}" {{ request('caisse') == $c->id ? 'selected' : '' }}>{{ $c->nom_caisse }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label>Banque</label>
+                <select name="banque" class="form-control">
+                    <option value="">-- Toutes --</option>
+                    @foreach($banques as $b)
+                        <option value="{{ $b->id }}" {{ request('banque') == $b->id ? 'selected' : '' }}>{{ $b->nom_banque }}</option>
                     @endforeach
                 </select>
             </div>

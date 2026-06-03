@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use App\Exports\EtatBudgetaireExport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\annee_academique;
+use App\Models\banque;
 use App\Models\caisse;
 use App\Models\entite;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -40,6 +41,7 @@ class EtatComptableController extends Controller
         $annees  = annee_academique::orderBy('nom', 'desc')->get();
         $entites = entite::orderBy('nom_entite')->get();
         $caisses = caisse::orderBy('nom_caisse')->get();
+        $banques = banque::orderBy('nom_banque')->get();
 
         $title = 'États budgétaires – Recettes';
 
@@ -50,6 +52,7 @@ class EtatComptableController extends Controller
             'annees',
             'entites',
             'caisses',
+            'banques',
             'title'
         ));
     }
@@ -61,6 +64,7 @@ class EtatComptableController extends Controller
         $annees  = annee_academique::orderBy('nom', 'desc')->get();
         $entites = entite::orderBy('nom_entite')->get();
         $caisses = caisse::orderBy('nom_caisse')->get();
+        $banques = banque::orderBy('nom_banque')->get();
 
         // =========================
         // 🔹 Libellés d’en-tête
@@ -75,6 +79,10 @@ class EtatComptableController extends Controller
 
         $caisseNom = $request->filled('caisse')
             ? optional(caisse::find($request->caisse))->nom_caisse
+            : null;
+
+        $banqueNom = $request->filled('banque')
+            ? optional(banque::find($request->banque))->nom_banque
             : null;
 
         // =========================
@@ -114,6 +122,9 @@ class EtatComptableController extends Controller
                 ->when($request->filled('caisse'), fn ($r) =>
                 $r->where('id_caisse', $request->caisse)
             )
+                ->when($request->filled('banque'), fn ($r) =>
+                $r->where('id_banque', $request->banque)
+            )
             ->sum('montant_reglement');
 
         // 🔹 Entité d’affichage
@@ -140,6 +151,7 @@ class EtatComptableController extends Controller
             ->where('statut', '!=', 'annule')
             ->when($request->filled('annee'), fn($q) => $q->where('id_annee_academique', $request->annee))
             ->when($request->filled('caisse'), fn($q) => $q->where('id_caisse', $request->caisse))
+            ->when($request->filled('banque'), fn($q) => $q->where('id_banque', $request->banque))
             ->when($request->filled('date_debut'), fn($q) => $q->whereDate('date_entree', '>=', $request->date_debut))
             ->when($request->filled('date_fin'), fn($q) => $q->whereDate('date_entree', '<=', $request->date_fin))
             ->get()
@@ -174,9 +186,11 @@ class EtatComptableController extends Controller
             'annees',
             'entites',
             'caisses',
+            'banques',
             'anneeNom',
             'entiteNom',
             'caisseNom',
+            'banqueNom',
             'title'
         ));
     }
@@ -858,12 +872,20 @@ class EtatComptableController extends Controller
             });
         }
 
-        return $query->get()->map(function ($d) {
+        if (!empty($filters['banque'])) {
+            $query->whereHas('facture_etudiants.reglement_etudiants', function ($q) use ($filters) {
+                $q->where('id_banque', $filters['banque']);
+            });
+        }
+
+        return $query->get()->map(function ($d) use ($filters) {
             $facture = $d->facture_etudiants->sum('montant_total_facture');
             $reduction = $d->facture_etudiants->sum(fn($facture) => $facture->montant_reduction);
 
             $encaisse = $d->facture_etudiants
                 ->flatMap->reglement_etudiants
+                ->when(!empty($filters['caisse']), fn ($r) => $r->where('id_caisse', $filters['caisse']))
+                ->when(!empty($filters['banque']), fn ($r) => $r->where('id_banque', $filters['banque']))
                 ->sum('montant_reglement');
 
             return [
@@ -881,6 +903,7 @@ class EtatComptableController extends Controller
                 ->where('statut', '!=', 'annule')
                 ->when(!empty($filters['annee']), fn($q) => $q->where('id_annee_academique', $filters['annee']))
                 ->when(!empty($filters['caisse']), fn($q) => $q->where('id_caisse', $filters['caisse']))
+                ->when(!empty($filters['banque']), fn($q) => $q->where('id_banque', $filters['banque']))
                 ->get()
                 ->map(function ($e) {
                     $encaisse = $e->type_entree === 'dette' ? $e->montant : $e->montant_net_encaisse;
@@ -935,13 +958,18 @@ class EtatComptableController extends Controller
             ? optional(caisse::find($request->caisse))->nom_caisse
             : null;
 
+        $banqueNom = $request->filled('banque')
+            ? optional(banque::find($request->banque))->nom_banque
+            : null;
+
         $pdf = PDF::loadView(
             'Admin.Etats.etat_budgetaire_entrees',
             compact(
                 'etatGrouped',
                 'anneeNom',
                 'entiteNom',
-                'caisseNom'
+                'caisseNom',
+                'banqueNom'
             )
         )
             ->setPaper('a4', 'landscape')
