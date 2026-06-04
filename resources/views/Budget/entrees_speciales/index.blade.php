@@ -133,6 +133,7 @@
                         <td>{{ $entree->echeances->where('statut', 'en_attente')->count() }} en attente</td>
                         <td>
                             <a href="{{ route('entrees_speciales.show', $entree->id) }}" class="btn btn-info btn-sm">Voir</a>
+                            <a href="{{ route('entrees_speciales.imprimer', $entree->id) }}" class="btn btn-danger btn-sm" target="_blank">Imprimer</a>
                             <a href="{{ route('entrees_speciales.edit', $entree->id) }}" class="btn btn-warning btn-sm">Editer</a>
                             <form action="{{ route('entrees_speciales.destroy', $entree->id) }}" method="POST" class="d-inline">
                                 @csrf

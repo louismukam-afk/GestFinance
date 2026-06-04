@@ -386,6 +386,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [EntreeSpecialeController::class, 'index'])->name('index');
         Route::get('/create', [EntreeSpecialeController::class, 'create'])->name('create');
         Route::post('/', [EntreeSpecialeController::class, 'store'])->name('store');
+        Route::get('/{id}/imprimer', [EntreeSpecialeController::class, 'imprimer'])->name('imprimer');
         Route::get('/{id}', [EntreeSpecialeController::class, 'show'])->name('show');
         Route::get('/{id}/edit', [EntreeSpecialeController::class, 'edit'])->name('edit');
         Route::put('/{id}', [EntreeSpecialeController::class, 'update'])->name('update');
@@ -734,6 +735,9 @@ Route::middleware(['auth'])->group(function () {
 // 📌 Modifier un transfert
     Route::post('transferts/update', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'update'])
         ->name('update_transfert');
+
+    Route::get('transferts/{id}/imprimer', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'imprimer'])
+        ->name('imprimer_transfert');
 
 // 📌 Supprimer un transfert
     Route::delete('transferts/{id}', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'destroy'])

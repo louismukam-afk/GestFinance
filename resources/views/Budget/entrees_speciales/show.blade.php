@@ -4,7 +4,10 @@
     <div class="container">
         <div class="d-flex justify-content-between mb-3">
             <h3>{{ $entree->libelle }}</h3>
-            <a href="{{ route('entrees_speciales.edit', $entree->id) }}" class="btn btn-warning">Modifier</a>
+            <div>
+                <a href="{{ route('entrees_speciales.imprimer', $entree->id) }}" class="btn btn-danger" target="_blank">Imprimer</a>
+                <a href="{{ route('entrees_speciales.edit', $entree->id) }}" class="btn btn-warning">Modifier</a>
+            </div>
         </div>
 
         <table class="table table-bordered">

@@ -46,7 +46,9 @@ class EtatSortieController extends Controller
     // =========================
     public function pilotage(Request $request)
     {
-        $query = decaissement::with(['caisses','user','personnels']);
+        $query = decaissement::with(['bon','caisses','banques','user','personnels']);
+        $caisses = caisse::orderBy('nom_caisse')->get();
+        $banques = banque::orderBy('nom_banque')->get();
 
         if ($request->date_debut) {
             $query->whereDate('date_depense','>=',$request->date_debut);
@@ -56,9 +58,17 @@ class EtatSortieController extends Controller
             $query->whereDate('date_depense','<=',$request->date_fin);
         }
 
+        if ($request->filled('id_caisse')) {
+            $query->where('id_caisse', $request->id_caisse);
+        }
+
+        if ($request->filled('id_banque')) {
+            $query->where('id_banque', $request->id_banque);
+        }
+
         $data = $query->get();
 
-        return view('Admin.Etats.sorties.pilotage', compact('data'));
+        return view('Admin.Etats.sorties.pilotage', compact('data', 'caisses', 'banques'));
     }
 
     // =========================

@@ -10,6 +10,7 @@ use App\Models\caisse;
 use App\Models\entree_speciale;
 use App\Models\entree_speciale_echeance;
 use App\Models\Transfert_caisse;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +76,28 @@ class EntreeSpecialeController extends Controller
             'entree' => $entree,
             'title' => 'Detail entree speciale',
         ]));
+    }
+
+    public function imprimer($id)
+    {
+        $entree = entree_speciale::with([
+            'caisse',
+            'banque',
+            'budget',
+            'annee_utilisation',
+            'annee_remboursement',
+            'echeances',
+            'user',
+        ])->findOrFail($id);
+
+        $pdf = Pdf::loadView('Budget.entrees_speciales.pdf', $this->viewData([
+            'entree' => $entree,
+            'title' => 'Recu entree speciale',
+        ]))->setPaper('a4', 'portrait');
+
+        $fileName = 'entree_speciale_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $entree->code_entree ?: $entree->id) . '.pdf';
+
+        return $pdf->stream($fileName);
     }
 
     public function edit($id)

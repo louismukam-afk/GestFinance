@@ -19,8 +19,8 @@
                 <tr>
                     <th>#</th>
                     <th>Code</th>
-                    <th>Caisse départ</th>
-                    <th>Caisse arrivée</th>
+                    <th>Compte depart</th>
+                    <th>Compte arrivee</th>
                     <th>Montant</th>
                     <th>Statut</th>
                     <th>Solde après</th>
@@ -69,6 +69,10 @@
                                        )"
                                class="btn btn-xs btn-warning">✏️</a>
 
+                            <a href="{{ route('imprimer_transfert', $t->id) }}"
+                               target="_blank"
+                               class="btn btn-xs btn-info">Imprimer</a>
+
                             <!-- DELETE -->
                             <form action="{{ route('delete_transfert',$t->id) }}" method="POST" style="display:inline;">
                                 @csrf
@@ -87,7 +91,7 @@
     <div class="modal fade" id="add_transfert">
         <div class="modal-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ route('store_transfert') }}">
+                <form method="POST" action="{{ route('store_transfert') }}" id="add-transfert-form">
                     @csrf
 
                     <div class="modal-header">
@@ -116,47 +120,44 @@
                             <input type="text" name="code_transfert" class="form-control" required>
                         </div>
 
+                        <input type="hidden" name="compte_depart_type" id="compte_depart_type">
+                        <input type="hidden" name="id_caisse_depart" id="id_caisse_depart">
+                        <input type="hidden" name="id_banque_depart" id="id_banque_depart">
+                        <input type="hidden" name="compte_arrivee_type" id="compte_arrivee_type">
+                        <input type="hidden" name="id_caisse_arrivee" id="id_caisse_arrivee">
+                        <input type="hidden" name="id_banque_arrivee" id="id_banque_arrivee">
+
                         <div class="form-group">
-                            <label>Type depart</label>
-                            <select name="compte_depart_type" class="form-control">
-                                <option value="caisse">Caisse</option>
-                                <option value="banque">Banque</option>
+                            <label>Compte depart</label>
+                            <select id="compte_depart" class="form-control" required>
+                                <option value="">-- Choisir le compte de depart --</option>
+                                <optgroup label="Caisses">
+                                    @foreach($caisses as $c)
+                                        <option value="caisse:{{ $c->id }}">Caisse - {{ $c->nom_caisse }}</option>
+                                    @endforeach
+                                </optgroup>
+                                <optgroup label="Banques">
+                                    @foreach($banques as $b)
+                                        <option value="banque:{{ $b->id }}">Banque - {{ $b->nom_banque }}</option>
+                                    @endforeach
+                                </optgroup>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <label>Caisse depart</label>
-                            <select name="id_caisse_depart" class="form-control">
-                                @foreach($caisses as $c)
-                                    <option value="{{ $c->id }}">{{ $c->nom_caisse }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Banque depart</label>
-                            <select name="id_banque_depart" class="form-control">
-                                <option value="">-- Aucune --</option>
-                                @foreach($banques as $b)
-                                    <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Type arrivee</label>
-                            <select name="compte_arrivee_type" class="form-control">
-                                <option value="caisse">Caisse</option>
-                                <option value="banque">Banque</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Caisse arrivee</label>
-                            <select name="id_caisse_arrivee" class="form-control">
-                                @foreach($caisses as $c)
-                                    <option value="{{ $c->id }}">{{ $c->nom_caisse }}</option>
-                                @endforeach
+                            <label>Compte arrivee</label>
+                            <select id="compte_arrivee" class="form-control" required>
+                                <option value="">-- Choisir le compte d'arrivee --</option>
+                                <optgroup label="Caisses">
+                                    @foreach($caisses as $c)
+                                        <option value="caisse:{{ $c->id }}">Caisse - {{ $c->nom_caisse }}</option>
+                                    @endforeach
+                                </optgroup>
+                                <optgroup label="Banques">
+                                    @foreach($banques as $b)
+                                        <option value="banque:{{ $b->id }}">Banque - {{ $b->nom_banque }}</option>
+                                    @endforeach
+                                </optgroup>
                             </select>
                         </div>
 
@@ -168,16 +169,6 @@
                         <div class="form-group">
                             <label>Date du transfert</label>
                             <input type="date" name="date_transfert" class="form-control" value="{{ old('date_transfert', now()->toDateString()) }}" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Banque arrivee</label>
-                            <select name="id_banque_arrivee" class="form-control">
-                                <option value="">-- Aucune --</option>
-                                @foreach($banques as $b)
-                                    <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
-                                @endforeach
-                            </select>
                         </div>
 
                         <div class="form-group">
@@ -254,6 +245,30 @@
         }
 
         $(function () {
+            function syncCompte(prefix) {
+                var value = $('#compte_' + prefix).val() || '';
+                var parts = value.split(':');
+                var type = parts[0] || '';
+                var id = parts[1] || '';
+
+                $('#compte_' + prefix + '_type').val(type);
+                $('#id_caisse_' + prefix).val(type === 'caisse' ? id : '');
+                $('#id_banque_' + prefix).val(type === 'banque' ? id : '');
+            }
+
+            $('#compte_depart').on('change', function () {
+                syncCompte('depart');
+            });
+
+            $('#compte_arrivee').on('change', function () {
+                syncCompte('arrivee');
+            });
+
+            $('#add-transfert-form').on('submit', function () {
+                syncCompte('depart');
+                syncCompte('arrivee');
+            });
+
             $('#transfertsTable').DataTable({
                 responsive: true,
                 pageLength: 25,
@@ -279,4 +294,3 @@
         <li class="active"><strong>{{ $title }}</strong></li>
     </ol>
 @endsection
-

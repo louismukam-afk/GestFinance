@@ -90,6 +90,7 @@
             <th>Date</th>
             <th>Operation</th>
             <th>Numero</th>
+            <th>Nom de l'etudiant</th>
             <th>Motif</th>
             <th>Budget</th>
             <th>Ligne budgetaire</th>
@@ -115,6 +116,7 @@
                 <td>{{ $op['date'] }}</td>
                 <td>{{ $op['operation'] }}</td>
                 <td>{{ $op['numero'] }}</td>
+                <td>{{ $op['tiers'] ?? '-' }}</td>
                 <td>{{ $op['motif'] ?: '-' }}</td>
                 <td>{{ $op['budget'] ?: '-' }}</td>
                 <td>{{ $op['ligne'] ?: '-' }}</td>
@@ -129,13 +131,13 @@
             </tr>
         @endforeach
         <tr class="total">
-            <td colspan="11">TOTAL {{ $caisse }}</td>
+            <td colspan="12">TOTAL {{ $caisse }}</td>
             <td class="right">{{ number_format($tEntree, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($tRetour, 0, ',', ' ') }}</td>
             <td class="right">{{ number_format($tSortie, 0, ',', ' ') }}</td>
         </tr>
         <tr class="total">
-            <td colspan="11">SOLDE {{ $caisse }}</td>
+            <td colspan="12">SOLDE {{ $caisse }}</td>
             <td colspan="3" class="right">{{ number_format($tEntree + $tRetour - $tSortie, 0, ',', ' ') }} FCFA</td>
         </tr>
         </tbody>

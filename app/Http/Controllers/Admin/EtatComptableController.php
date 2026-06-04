@@ -708,14 +708,14 @@ class EtatComptableController extends Controller
         // =========================
         // Données filtres
         // =========================
-        $etudiants = \App\Models\etudiant::orderBy('nom')->get();
+        $etudiants = \App\Models\Etudiant::orderBy('nom')->get();
         $annees    = \App\Models\annee_academique::orderBy('nom', 'desc')->get();
         $specialites = \App\Models\specialite::orderBy('nom_specialite')->get();
         $niveaux   = \App\Models\niveau::orderBy('nom_niveau')->get();
         $filieres  = \App\Models\filiere::orderBy('nom_filiere')->get();
         $cycles    = \App\Models\cycle::orderBy('nom_cycle')->get();
         $budgets   = \App\Models\Budget::orderBy('libelle_ligne_budget')->get();
-        $lignes    = \App\Models\ligne_budgetaire_entree::orderBy('libelle_ligne_budgetaire_entree')->get();
+        $lignes    = \App\Models\ligne_budgetaire_Entree::orderBy('libelle_ligne_budgetaire_entree')->get();
 
         $result = collect();
 

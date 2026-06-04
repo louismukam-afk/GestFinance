@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\banque;
 use App\Models\caisse;
 use App\Models\Transfert_caisse;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -56,7 +57,17 @@ class TransfertCaisseController extends Controller
             ->get()
             ->sum(fn($e) => $e->montant_net_encaisse);
 
-        return $entrees + $entreesSpeciales + $transfertsEntrants - $transfertsSortants;
+        $retours = \App\Models\retour_caisse::where('id_caisse', $caisseId)
+            ->sum('montant');
+
+        $decaissements = \App\Models\decaissement::where('id_caisse', $caisseId)
+            ->sum('montant');
+
+        $remboursementsDettes = \App\Models\entree_speciale_echeance::where('id_caisse_paiement', $caisseId)
+            ->where('statut', 'payee')
+            ->sum('montant_paye');
+
+        return $entrees + $entreesSpeciales + $retours + $transfertsEntrants - $transfertsSortants - $decaissements - $remboursementsDettes;
     }
     private function getSoldeCaisse1($caisseId)
     {
@@ -78,7 +89,17 @@ class TransfertCaisseController extends Controller
             ->get()
             ->sum(fn($e) => $e->montant_net_encaisse);
 
-        return $entrees + $entreesSpeciales + $transfertsEntrants - $transfertsSortants;
+        $retours = \App\Models\retour_caisse::where('id_caisse', $caisseId)
+            ->sum('montant');
+
+        $decaissements = \App\Models\decaissement::where('id_caisse', $caisseId)
+            ->sum('montant');
+
+        $remboursementsDettes = \App\Models\entree_speciale_echeance::where('id_caisse_paiement', $caisseId)
+            ->where('statut', 'payee')
+            ->sum('montant_paye');
+
+        return $entrees + $entreesSpeciales + $retours + $transfertsEntrants - $transfertsSortants - $decaissements - $remboursementsDettes;
     }
 
     private function getSoldeBanque($banqueId)
@@ -120,6 +141,10 @@ class TransfertCaisseController extends Controller
             'code_transfert' => 'required|unique:transfert_caisses,code_transfert',
             'compte_depart_type' => 'required|in:caisse,banque',
             'compte_arrivee_type' => 'required|in:caisse,banque',
+            'id_caisse_depart' => 'nullable|required_if:compte_depart_type,caisse|integer|exists:caisses,id',
+            'id_banque_depart' => 'nullable|required_if:compte_depart_type,banque|integer|exists:banques,id',
+            'id_caisse_arrivee' => 'nullable|required_if:compte_arrivee_type,caisse|integer|exists:caisses,id',
+            'id_banque_arrivee' => 'nullable|required_if:compte_arrivee_type,banque|integer|exists:banques,id',
             'montant_transfert' => 'required|numeric|min:1',
             'date_transfert' => 'required|date',
         ]);
@@ -137,14 +162,6 @@ class TransfertCaisseController extends Controller
 
         if ($request->compte_depart_type === $request->compte_arrivee_type && $departId === $arriveeId) {
             throw new \RuntimeException('Le compte de depart doit etre different du compte d arrivee.');
-        }
-
-        $caisseDepart = $request->compte_depart_type === 'caisse' ? caisse::findOrFail($departId) : null;
-        $caisseArrivee = $request->compte_arrivee_type === 'caisse' ? caisse::findOrFail($arriveeId) : null;
-
-        if ($request->compte_depart_type !== $request->compte_arrivee_type
-            && (($caisseDepart && (int) $caisseDepart->type_caisse !== 2) || ($caisseArrivee && (int) $caisseArrivee->type_caisse !== 2))) {
-            throw new \RuntimeException('Les transferts banque <-> caisse doivent passer par une caisse centrale.');
         }
 
         return [$departId, $arriveeId];
@@ -344,5 +361,27 @@ class TransfertCaisseController extends Controller
             ->findOrFail($id);
 
         return view('Admin.Transfert.show', compact('transfert'));
+    }
+
+    public function imprimer($id)
+    {
+        $transfert = Transfert_caisse::with([
+            'caisseDepart',
+            'caisseArrivee',
+            'banqueDepart',
+            'banqueArrivee',
+            'entree_speciale',
+            'user',
+            'userLast',
+        ])->findOrFail($id);
+
+        $pdf = Pdf::loadView('Admin.Transfert.pdf', [
+            'transfert' => $transfert,
+            'title' => 'Fiche de transfert',
+        ])->setPaper('a4', 'portrait');
+
+        $fileName = 'transfert_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $transfert->code_transfert ?: $transfert->id) . '.pdf';
+
+        return $pdf->stream($fileName);
     }
 }
