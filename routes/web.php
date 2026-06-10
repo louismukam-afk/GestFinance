@@ -97,6 +97,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/export/pdf', [ReductionFactureController::class, 'exportPdf'])->name('pdf');
     });
 
+    Route::get('matieres/import/template', [MatiereController::class, 'downloadTemplate'])->name('matieres.import.template');
+    Route::post('matieres/import', [MatiereController::class, 'importStore'])->name('matieres.import.store');
     Route::resource('matieres', MatiereController::class)->except(['create', 'show', 'edit']);
 
     Route::get('/emploi-du-temps', [EmploiTempsController::class, 'index'])->name('emploi_temps.index');

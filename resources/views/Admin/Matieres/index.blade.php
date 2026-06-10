@@ -7,6 +7,35 @@
         <a href="{{ route('factures_rattrapage.index') }}" class="btn btn-info">Factures rattrapage</a>
     </div>
 
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    @if(session('warning'))
+        <div class="alert alert-warning">{{ session('warning') }}</div>
+    @endif
+
+    @if(session('import_errors') && count(session('import_errors')))
+        <div class="alert alert-info">
+            <strong>Details de l'import :</strong>
+            <ul class="mb-0">
+                @foreach(session('import_errors') as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="card mb-4">
         <div class="card-header"><strong>Nouvelle matiere</strong></div>
         <div class="card-body">
@@ -26,6 +55,27 @@
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button class="btn btn-success w-100">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header"><strong>Import Excel des matieres</strong></div>
+        <div class="card-body">
+            <form method="POST" action="{{ route('matieres.import.store') }}" enctype="multipart/form-data" class="row g-3">
+                @csrf
+                <div class="col-md-4 d-flex align-items-end">
+                    <a href="{{ route('matieres.import.template') }}" class="btn btn-info w-100">
+                        Telecharger le template Excel
+                    </a>
+                </div>
+                <div class="col-md-5">
+                    <label>Fichier Excel</label>
+                    <input type="file" name="fichier" class="form-control" accept=".xlsx,.xls,.csv" required>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-success w-100">Importer</button>
                 </div>
             </form>
         </div>

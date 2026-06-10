@@ -52,7 +52,7 @@
             <label>Banque</label>
             <select id="banque" name="id_banque" class="form-control">
                 <option value="">-- Choisir --</option>
-                @foreach(\App\Models\banque::all() as $b)
+                @foreach($banques as $b)
                     <option value="{{ $b->id }}">{{ $b->nom_banque }}</option>
                 @endforeach
             </select>
@@ -122,6 +122,10 @@
         $.get(baseUrl + '/ajax/solde-banque/' + id, function (data) {
             $('#solde_info').html('Solde : ' + data.solde);
             $('#montant').data('solde', data.solde);
+        }).fail(function (xhr) {
+            var response = xhr.responseJSON || {};
+            $('#solde_info').html(response.message || 'Impossible de charger le solde de cette banque');
+            $('#montant').data('solde', 0);
         });
     });
 

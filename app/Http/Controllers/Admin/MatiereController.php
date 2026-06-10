@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\MatieresTemplateExport;
 use App\Http\Controllers\Controller;
+use App\Imports\MatieresImport;
 use App\Models\Matiere;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 
 class MatiereController extends Controller
 {
@@ -29,6 +32,26 @@ class MatiereController extends Controller
         Matiere::create($data);
 
         return back()->with('success', 'Matiere creee avec succes.');
+    }
+
+    public function downloadTemplate()
+    {
+        return Excel::download(new MatieresTemplateExport(), 'template_import_matieres.xlsx');
+    }
+
+    public function importStore(Request $request)
+    {
+        $request->validate([
+            'fichier' => 'required|file|mimes:xlsx,xls,csv',
+        ]);
+
+        $import = new MatieresImport();
+        Excel::import($import, $request->file('fichier'));
+
+        return redirect()->route('matieres.index')
+            ->with('success', $import->createdCount() . ' matiere(s) creee(s), ' . $import->updatedCount() . ' matiere(s) mise(s) a jour.')
+            ->with('warning', $import->skippedCount() . ' ligne(s) ignoree(s).')
+            ->with('import_errors', $import->errors());
     }
 
     public function update(Request $request, Matiere $matiere)

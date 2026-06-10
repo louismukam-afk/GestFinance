@@ -7,6 +7,7 @@ use App\Models\annee_academique;
 use App\Models\bon_commandeok;
 use App\Models\Budget;
 use App\Models\BanqueUser;
+use App\Models\banque;
 use App\Models\CaisseUser;
 use App\Models\caisse;
 use App\Models\decaissement;
@@ -17,6 +18,7 @@ use App\Models\entite;
 use App\Models\entree_speciale;
 use App\Models\ligne_budgetaire_sortie;
 use App\Models\personnel;
+use App\Models\reglement_etudiant;
 use App\Models\Transfert_caisse;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -130,6 +132,7 @@ class DecaissementController extends Controller
         $totalDecaisse = decaissement::where('id_bon_commande', $id)->sum('montant');
         $reste = $bon->montant_total - $totalDecaisse;
         $caissest = $this->caissesAffecteesUtilisateur(auth()->id(), 'decaissement');
+        $banques = $this->banquesAffecteesUtilisateur(auth()->id(), 'decaissement');
         // 🔥 DONNÉES
         $budgets = Budget::all();
         $annees = annee_academique::all();
@@ -145,7 +148,8 @@ class DecaissementController extends Controller
         return view('decaissements.create', compact(
             'bon',
             'reste',
-            'caissest'
+            'caissest',
+            'banques'
         ));
     }
     public function getSoldeAjax($id)
@@ -219,6 +223,9 @@ class DecaissementController extends Controller
 
     private function soldeBanque(int $idBanque): float
     {
+        $reglements = reglement_etudiant::where('id_banque', $idBanque)
+            ->sum('montant_reglement');
+
         $entree = Transfert_caisse::where('id_banque_arrivee', $idBanque)
             ->where('type_transfert', '!=', 2)
             ->sum('montant_transfert');
@@ -236,7 +243,7 @@ class DecaissementController extends Controller
             ->get()
             ->sum(fn($e) => $e->montant_net_encaisse);
 
-        return $entree + $entreesSpeciales - $sortie - $decaisse;
+        return $reglements + $entree + $entreesSpeciales - $sortie - $decaisse;
     }
 
     private function caissesAffecteesUtilisateur(?int $userId, string $operation)
@@ -254,6 +261,27 @@ class DecaissementController extends Controller
                     $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
                 });
         })->orderBy('nom_caisse')->get();
+    }
+
+    private function banquesAffecteesUtilisateur(?int $userId, string $operation)
+    {
+        if (auth()->user() && auth()->user()->isSuperAdmin()) {
+            return banque::orderBy('nom_banque')->get();
+        }
+
+        $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
+
+        return banque::whereHas('affectations', function ($query) use ($userId, $droit) {
+            $query->where('id_user', $userId)
+                ->where('actif', true)
+                ->where($droit, true)
+                ->where(function ($q) {
+                    $q->whereNull('date_debut')->orWhereDate('date_debut', '<=', now()->toDateString());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('date_fin')->orWhereDate('date_fin', '>=', now()->toDateString());
+                });
+        })->orderBy('nom_banque')->get();
     }
 
     private function utilisateurAutoriseCaisse(?int $userId, int $idCaisse, string $operation): bool
@@ -275,6 +303,10 @@ class DecaissementController extends Controller
 
     private function utilisateurAutoriseBanque(?int $userId, int $idBanque, string $operation): bool
     {
+        if (auth()->user() && auth()->user()->isSuperAdmin()) {
+            return true;
+        }
+
         $droit = $operation === 'encaissement' ? 'peut_encaisser' : 'peut_decaisser';
 
         return BanqueUser::where('id_user', $userId)
