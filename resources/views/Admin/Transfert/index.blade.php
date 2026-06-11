@@ -13,6 +13,36 @@
             ➕ Nouveau Transfert
         </button>
 
+        <form method="GET" action="{{ route('transfert_management') }}" class="panel panel-default mt-3" style="padding: 15px;">
+            <div class="row">
+                <div class="col-md-4">
+                    <label>Recherche caisse / banque</label>
+                    <input type="text" name="recherche" class="form-control"
+                           placeholder="Nom caisse, nom banque ou code transfert"
+                           value="{{ request('recherche') }}">
+                </div>
+                <div class="col-md-3">
+                    <label>Date debut</label>
+                    <input type="date" name="date_debut" class="form-control" value="{{ request('date_debut') }}">
+                </div>
+                <div class="col-md-3">
+                    <label>Date fin</label>
+                    <input type="date" name="date_fin" class="form-control" value="{{ request('date_fin') }}">
+                </div>
+                <div class="col-md-2" style="padding-top: 25px;">
+                    <button type="submit" class="btn btn-primary btn-block">Filtrer</button>
+                </div>
+            </div>
+            <div class="mt-2">
+                <a href="{{ route('transfert_management') }}" class="btn btn-default">Reinitialiser</a>
+                <a href="{{ route('imprimer_liste_transferts', request()->only(['recherche', 'date_debut', 'date_fin'])) }}"
+                   target="_blank"
+                   class="btn btn-info">
+                    Imprimer la liste
+                </a>
+            </div>
+        </form>
+
         <div class="table-responsive mt-3">
             <table id="transfertsTable" class="table table-bordered table-striped">
                 <thead>

@@ -12,11 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 class TransfertCaisseController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $transferts = Transfert_caisse::with(['caisseDepart', 'caisseArrivee', 'banqueDepart', 'banqueArrivee'])
-            ->latest()
-            ->get();
+        $transferts = $this->transfertsFiltres($request)->get();
         $caisses1 = caisse::all()->map(function ($caisse) {
             $caisse->solde_calcule = $this->getSoldeCaisse($caisse->id);
             return $caisse;
@@ -26,6 +24,37 @@ class TransfertCaisseController extends Controller
         $title = "Gestion des Transferts";
 
         return view('Admin.Transfert.index', compact('transferts', 'caisses','caisses1', 'banques', 'title'));
+    }
+
+    private function transfertsFiltres(Request $request)
+    {
+        $recherche = trim((string) $request->input('recherche'));
+
+        return Transfert_caisse::with([
+            'caisseDepart',
+            'caisseArrivee',
+            'banqueDepart',
+            'banqueArrivee',
+            'user',
+            'userLast',
+        ])
+            ->when($request->filled('date_debut'), function ($query) use ($request) {
+                $query->whereDate('date_transfert', '>=', $request->date_debut);
+            })
+            ->when($request->filled('date_fin'), function ($query) use ($request) {
+                $query->whereDate('date_transfert', '<=', $request->date_fin);
+            })
+            ->when($recherche !== '', function ($query) use ($recherche) {
+                $query->where(function ($q) use ($recherche) {
+                    $q->where('code_transfert', 'like', "%{$recherche}%")
+                        ->orWhereHas('caisseDepart', fn($sub) => $sub->where('nom_caisse', 'like', "%{$recherche}%"))
+                        ->orWhereHas('caisseArrivee', fn($sub) => $sub->where('nom_caisse', 'like', "%{$recherche}%"))
+                        ->orWhereHas('banqueDepart', fn($sub) => $sub->where('nom_banque', 'like', "%{$recherche}%"))
+                        ->orWhereHas('banqueArrivee', fn($sub) => $sub->where('nom_banque', 'like', "%{$recherche}%"));
+                });
+            })
+            ->orderByDesc('date_transfert')
+            ->orderByDesc('id');
     }
 
     /**
@@ -383,5 +412,20 @@ class TransfertCaisseController extends Controller
         $fileName = 'transfert_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $transfert->code_transfert ?: $transfert->id) . '.pdf';
 
         return $pdf->stream($fileName);
+    }
+
+    public function imprimerListe(Request $request)
+    {
+        $transferts = $this->transfertsFiltres($request)->get();
+
+        $pdf = Pdf::loadView('Admin.Transfert.liste_pdf', [
+            'transferts' => $transferts,
+            'title' => 'Liste des transferts',
+            'dateDebut' => $request->date_debut,
+            'dateFin' => $request->date_fin,
+            'recherche' => $request->recherche,
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->stream('liste_transferts.pdf');
     }
 }

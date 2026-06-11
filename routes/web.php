@@ -738,6 +738,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transferts/update', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'update'])
         ->name('update_transfert');
 
+    Route::get('transferts/imprimer-liste', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'imprimerListe'])
+        ->name('imprimer_liste_transferts');
+
     Route::get('transferts/{id}/imprimer', [\App\Http\Controllers\Admin\TransfertCaisseController::class, 'imprimer'])
         ->name('imprimer_transfert');
 
