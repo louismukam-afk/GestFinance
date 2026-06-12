@@ -55,7 +55,14 @@
                                         @endforeach
                                     </select>
                                 </td>
-                                <td><input type="text" name="semestre" value="{{ $programme->semestre }}" class="form-control" placeholder="S1, S2..."></td>
+                                <td>
+                                    <select name="semestre" class="form-control">
+                                        <option value="">-- Choisir --</option>
+                                        @foreach(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'] as $semestre)
+                                            <option value="{{ $semestre }}" {{ $programme->semestre === $semestre ? 'selected' : '' }}>{{ $semestre }}</option>
+                                        @endforeach
+                                    </select>
+                                </td>
                                 <td><input type="number" step="0.5" name="volume_horaire" value="{{ $programme->volume_horaire }}" class="form-control"></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary">Modifier</button>
@@ -78,7 +85,7 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('programmes_specialites.store', $specialite) }}">
+    <form method="POST" action="{{ route('programmes_specialites.store', $specialite) }}" id="programme-form">
         @csrf
         @foreach($context as $key => $value)
             <input type="hidden" name="{{ $key }}" value="{{ $value }}">
@@ -114,25 +121,32 @@
                             @forelse($matieres as $i => $matiere)
                                 <tr class="matiere-row">
                                     <td>
-                                        <input type="checkbox" name="programmes[{{ $i }}][selected]" value="1">
-                                        <input type="hidden" name="programmes[{{ $i }}][id_matiere]" value="{{ $matiere->id }}">
+                                        <input type="checkbox" name="programmes[{{ $i }}][selected]" value="1" class="matiere-selected">
+                                        <input type="hidden" name="programmes[{{ $i }}][id_matiere]" value="{{ $matiere->id }}" class="matiere-field">
                                     </td>
                                     <td>
                                         <strong>{{ $matiere->nom_matiere }}</strong><br>
                                         <small class="text-muted">{{ $matiere->code_matiere }}</small>
                                     </td>
-                                    <td><input type="text" name="programmes[{{ $i }}][code_matiere_specialite]" class="form-control"></td>
-                                    <td><input type="number" step="0.01" name="programmes[{{ $i }}][coefficient]" class="form-control"></td>
-                                    <td><input type="number" step="0.01" name="programmes[{{ $i }}][coefficient_maximum]" class="form-control"></td>
+                                    <td><input type="text" name="programmes[{{ $i }}][code_matiere_specialite]" class="form-control matiere-field"></td>
+                                    <td><input type="number" step="0.01" name="programmes[{{ $i }}][coefficient]" class="form-control matiere-field" value="1"></td>
+                                    <td><input type="number" step="0.01" name="programmes[{{ $i }}][coefficient_maximum]" class="form-control matiere-field" value="1"></td>
                                     <td>
-                                        <select name="programmes[{{ $i }}][type_matiere]" class="form-control">
+                                        <select name="programmes[{{ $i }}][type_matiere]" class="form-control matiere-field">
                                             <option value="transversale">Transversale</option>
                                             <option value="professionnelle" selected>Professionnelle</option>
                                             <option value="fondamentale">Fondamentale</option>
                                         </select>
                                     </td>
-                                    <td><input type="text" name="programmes[{{ $i }}][semestre]" class="form-control" placeholder="S1, S2..."></td>
-                                    <td><input type="number" step="0.5" name="programmes[{{ $i }}][volume_horaire]" class="form-control"></td>
+                                    <td>
+                                        <select name="programmes[{{ $i }}][semestre]" class="form-control matiere-field">
+                                            <option value="">-- Choisir --</option>
+                                            @foreach(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'] as $semestre)
+                                                <option value="{{ $semestre }}">{{ $semestre }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td><input type="number" step="0.5" name="programmes[{{ $i }}][volume_horaire]" class="form-control matiere-field"></td>
                                 </tr>
                             @empty
                                 <tr>
@@ -154,6 +168,16 @@ document.getElementById('matiere-search').addEventListener('input', function () 
     const term = this.value.toLowerCase();
     document.querySelectorAll('.matiere-row').forEach(function (row) {
         row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none';
+    });
+});
+
+document.getElementById('programme-form').addEventListener('submit', function () {
+    document.querySelectorAll('.matiere-row').forEach(function (row) {
+        const checked = row.querySelector('.matiere-selected').checked;
+
+        row.querySelectorAll('.matiere-field').forEach(function (field) {
+            field.disabled = !checked;
+        });
     });
 });
 </script>

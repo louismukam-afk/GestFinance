@@ -100,15 +100,18 @@ class ProgrammeSpecialiteController extends Controller
             'programmes.*.coefficient' => 'nullable|numeric|min:0',
             'programmes.*.coefficient_maximum' => 'nullable|numeric|min:0',
             'programmes.*.type_matiere' => 'nullable|in:transversale,professionnelle,fondamentale',
-            'programmes.*.semestre' => 'nullable|string|max:50',
+            'programmes.*.semestre' => 'nullable|in:S1,S2,S3,S4,S5,S6,S7,S8,S9,S10',
             'programmes.*.volume_horaire' => 'nullable|numeric|min:0',
         ]);
 
-        foreach ($request->input('programmes', []) as $line) {
-            if (empty($line['selected'])) {
-                continue;
-            }
+        $selected = collect($request->input('programmes', []))
+            ->filter(fn($line) => !empty($line['selected']));
 
+        if ($selected->isEmpty()) {
+            return back()->with('error', 'Aucune matiere selectionnee n a ete recue. Coche au moins une matiere puis recommence.');
+        }
+
+        foreach ($selected as $line) {
             ProgrammeSpecialite::updateOrCreate(
                 [
                     'id_specialite' => $specialite->id,
@@ -141,7 +144,7 @@ class ProgrammeSpecialiteController extends Controller
             'coefficient' => 'nullable|numeric|min:0',
             'coefficient_maximum' => 'nullable|numeric|min:0',
             'type_matiere' => 'required|in:transversale,professionnelle,fondamentale',
-            'semestre' => 'nullable|string|max:50',
+            'semestre' => 'nullable|in:S1,S2,S3,S4,S5,S6,S7,S8,S9,S10',
             'volume_horaire' => 'nullable|numeric|min:0',
         ]);
 
