@@ -33,7 +33,7 @@ class DecaissementController extends Controller
     public function index(Request $request)
     {
         $query = bon_commandeok::with(['personnels', 'user', 'decaissements'])
-            ->where('statuts', 1);
+            ->valides();
 
         // 🔍 FILTRES
         if ($request->date_debut) {
@@ -68,10 +68,7 @@ class DecaissementController extends Controller
     public function indexvalide()
     {
         $bons = bon_commandeok::with(['personnels'])
-            ->where(function ($q) {
-                $q->where('statuts', 1)
-                    ->orWhere('validation_pdg', true);
-            })
+            ->valides()
             ->get()
             ->map(function ($bon) {
 
@@ -94,10 +91,7 @@ class DecaissementController extends Controller
     }
     public function index1()
     {
-        $bons = bon_commandeok::where(function ($q) {
-            $q->where('statuts', 1)
-                ->orWhere('validation_pdg', true);
-        })->get();
+        $bons = bon_commandeok::valides()->get();
 
         return view('decaissements.index', compact('bons'));
     }
@@ -124,7 +118,7 @@ class DecaissementController extends Controller
             'entree_speciale',
         ])->findOrFail($id);
 
-        if (!$bon->statuts || !$bon->id_budget || !$bon->id_donnee_ligne_budgetaire_sortie || !$bon->id_annee_academique) {
+        if (!$bon->isValidePourFinancement() || !$bon->id_budget || !$bon->id_donnee_ligne_budgetaire_sortie || !$bon->id_annee_academique) {
             return redirect()->route('decaissements.index')
                 ->with('error', 'Ce bon doit etre valide et impute par la DAF avant financement.');
         }
@@ -338,7 +332,7 @@ class DecaissementController extends Controller
 
         $bon = bon_commandeok::findOrFail($request->id_bon_commande);
 
-        if ($bon->statuts != 1) {
+        if (!$bon->isValidePourFinancement()) {
             return back()->with('error', 'Bon non valide par tous les niveaux');
         }
 
@@ -347,7 +341,7 @@ class DecaissementController extends Controller
         }
 
         // 🔒 Vérification validation
-        if (!$bon->validation_pdg && $bon->statuts != 1) {
+        if (!$bon->validation_pdg && !$bon->isValidePourFinancement()) {
             return back()->with('error', 'Bon non validé');
         }
 
@@ -592,7 +586,7 @@ class DecaissementController extends Controller
         $bon = bon_commandeok::findOrFail($request->id_bon_commande);
 
         // 🔒 Vérification validation
-        if (!$bon->validation_pdg && $bon->statuts != 1) {
+        if (!$bon->validation_pdg && !$bon->isValidePourFinancement()) {
             return back()->with('error', 'Bon non validé');
         }
 
@@ -714,7 +708,7 @@ class DecaissementController extends Controller
         $bon = bon_commandeok::findOrFail($request->id_bon_commande);
 
         // 🔒 Vérification validation bon
-        if (!$bon->validation_pdg && $bon->statuts != 1) {
+        if (!$bon->validation_pdg && !$bon->isValidePourFinancement()) {
             return back()->with('error', 'Bon non validé');
         }
 
@@ -1181,7 +1175,7 @@ class DecaissementController extends Controller
             'budget',
             'annee_academique',
         ])
-            ->where('statuts', 1)
+            ->valides()
             ->when($request->id_entite, fn($q) => $q->where('id_entite', $request->id_entite))
             ->when($request->id_annee_academique, fn($q) => $q->where('id_annee_academique', $request->id_annee_academique))
             // Vue globale: aucun filtre sur id_user, tous les bons valides sont visibles.

@@ -192,7 +192,7 @@ class ElementBonCommandeController extends Controller
 
         // (optionnel si tu veux stocker)
         $bon->update([
-            'statuts' => ($reste > 0) ? 0 : 1
+            'statuts' => $bon->isValidePourFinancement() ? 1 : $bon->statuts
         ]);
 
         return redirect()

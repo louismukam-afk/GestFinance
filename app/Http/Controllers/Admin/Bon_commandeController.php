@@ -44,7 +44,17 @@ class Bon_commandeController extends Controller
         $bons = bon_commandeok::with('personnels','entites')
             ->when($request->date_debut, fn($q) => $q->whereDate('date_debut', '>=', $request->date_debut))
             ->when($request->date_fin, fn($q) => $q->whereDate('date_debut', '<=', $request->date_fin))
-            ->when($request->statut !== null && $request->statut !== '', fn($q) => $q->where('statuts', $request->statut))
+            ->when($request->statut === '1', fn($q) => $q->valides())
+            ->when($request->statut === '0', function ($q) {
+                $q->where('statuts', 0)
+                    ->where(function ($sub) {
+                        $sub->where('validation_pdg', 0)
+                            ->orWhere('validation_daf', 0)
+                            ->orWhere('validation_achats', 0)
+                            ->orWhere('validation_emetteur', 0);
+                    });
+            })
+            ->when($request->statut === '2', fn($q) => $q->where('statuts', 2))
             ->orderBy('date_debut', 'desc')
             ->get()
             ->groupBy('id_personnel')

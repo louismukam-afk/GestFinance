@@ -40,11 +40,11 @@
 
             {{-- ✅ Affichage clair du statut --}}
             <td>
-                @if($bon->statuts == 0)
+                @if($bon->statut_bon_code == 0)
                     <span class="label label-warning">En attente</span>
-                @elseif($bon->statuts == 1)
+                @elseif($bon->statut_bon_code == 1)
                     <span class="label label-success">Validé</span>
-                @elseif($bon->statuts == 2)
+                @elseif($bon->statut_bon_code == 2)
                     <span class="label label-danger">Rejeté</span>
                 @else
                     <span class="label label-default">Inconnu</span>

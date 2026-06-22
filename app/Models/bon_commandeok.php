@@ -208,6 +208,36 @@ class bon_commandeok extends Model
         return -1;
     }
 
+    public function scopeValides($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('statuts', 1)
+                ->orWhere(function ($sub) {
+                    $sub->where('validation_pdg', 1)
+                        ->where('validation_daf', 1)
+                        ->where('validation_achats', 1)
+                        ->where('validation_emetteur', 1)
+                        ->where(function ($r) {
+                            $r->whereNull('refus_pdg')->orWhere('refus_pdg', 0);
+                        })
+                        ->where(function ($r) {
+                            $r->whereNull('refus_daf')->orWhere('refus_daf', 0);
+                        })
+                        ->where(function ($r) {
+                            $r->whereNull('refus_achats')->orWhere('refus_achats', 0);
+                        })
+                        ->where(function ($r) {
+                            $r->whereNull('refus_emetteur')->orWhere('refus_emetteur', 0);
+                        });
+                });
+        });
+    }
+
+    public function isValidePourFinancement(): bool
+    {
+        return $this->statut_bon_code === 1;
+    }
+
     public function getStatutBonLibelleAttribute(): string
     {
         return match ($this->statut_bon_code) {

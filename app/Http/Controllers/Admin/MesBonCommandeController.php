@@ -213,10 +213,16 @@ class MesBonCommandeController extends Controller
                         ->orWhere('description_bon_commande', 'like', '%' . $request->search . '%');
                 });
             })
-            ->when($type === 'valides', fn($q) => $q->where(function ($sub) {
-                $sub->where('statuts', 1);
-            }))
-            ->when($type === 'attente', fn($q) => $q->where('validation_pdg', 0)->where('statuts', 0))
+            ->when($type === 'valides', fn($q) => $q->valides())
+            ->when($type === 'attente', function ($q) {
+                $q->where('statuts', 0)
+                    ->where(function ($sub) {
+                        $sub->where('validation_pdg', 0)
+                            ->orWhere('validation_daf', 0)
+                            ->orWhere('validation_achats', 0)
+                            ->orWhere('validation_emetteur', 0);
+                    });
+            })
             ->when($type === 'refuses', fn($q) => $q->where('statuts', 2))
             ->orderBy('date_debut', 'desc');
     }
@@ -233,10 +239,16 @@ class MesBonCommandeController extends Controller
                         ->orWhere('description_bon_commande', 'like', '%' . $request->search . '%');
                 });
             })
-            ->when($type === 'valides', fn($q) => $q->where(function ($sub) {
-                $sub->where('statuts', 1);
-            }))
-            ->when($type === 'attente', fn($q) => $q->where('validation_pdg', 0)->where('statuts', 0))
+            ->when($type === 'valides', fn($q) => $q->valides())
+            ->when($type === 'attente', function ($q) {
+                $q->where('statuts', 0)
+                    ->where(function ($sub) {
+                        $sub->where('validation_pdg', 0)
+                            ->orWhere('validation_daf', 0)
+                            ->orWhere('validation_achats', 0)
+                            ->orWhere('validation_emetteur', 0);
+                    });
+            })
             ->when($type === 'refuses', fn($q) => $q->where('statuts', 2))
             ->orderBy('date_debut', 'desc');
     }
