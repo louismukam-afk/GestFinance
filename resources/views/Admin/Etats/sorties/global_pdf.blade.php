@@ -88,6 +88,16 @@
 <p class="summary">
     Disponibilité : <strong>{{ number_format($disponibilite) }} FCFA</strong>
     |
+    <br>
+    Annees academiques :
+    <strong>
+        @if(($selectedAnnees ?? collect())->isNotEmpty())
+            {{ $selectedAnnees->pluck('nom')->implode(', ') }}
+        @else
+            Toutes
+        @endif
+    </strong>
+    <br>
     Déficit : <strong>{{ number_format($deficit) }} FCFA</strong>
 </p>
 

@@ -676,23 +676,33 @@ class EtatComptableController extends Controller
 
     public function exportSituationEtudiantPdf(Request $request)
     {
-        $factures = facture_etudiant::with('reglement_etudiants')
+        $factures = facture_etudiant::with(['reglement_etudiants', 'reductions', 'specialites'])
             ->where('id_etudiant', $request->etudiant)
             ->when(
                 $request->annee,
                 fn ($q) => $q->where('id_annee_academique', $request->annee)
-        )
-        ->get();
+            )
+            ->when(
+                $request->specialite,
+                fn ($q) => $q->where('id_specialite', $request->specialite)
+            )
+            ->when(
+                $request->niveau,
+                fn ($q) => $q->whereHas('specialites', fn ($s) => $s->where('id_niveau', $request->niveau))
+            )
+            ->get();
 
     $result = $factures->map(function ($f) {
         $encaisse = $f->reglement_etudiants->sum('montant_reglement');
+        $reduction = $f->montant_reduction;
 
         return [
             'facture'  => $f->numero_facture,
             'date'     => $f->date_facture,
             'montant'  => $f->montant_total_facture,
+            'reduction' => $reduction,
             'encaisse' => $encaisse,
-            'reste'    => $f->montant_total_facture - $encaisse,
+            'reste'    => $f->montant_total_facture - $reduction - $encaisse,
         ];
     });
 
@@ -726,6 +736,7 @@ class EtatComptableController extends Controller
 
             $query = \App\Models\facture_etudiant::with([
                 'reglement_etudiants',
+                'reductions',
                 'specialites',
                 'ligne_budgetaire_entree',
                 'budget'
@@ -770,13 +781,15 @@ class EtatComptableController extends Controller
             // =========================
             $result = $query->get()->map(function ($f) {
                 $encaisse = $f->reglement_etudiants->sum('montant_reglement');
+                $reduction = $f->montant_reduction;
 
                 return [
                     'facture'  => $f->numero_facture,
                     'date'     => $f->date_facture,
                     'montant'  => $f->montant_total_facture,
+                    'reduction' => $reduction,
                     'encaisse' => $encaisse,
-                    'reste'    => $f->montant_total_facture - $encaisse,
+                    'reste'    => $f->montant_total_facture - $reduction - $encaisse,
                 ];
             });
         }

@@ -33,14 +33,20 @@
 
             <div class="col-md-3">
                 <label>Année académique</label>
-                <select name="id_annee_academique" class="form-control">
-                    <option value="">Toutes</option>
+                <div class="border rounded p-2 bg-light" style="max-height: 150px; overflow-y: auto;">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input js-annee-all" id="atterrissage_annee_all" {{ ($anneeIds ?? collect())->isEmpty() ? 'checked' : '' }}>
+                        <label class="form-check-label" for="atterrissage_annee_all">Toutes</label>
+                    </div>
                     @foreach($annees as $a)
-                        <option value="{{ $a->id }}" {{ request('id_annee_academique') == $a->id ? 'selected' : '' }}>
-                            {{ $a->nom }}
-                        </option>
+                        <div class="form-check">
+                            <input type="checkbox" name="id_annee_academique[]" value="{{ $a->id }}"
+                                   class="form-check-input js-annee-item" id="atterrissage_annee_{{ $a->id }}"
+                                    {{ ($anneeIds ?? collect())->contains($a->id) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="atterrissage_annee_{{ $a->id }}">{{ $a->nom }}</label>
+                        </div>
                     @endforeach
-                </select>
+                </div>
             </div>
 
             <div class="col-md-3">
@@ -77,6 +83,13 @@
         <div class="alert alert-info">
             💰 <strong>Disponibilité globale :</strong>
             {{ number_format($soldeGlobal,0,',',' ') }} FCFA
+            <br>
+            <strong>Annees prises en compte :</strong>
+            @if(($selectedAnnees ?? collect())->isNotEmpty())
+                {{ $selectedAnnees->pluck('nom')->implode(', ') }}
+            @else
+                Toutes
+            @endif
         </div>
 
         {{-- TABLE PAR ENTITÉ --}}
@@ -193,4 +206,22 @@
             }
         }
     </style>
+@endsection
+
+@section('scripts')
+    <script>
+        $(function () {
+            $('.js-annee-all').on('change', function () {
+                if ($(this).is(':checked')) {
+                    $(this).closest('form').find('.js-annee-item').prop('checked', false);
+                }
+            });
+
+            $('.js-annee-item').on('change', function () {
+                var $form = $(this).closest('form');
+                var hasSelectedYear = $form.find('.js-annee-item:checked').length > 0;
+                $form.find('.js-annee-all').prop('checked', !hasSelectedYear);
+            });
+        });
+    </script>
 @endsection

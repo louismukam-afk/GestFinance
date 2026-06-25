@@ -36,6 +36,7 @@
         <th>Facture</th>
         <th>Date</th>
         <th>Montant</th>
+        <th>Reduction</th>
         <th>Encaissé</th>
         <th>Reste</th>
     </tr>
@@ -44,6 +45,7 @@
 
     @php
         $total = 0;
+        $reduction = 0;
         $encaisse = 0;
         $reste = 0;
     @endphp
@@ -53,12 +55,14 @@
             <td>{{ $r['facture'] }}</td>
             <td>{{ $r['date'] }}</td>
             <td class="right">{{ number_format($r['montant'],0,',',' ') }}</td>
+            <td class="right">{{ number_format($r['reduction'] ?? 0,0,',',' ') }}</td>
             <td class="right">{{ number_format($r['encaisse'],0,',',' ') }}</td>
             <td class="right">{{ number_format($r['reste'],0,',',' ') }}</td>
         </tr>
 
         @php
             $total += $r['montant'];
+            $reduction += $r['reduction'] ?? 0;
             $encaisse += $r['encaisse'];
             $reste += $r['reste'];
         @endphp
@@ -69,6 +73,7 @@
     <tr style="font-weight:bold;background:#F2F2F2;">
         <td colspan="2">TOTAL</td>
         <td class="right">{{ number_format($total,0,',',' ') }}</td>
+        <td class="right">{{ number_format($reduction,0,',',' ') }}</td>
         <td class="right">{{ number_format($encaisse,0,',',' ') }}</td>
         <td class="right">{{ number_format($reste,0,',',' ') }}</td>
     </tr>

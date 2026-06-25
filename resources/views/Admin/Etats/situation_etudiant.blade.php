@@ -9,11 +9,11 @@
 
             <div class="col-md-3">
                 <label>Étudiant *</label>
-                <select name="etudiant" class="form-control" required>
+                <select name="etudiant" class="form-control js-etudiant-search" required>
                     <option value="">-- Sélectionner --</option>
                     @foreach($etudiants as $e)
                         <option value="{{ $e->id }}" {{ request('etudiant')==$e->id?'selected':'' }}>
-                            {{ $e->nom }}
+                            {{ trim(($e->nom ?? '').' '.($e->prenom ?? '')) }}{{ $e->matricule ? ' - '.$e->matricule : '' }}
                         </option>
                     @endforeach
                 </select>
@@ -75,6 +75,7 @@
                     <th>Facture</th>
                     <th>Date</th>
                     <th class="text-end">Montant</th>
+                    <th class="text-end">Reduction</th>
                     <th class="text-end">Encaissé</th>
                     <th class="text-end">Reste</th>
                 </tr>
@@ -84,6 +85,7 @@
 
                 @php
                     $total = 0;
+                    $reduction = 0;
                     $encaisse = 0;
                     $reste = 0;
                 @endphp
@@ -93,12 +95,14 @@
                         <td>{{ $r['facture'] }}</td>
                         <td>{{ $r['date'] }}</td>
                         <td class="text-end">{{ number_format($r['montant'],0,',',' ') }}</td>
+                        <td class="text-end">{{ number_format($r['reduction'] ?? 0,0,',',' ') }}</td>
                         <td class="text-end">{{ number_format($r['encaisse'],0,',',' ') }}</td>
                         <td class="text-end">{{ number_format($r['reste'],0,',',' ') }}</td>
                     </tr>
 
                     @php
                         $total += $r['montant'];
+                        $reduction += $r['reduction'] ?? 0;
                         $encaisse += $r['encaisse'];
                         $reste += $r['reste'];
                     @endphp
@@ -110,6 +114,7 @@
                 <tr>
                     <td colspan="2">TOTAL</td>
                     <td class="text-end">{{ number_format($total,0,',',' ') }}</td>
+                    <td class="text-end">{{ number_format($reduction,0,',',' ') }}</td>
                     <td class="text-end">{{ number_format($encaisse,0,',',' ') }}</td>
                     <td class="text-end">{{ number_format($reste,0,',',' ') }}</td>
                 </tr>
@@ -119,6 +124,23 @@
         @endif
 
     </div>
+@endsection
+
+@section('styles')
+    <link rel="stylesheet" href="{{ asset('vendor/laravel-admin/AdminLTE/plugins/select2/select2.min.css') }}">
+@endsection
+
+@section('scripts')
+    <script src="{{ asset('vendor/laravel-admin/AdminLTE/plugins/select2/select2.full.min.js') }}"></script>
+    <script>
+        $(function () {
+            $('.js-etudiant-search').select2({
+                placeholder: '-- Selectionner --',
+                allowClear: true,
+                width: '100%'
+            });
+        });
+    </script>
 @endsection
 @section('breadcrumb')
     <ol class="breadcrumb" style="background-color: transparent; padding: 4px 10px">

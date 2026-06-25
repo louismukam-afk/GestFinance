@@ -91,6 +91,15 @@
 <p class="summary">
     Disponibilite globale :
     <strong>{{ number_format($soldeGlobal ?? 0, 0, ',', ' ') }} FCFA</strong>
+    <br>
+    Annees academiques :
+    <strong>
+        @if(($selectedAnnees ?? collect())->isNotEmpty())
+            {{ $selectedAnnees->pluck('nom')->implode(', ') }}
+        @else
+            Toutes
+        @endif
+    </strong>
 </p>
 
 <div class="section">
