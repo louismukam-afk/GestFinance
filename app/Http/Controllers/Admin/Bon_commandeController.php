@@ -44,6 +44,7 @@ class Bon_commandeController extends Controller
         $bons = bon_commandeok::with('personnels','entites')
             ->when($request->date_debut, fn($q) => $q->whereDate('date_debut', '>=', $request->date_debut))
             ->when($request->date_fin, fn($q) => $q->whereDate('date_debut', '<=', $request->date_fin))
+            ->when($request->filled('id_personnel'), fn($q) => $q->where('id_personnel', $request->id_personnel))
             ->when($request->statut === '1', fn($q) => $q->valides())
             ->when($request->statut === '0', function ($q) {
                 $q->where('statuts', 0)
@@ -83,7 +84,11 @@ class Bon_commandeController extends Controller
             });
         }
 
-        $bons = $query->get()->groupBy('personnel_id');
+        if ($request->filled('id_personnel')) {
+            $query->where('id_personnel', $request->id_personnel);
+        }
+
+        $bons = $query->get()->groupBy('id_personnel');
 
         $p = personnel::all();
         $e = entite::all();

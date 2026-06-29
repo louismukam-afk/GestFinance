@@ -86,8 +86,33 @@
 </p>
 
 <p class="summary">
-    Disponibilité : <strong>{{ number_format($disponibilite) }} FCFA</strong>
+    Disponibilite reelle caisse :
+    <strong>Situation du {{ $dateDisponibilite ?? now()->format('Y-m-d') }}</strong>
+    -
+    <strong>{{ number_format($disponibilite, 0, ',', ' ') }} FCFA</strong>
+    <br>
+    Disponibilite date fin :
+    <strong>Situation du {{ $dateDisponibiliteFiltree ?? request('date_fin', now()->format('Y-m-d')) }}</strong>
+    -
+    <strong>{{ number_format($disponibiliteFiltree ?? 0, 0, ',', ' ') }} FCFA</strong>
+    <br>
+    Total previsionnel :
+    <strong>{{ number_format($totalPrevisionnel ?? 0, 0, ',', ' ') }} FCFA</strong>
     |
+    Benefice budgetaire :
+    <strong>{{ number_format($beneficeBudgetaire ?? 0, 0, ',', ' ') }} FCFA</strong>
+    |
+    Deficit budgetaire :
+    <strong>{{ number_format($deficitBudgetaire ?? 0, 0, ',', ' ') }} FCFA</strong>
+    <br>
+    Previsionnel entrees :
+    <strong>{{ number_format($totalPrevisionnelEntrees ?? 0, 0, ',', ' ') }} FCFA</strong>
+    |
+    Previsionnel sorties :
+    <strong>{{ number_format($totalPrevisionnelSorties ?? 0, 0, ',', ' ') }} FCFA</strong>
+    |
+    Resultat :
+    <strong>{{ number_format($deficit, 0, ',', ' ') }} FCFA</strong>
     <br>
     Annees academiques :
     <strong>
@@ -97,8 +122,6 @@
             Toutes
         @endif
     </strong>
-    <br>
-    Déficit : <strong>{{ number_format($deficit) }} FCFA</strong>
 </p>
 
 {{-- ================= ENTRÉES ================= --}}

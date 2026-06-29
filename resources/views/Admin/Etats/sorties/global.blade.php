@@ -104,20 +104,49 @@
         </form>
 
         {{-- ================= KPI ================= --}}
-        <div class="alert alert-info text-center no-print">
-            💰 Disponibilité : <strong>{{ number_format($disponibilite) }} FCFA</strong>
-            |
-            ⚠️ Déficit :
-            <strong class="{{ $deficit < 0 ? 'text-danger' : 'text-success' }}">
-                {{ number_format($deficit) }} FCFA
-            </strong>
-            <br>
-            <strong>Annees prises en compte :</strong>
-            @if(($selectedAnnees ?? collect())->isNotEmpty())
-                {{ $selectedAnnees->pluck('nom')->implode(', ') }}
-            @else
-                Toutes
-            @endif
+        <div class="alert alert-info no-print">
+            <div class="row text-center">
+                <div class="col-md">
+                    <strong>Disponibilite reelle caisse</strong><br>
+                    <small>Situation du {{ $dateDisponibilite ?? now()->format('Y-m-d') }}</small><br>
+                    {{ number_format($disponibilite, 0, ',', ' ') }} FCFA
+                </div>
+                <div class="col-md">
+                    <strong>Disponibilite date fin</strong><br>
+                    <small>Situation du {{ $dateDisponibiliteFiltree ?? request('date_fin', now()->format('Y-m-d')) }}</small><br>
+                    {{ number_format($disponibiliteFiltree ?? 0, 0, ',', ' ') }} FCFA
+                </div>
+                <div class="col-md">
+                    <strong>Total previsionnel</strong><br>
+                    {{ number_format($totalPrevisionnel ?? 0, 0, ',', ' ') }} FCFA
+                </div>
+                <div class="col-md">
+                    <strong>Benefice budgetaire</strong><br>
+                    <span class="text-success">{{ number_format($beneficeBudgetaire ?? 0, 0, ',', ' ') }} FCFA</span>
+                </div>
+                <div class="col-md">
+                    <strong>Deficit budgetaire</strong><br>
+                    <span class="text-danger">{{ number_format($deficitBudgetaire ?? 0, 0, ',', ' ') }} FCFA</span>
+                </div>
+            </div>
+            <hr>
+            <div class="text-center">
+                <strong>Previsionnel entrees :</strong> {{ number_format($totalPrevisionnelEntrees ?? 0, 0, ',', ' ') }} FCFA
+                |
+                <strong>Previsionnel sorties :</strong> {{ number_format($totalPrevisionnelSorties ?? 0, 0, ',', ' ') }} FCFA
+                |
+                <strong>Resultat :</strong>
+                <span class="{{ $deficit < 0 ? 'text-danger' : 'text-success' }}">
+                    {{ number_format($deficit, 0, ',', ' ') }} FCFA
+                </span>
+                <br>
+                <strong>Annees prises en compte :</strong>
+                @if(($selectedAnnees ?? collect())->isNotEmpty())
+                    {{ $selectedAnnees->pluck('nom')->implode(', ') }}
+                @else
+                    Toutes
+                @endif
+            </div>
         </div>
 
         {{-- ================= ENTRÉES ================= --}}

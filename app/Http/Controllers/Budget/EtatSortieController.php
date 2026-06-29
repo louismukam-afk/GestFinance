@@ -120,7 +120,7 @@ class EtatSortieController extends Controller
     // ==========================
     // 🔥 SOLDE GLOBAL CAISSE
     // ==========================
-    $soldeGlobal = $this->buildDisponibiliteCaissesData($request)['totalApresTransfert'];
+    $soldeGlobal = $this->buildDisponibiliteCaissesData($this->disponibiliteDuJourRequest())['totalApresTransfert'];
 
     // ==========================
     // 🔥 DONNÉES BUDGÉTAIRES
@@ -258,6 +258,11 @@ class EtatSortieController extends Controller
             ->map(fn($value) => (int) $value)
             ->unique()
             ->values();
+    }
+
+    private function disponibiliteDuJourRequest(): Request
+    {
+        return new Request(['date_fin' => now()->format('Y-m-d')]);
     }
 
     private function buildEtatCaisseData(Request $request, bool $currentUserOnly = false): array
@@ -926,36 +931,30 @@ class EtatSortieController extends Controller
     private function buildDisponibiliteCaissesData(Request $request): array
     {
         $dateFin = $request->date_fin ?? now()->format('Y-m-d');
-        $anneeIds = $this->selectedAcademicYearIds($request);
 
-        $caisses = caisse::orderBy('nom_caisse')->get()->map(function ($caisse) use ($dateFin, $anneeIds) {
+        $caisses = caisse::orderBy('nom_caisse')->get()->map(function ($caisse) use ($dateFin) {
             $entreesReglements = reglement_etudiant::where('id_caisse', $caisse->id)
                 ->whereHas('facture_etudiants')
                 ->whereDate('date_reglement', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant_reglement');
 
             $entreesRetours = retour_caisse::where('id_caisse', $caisse->id)
                 ->whereDate('date_retour', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant');
 
             $entreesSpeciales = entree_speciale::with('echeances')
                 ->where('id_caisse', $caisse->id)
                 ->where('statut', '!=', 'annule')
                 ->whereDate('date_entree', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant');
 
             $sortiesDecaissements = decaissement::where('id_caisse', $caisse->id)
                 ->whereDate('date_depense', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant');
 
             $remboursementsDettes = entree_speciale_echeance::where('id_caisse_paiement', $caisse->id)
                 ->where('statut', 'payee')
                 ->whereDate('date_paiement', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique_paiement', $anneeIds))
                 ->sum('montant_paye');
 
             $transfertsEntrants = Transfert_caisse::where('id_caisse_arrivee', $caisse->id)
@@ -985,23 +984,20 @@ class EtatSortieController extends Controller
             ];
         });
 
-        $banques = banque::orderBy('nom_banque')->get()->map(function ($banque) use ($dateFin, $anneeIds) {
+        $banques = banque::orderBy('nom_banque')->get()->map(function ($banque) use ($dateFin) {
             $entreesReglements = reglement_etudiant::where('id_banque', $banque->id)
                 ->whereHas('facture_etudiants')
                 ->whereDate('date_reglement', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant_reglement');
 
             $entreesSpeciales = entree_speciale::with('echeances')
                 ->where('id_banque', $banque->id)
                 ->where('statut', '!=', 'annule')
                 ->whereDate('date_entree', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant');
 
             $sortiesDecaissements = decaissement::where('id_banque', $banque->id)
                 ->whereDate('date_depense', '<=', $dateFin)
-                ->when($anneeIds->isNotEmpty(), fn($q) => $q->whereIn('id_annee_academique', $anneeIds))
                 ->sum('montant');
 
             $transfertsEntrants = Transfert_caisse::where('id_banque_arrivee', $banque->id)
@@ -1204,7 +1200,10 @@ class EtatSortieController extends Controller
         // =========================
         // 💰 DISPONIBILITÉ CAISSE
         // =========================
-        $disponibilite = $this->buildDisponibiliteCaissesData($request)['totalApresTransfert'];
+        $dateDisponibilite = now()->format('Y-m-d');
+        $disponibilite = $this->buildDisponibiliteCaissesData($this->disponibiliteDuJourRequest())['totalApresTransfert'];
+        $dateDisponibiliteFiltree = $request->date_fin ?? now()->format('Y-m-d');
+        $disponibiliteFiltree = $this->buildDisponibiliteCaissesData($request)['totalApresTransfert'];
 
         // =========================
         // 🔵 ENTRÉES
@@ -1413,6 +1412,11 @@ class EtatSortieController extends Controller
         $resteSorties = $sorties->sum('reste');
 
         $deficit = $disponibilite + $resteEntrees - $resteSorties;
+        $beneficeBudgetaire = max($deficit, 0);
+        $deficitBudgetaire = max(-$deficit, 0);
+        $totalPrevisionnelEntrees = $entrees->sum('prevu');
+        $totalPrevisionnelSorties = $sorties->sum('prevu');
+        $totalPrevisionnel = $totalPrevisionnelEntrees + $totalPrevisionnelSorties;
         $annees  = annee_academique::orderBy('nom','desc')->get();
         $selectedAnnees = $annees->whereIn('id', $anneeIds)->values();
         $entites = entite::orderBy('nom_entite')->get();
@@ -1422,7 +1426,15 @@ class EtatSortieController extends Controller
             'entreesGrouped',
             'sortiesGrouped',
             'disponibilite',
+            'dateDisponibilite',
+            'disponibiliteFiltree',
+            'dateDisponibiliteFiltree',
             'deficit',
+            'beneficeBudgetaire',
+            'deficitBudgetaire',
+            'totalPrevisionnelEntrees',
+            'totalPrevisionnelSorties',
+            'totalPrevisionnel',
             'annees',
             'anneeIds',
             'selectedAnnees',

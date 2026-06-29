@@ -24,23 +24,35 @@
     </a>
 
     <form method="GET" action="{{ route('bon_commande_management') }}" class="row" style="margin-top:15px; margin-bottom:15px;">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label>Date debut</label>
             <input type="date" name="date_debut" value="{{ request('date_debut') }}" class="form-control">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label>Date fin</label>
             <input type="date" name="date_fin" value="{{ request('date_fin') }}" class="form-control">
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label>Statut</label>
             <select name="statut" class="form-control">
                 <option value="">Tous</option>
                 <option value="0" {{ request('statut') === '0' ? 'selected' : '' }}>En attente</option>
                 <option value="1" {{ request('statut') === '1' ? 'selected' : '' }}>Valide</option>
                 <option value="2" {{ request('statut') === '2' ? 'selected' : '' }}>Refuse</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label>Personnel</label>
+            <select name="id_personnel" class="form-control">
+                <option value="">Tous</option>
+                @foreach($personnels as $personnel)
+                    <option value="{{ $personnel->id }}" {{ request('id_personnel') == $personnel->id ? 'selected' : '' }}>
+                        {{ $personnel->nom }}
+                    </option>
+                @endforeach
             </select>
         </div>
 
