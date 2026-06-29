@@ -320,25 +320,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/pdf', [EtatBonCommandeController::class, 'exportPdfOne'])->name('etat_bons.exportPdfOne');
         Route::get('/{id}/excel', [EtatBonCommandeController::class, 'exportExcelOne'])->name('etat_bons.exportExcelOne');
 
-// Routes Etat Bons
-        Route::prefix('etat-bons')->group(function () {
-            // Liste principale avec filtres (dates, personnel, utilisateur)
-            Route::get('/', [EtatBonCommandeController::class, 'index'])->name('etat_bons.index');
-
-            // ✅ Export global (tous les bons filtrés)
-            Route::get('/export/pdf', [EtatBonCommandeController::class, 'exportPdf'])->name('etat_bons.export_pdf');
-            Route::get('/export/excel', [EtatBonCommandeController::class, 'exportExcel'])->name('etat_bons.export_excel');
-
-            // ✅ Export individuel (un seul bon)
-            Route::get('/{id}/export/pdf', [EtatBonCommandeController::class, 'exportPdfOne'])->name('etat_bons.pdf_one');
-            Route::get('/{id}/export/excel', [EtatBonCommandeController::class, 'exportExcelOne'])->name('etat_bons.excel_one');
-
-            // ✅ Détails d’un bon
-            Route::get('/{id}', [EtatBonCommandeController::class, 'show'])->name('etat_bons.show');
-        });
-
-        // Détails d’un bon
-        Route::get('/{id}', [EtatBonCommandeController::class, 'show'])->name('etat_bons.show');
     });
     Route::get('/budget/dashboard', function () {
         return view('Budget.index_budget')->with(['big_title' => 'Gestion des budgets']);
@@ -460,9 +441,9 @@ Route::middleware(['auth'])->group(function () {
     // Gestion des éléments d’une ligne sortie
     Route::prefix('ligne_budgetaire_sorties/{ligne_id}/elements')->group(function () {
         Route::get('/manage', [ElementLigneBudgetaireSortieController::class, 'manage'])->name('element_sorties.manage');
-        Route::get('/', [ElementLigneBudgetaireSortieController::class, 'indexElements'])->name('element_sorties.index');
-        Route::get('/create', [ElementLigneBudgetaireSortieController::class, 'create'])->name('element_sorties.create');
-        Route::post('/store', [ElementLigneBudgetaireSortieController::class, 'store'])->name('element_sorties.store');
+        Route::get('/', [ElementLigneBudgetaireSortieController::class, 'indexElements'])->name('element_sorties.index_elements');
+        Route::get('/create', [ElementLigneBudgetaireSortieController::class, 'create'])->name('element_sorties.create_for_ligne');
+        Route::post('/store', [ElementLigneBudgetaireSortieController::class, 'store'])->name('element_sorties.store_for_ligne');
     });
 
 // CRUD élément direct
