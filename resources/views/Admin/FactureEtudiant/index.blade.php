@@ -683,9 +683,29 @@
                 $('#edit-bloc-scolarite').toggle(isScolarite);
                 $('#edit-bloc-frais').toggle(!isScolarite);
                 if (isScolarite) {
-                    $('#edit-id-frais-hidden').val('');
+                    $('#edit-scolarite')
+                        .prop('required', true)
+                        .prop('disabled', false);
+
+                    $('#edit-id-frais-hidden')
+                        .prop('required', false)
+                        .prop('disabled', true)
+                        .val('');
+
+                    $('#edit-frais').prop('disabled', true);
                     $('#edit-montant-frais').val('');
                 } else {
+                    $('#edit-id-frais-hidden')
+                        .prop('required', true)
+                        .prop('disabled', false);
+
+                    $('#edit-frais').prop('disabled', false);
+
+                    $('#edit-scolarite')
+                        .prop('required', false)
+                        .prop('disabled', true)
+                        .val('');
+
                     const id = $('#edit-frais').val() || '';
                     const mt = $('#edit-frais option:selected').data('montant') || '';
                     $('#edit-id-frais-hidden').val(id);

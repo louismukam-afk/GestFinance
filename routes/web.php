@@ -432,8 +432,9 @@ Route::middleware(['auth'])->group(function () {
 
 
     Route::prefix('element_ligne_budgetaire_sorties')->group(function () {
-        Route::get('/{id_ligne}', [ElementLigneBudgetaireSortieController::class, 'index'])->name('element_sorties.index');
+        Route::get('/{id_ligne}', [ElementLigneBudgetaireSortieController::class, 'indexElements'])->name('element_sorties.index');
         Route::get('/{id_ligne}/create', [ElementLigneBudgetaireSortieController::class, 'create'])->name('element_sorties.create');
+        Route::get('/{id_ligne}/export/excel', [ElementLigneBudgetaireSortieController::class, 'exportExcel'])->name('element_sorties.export.excel');
         Route::post('/{id_ligne}/generate', [ElementLigneBudgetaireSortieController::class, 'generateForm'])->name('element_sorties.generate');
         Route::post('/{id_ligne}/store', [ElementLigneBudgetaireSortieController::class, 'store'])->name('element_sorties.store');
     });
@@ -456,6 +457,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{ligne_id}/manage', [ElementLigneBudgetaireEntreeController::class, 'manage'])->name('element_entrees.manage');
         Route::get('/{ligne_id}/index', [ElementLigneBudgetaireEntreeController::class, 'indexElements'])->name('element_entrees.index');
         Route::get('/{ligne_id}/create', [ElementLigneBudgetaireEntreeController::class, 'create'])->name('element_entrees.create');
+        Route::get('/{ligne_id}/export/excel', [ElementLigneBudgetaireEntreeController::class, 'exportExcel'])->name('element_entrees.export.excel');
         Route::post('/{ligne_id}/store', [ElementLigneBudgetaireEntreeController::class, 'store'])->name('element_entrees.store');
 
         Route::get('/{id}/edit', [ElementLigneBudgetaireEntreeController::class, 'edit'])->name('element_entrees.edit');

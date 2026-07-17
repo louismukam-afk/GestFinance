@@ -359,7 +359,8 @@ class FactureEtudiantController extends Controller
             'id_niveau'            => 'nullable|integer',
             'id_specialite'        => 'required|integer',
             'id_scolarite' => [
-                'required',
+                'required_if:type_facture,1',
+                'nullable',
                 'integer',
                 Rule::exists('scolarites', 'id')->where(fn($q) => $q->where('id_annee_academique', $r->id_annee_academique)),
             ],
@@ -377,9 +378,10 @@ class FactureEtudiantController extends Controller
             $f = facture_etudiant::findOrFail($r->id);
             $type = (int) $r->type_facture;
 
-            $idFrais = 0; $montant = 0.0;
+            $idFrais = 0; $montant = 0.0; $scolariteId = 0;
             if ($type === 1) {
                 $sc = scolarite::findOrFail($r->id_scolarite);
+                $scolariteId = (int) $sc->id;
                 $montant = (float) $sc->montant_total + (float) $sc->inscription;
                 $idFrais = 0;
             } else {
@@ -389,7 +391,7 @@ class FactureEtudiantController extends Controller
             }
 
             // Tranche auto (ou 0)
-            $trancheId = $this->pickTrancheIdFromScolarite((int)$r->id_scolarite);
+            $trancheId = $type === 1 ? $this->pickTrancheIdFromScolarite($scolariteId) : 0;
                $oldDonneeBudgetaireId = $f->id_donnee_budgetaire_entree;
                 $oldDonneeLigneId = $f->id_donnee_ligne_budgetaire_entree;
             $f->update([
@@ -398,7 +400,7 @@ class FactureEtudiantController extends Controller
                 'id_niveau'     => (int)($r->id_niveau ?? 0),
                 'id_specialite' => (int)$r->id_specialite,
                 'type_facture'  => $type,
-                'id_scolarite'  => (int)$r->id_scolarite,
+                'id_scolarite'  => $scolariteId,
                 'id_tranche_scolarite' => $trancheId,
                 'id_frais'      => $idFrais,
 

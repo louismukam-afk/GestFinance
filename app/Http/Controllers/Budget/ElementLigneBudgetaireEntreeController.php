@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Budget;
 
 use App\Http\Controllers\Controller;
+use App\Exports\ViewExport;
 use App\Models\element_ligne_budgetaire_entree;
 use App\Models\ligne_budgetaire_Entree;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\DonneeBudgetaireEntreesExport;
-use Barryvdh\DomPDF\Facade\Pdf;
+
 class ElementLigneBudgetaireEntreeController extends Controller
 {
     public function __construct()
@@ -34,9 +34,24 @@ class ElementLigneBudgetaireEntreeController extends Controller
     public function indexElements($ligne_id)
     {
         $ligne = ligne_budgetaire_Entree::findOrFail($ligne_id);
-        $elements = element_ligne_budgetaire_entree::where('id_ligne_budgetaire_entree', $ligne_id)->get();
+        $elements = element_ligne_budgetaire_entree::with('user')
+            ->where('id_ligne_budgetaire_entree', $ligne_id)
+            ->get();
         $this->values['title']='Eléments ligne budgétaire entrées';
         return view('Budget.element_entrees.index', compact('ligne', 'elements'),$this->values);
+    }
+
+    public function exportExcel($ligne_id)
+    {
+        $ligne = ligne_budgetaire_Entree::findOrFail($ligne_id);
+        $elements = element_ligne_budgetaire_entree::with('user')
+            ->where('id_ligne_budgetaire_entree', $ligne_id)
+            ->get();
+
+        return Excel::download(
+            new ViewExport('Budget.element_entrees.excel', compact('ligne', 'elements')),
+            'elements_ligne_budgetaire_entree_'.$ligne->id.'.xlsx'
+        );
     }
 
     // Formulaire création

@@ -10,6 +10,9 @@
         <a href="{{ route('element_sorties.create', $ligne->id) }}" class="btn btn-success" style="margin-bottom:15px;">
             ➕ Ajouter d'autres éléments
         </a>
+        <a href="{{ route('element_sorties.export.excel', $ligne->id) }}" class="btn btn-success" style="margin-bottom:15px;">
+            Excel
+        </a>
         <a href="{{ route('ligne_budgetaire_sorties.index') }}" class="btn btn-default" style="margin-bottom:15px;">
             ⬅ Retour aux lignes sorties
         </a>

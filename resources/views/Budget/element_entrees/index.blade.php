@@ -10,6 +10,9 @@
         <a href="{{ route('element_entrees.create', $ligne->id) }}" class="btn btn-primary" style="margin-bottom:15px;">
             <i class="glyphicon glyphicon-plus"></i> Ajouter
         </a>
+        <a href="{{ route('element_entrees.export.excel', $ligne->id) }}" class="btn btn-success" style="margin-bottom:15px;">
+            Excel
+        </a>
 
         <div class="table-responsive">
             <table id="tableElements" class="table table-bordered table-striped table-condensed">
