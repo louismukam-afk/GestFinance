@@ -30,9 +30,9 @@
         <h3 class="text-primary"><i class="fa fa-users"></i> {{ $title }}</h3>
 
         <div class="btn-toolbar" style="margin-bottom: 15px;">
-            <button class="btn btn-primary" data-toggle="modal" data-backdrop="false" href="#add_personnel">
+            <a class="btn btn-primary" href="{{ route('personnel_management', ['ajouter' => 1]) }}">
                 <i class="fa fa-plus"></i> Nouveau Personnel
-            </button>
+            </a>
 
             <a href="{{ route('personnels.import') }}" class="btn btn-success">
                 <i class="fa fa-upload"></i> Importation Excel
@@ -102,27 +102,6 @@
         </div>
     </div>
 
-    <div class="modal fade" id="add_personnel">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <form method="POST" action="{{ route('store_personnel') }}">
-                    @csrf
-                    <div class="modal-header">
-                        <h4 class="modal-title"><i class="fa fa-plus"></i> Nouveau Personnel</h4>
-                        <button type="button" class="close" data-dismiss="modal">x</button>
-                    </div>
-
-                    <div class="modal-body">
-                        @include('Admin.Personnel.partials.form_fields', ['personnel' => null, 'disabled' => false])
-                    </div>
-
-                    <div class="modal-footer">
-                        <button class="btn btn-success"><i class="fa fa-save"></i> Enregistrer</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 @endsection
 
 @section('scripts')

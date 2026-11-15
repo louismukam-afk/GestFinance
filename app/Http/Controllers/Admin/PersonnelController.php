@@ -14,8 +14,14 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class PersonnelController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        if ($request->boolean('ajouter')) {
+            $title = 'Nouveau Personnel';
+
+            return view('Admin.Personnel.create', compact('title'));
+        }
+
         $personnels = personnel::orderBy('created_at', 'desc')->get();
         $title = 'Gestion du Personnel';
 
