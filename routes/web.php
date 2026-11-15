@@ -780,11 +780,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('personnels/import/template', [\App\Http\Controllers\Admin\PersonnelController::class, 'downloadTemplate'])
         ->name('personnels.import.template');
 
+    Route::get('personnels/export/excel', [\App\Http\Controllers\Admin\PersonnelController::class, 'exportExcel'])
+        ->name('personnels.export.excel');
+
     Route::post('personnels/import', [\App\Http\Controllers\Admin\PersonnelController::class, 'importStore'])
         ->name('personnels.import.store');
 
     Route::post('personnels/store', [\App\Http\Controllers\Admin\PersonnelController::class, 'store'])
         ->name('store_personnel');
+
+    Route::get('personnels/{id}/details', [\App\Http\Controllers\Admin\PersonnelController::class, 'show'])
+        ->name('personnels.show');
+
+    Route::get('personnels/{id}/modifier', [\App\Http\Controllers\Admin\PersonnelController::class, 'edit'])
+        ->name('personnels.edit');
+
+    Route::get('personnels/{id}/fiche-pdf', [\App\Http\Controllers\Admin\PersonnelController::class, 'fichePdf'])
+        ->name('personnels.fiche_pdf');
 
     Route::post('personnels/update', [\App\Http\Controllers\Admin\PersonnelController::class, 'update'])
         ->name('update_personnel');

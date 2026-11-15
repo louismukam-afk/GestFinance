@@ -88,6 +88,7 @@ class PersonnelsImport implements SkipsEmptyRows, ToCollection, WithHeadingRow
 
             personnel::create([
                 'nom' => $nom,
+                'nom_biometrie' => $this->clean($row['nom_biometrie'] ?? null) ?: $nom,
                 'date_naissance' => $dateNaissance,
                 'lieu_naissance' => $lieuNaissance,
                 'adresse' => $adresse,

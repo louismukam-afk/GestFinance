@@ -28,6 +28,7 @@ class PersonnelController extends AdminController
 
         $grid->column('id', __('Id'));
         $grid->column('nom', __('Nom'));
+        $grid->column('nom_biometrie', __('Nom biometrie'));
         $grid->column('date_naissance', __('Date naissance'));
         $grid->column('lieu_naissance', __('Lieu naissance'));
         $grid->column('adresse', __('Adresse'));
@@ -60,6 +61,7 @@ class PersonnelController extends AdminController
 
         $show->field('id', __('Id'));
         $show->field('nom', __('Nom'));
+        $show->field('nom_biometrie', __('Nom biometrie'));
         $show->field('date_naissance', __('Date naissance'));
         $show->field('lieu_naissance', __('Lieu naissance'));
         $show->field('adresse', __('Adresse'));
@@ -90,6 +92,7 @@ class PersonnelController extends AdminController
         $form = new Form(new personnel());
 
         $form->text('nom', __('Nom'));
+        $form->text('nom_biometrie', __('Nom biometrie'))->help('Nom abrege exactement comme dans l appareil biometrique.');
         $form->date('date_naissance', __('Date naissance'))->default(date('Y-m-d'));
         $form->text('lieu_naissance', __('Lieu naissance'));
         $form->text('adresse', __('Adresse'));
@@ -105,6 +108,9 @@ class PersonnelController extends AdminController
         $form->hidden('id_user');
         $form->saving(function (Form $form) {
             $form->id_user = \Admin::user()->id; // ou Auth::id() si hors de Laravel Admin
+            if (!$form->nom_biometrie) {
+                $form->nom_biometrie = $form->nom;
+            }
         });
         $form->text('nationalite', __('Nationalite'));
 

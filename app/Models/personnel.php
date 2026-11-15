@@ -16,6 +16,7 @@ class personnel extends Model
 
     protected  $fillable = [
      'nom',
+    'nom_biometrie',
     'date_naissance',
     'lieu_naissance',
     'adresse',

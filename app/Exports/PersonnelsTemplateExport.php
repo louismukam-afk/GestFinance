@@ -14,6 +14,7 @@ class PersonnelsTemplateExport implements FromArray, ShouldAutoSize, WithHeading
     {
         return [
             'nom',
+            'nom_biometrie',
             'date_naissance',
             'lieu_naissance',
             'adresse',
@@ -41,6 +42,7 @@ class PersonnelsTemplateExport implements FromArray, ShouldAutoSize, WithHeading
         return [
             [
                 'Exemple Nom Prenom',
+                'Exemple Nom',
                 '1990-01-31',
                 'Yaounde',
                 'Adresse du personnel',
