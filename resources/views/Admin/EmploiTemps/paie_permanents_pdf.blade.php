@@ -128,7 +128,7 @@
         <table class="meta">
             <tr>
                 <td class="label">Raison sociale</td>
-                <td>INSTITUT SUPERIEUR HINTEL</td>
+                <td>{{ $bulletin->entite->nom_entite ?? '-' }}</td>
                 <td class="label">N°</td>
                 <td>{{ optional($bulletin->periode_debut)->format('m/Y') }}</td>
             </tr>
@@ -147,6 +147,12 @@
                 <td>{{ $bulletin->personnel->type_personnel ?? 'Permanent' }}</td>
                 <td class="label">Paie du</td>
                 <td>{{ optional($bulletin->periode_debut)->format('d/m/Y') }} au {{ optional($bulletin->periode_fin)->format('d/m/Y') }}</td>
+            </tr>
+            <tr>
+                <td class="label">Entite</td>
+                <td>{{ $bulletin->entite->nom_entite ?? '-' }}</td>
+                <td class="label">Salaire contractuel</td>
+                <td>{{ number_format($bulletin->salaire_permanent->montant_mensuel ?? $bulletin->salaire_base, 0, ',', ' ') }} FCFA</td>
             </tr>
             <tr>
                 <td class="label">Statut bulletin</td>
@@ -203,6 +209,35 @@
                 <td>Salaire cotisable</td>
                 <td></td>
                 <td class="right">{{ number_format($bulletin->salaire_cotisable, 0, ',', ' ') }}</td>
+            </tr>
+        </table>
+
+        <table class="lines section">
+            <tr><td colspan="3" class="section-title">Bases de calcul des charges</td></tr>
+            <tr>
+                <th>Base</th>
+                <th class="right">Utilisation</th>
+                <th class="right">Montant</th>
+            </tr>
+            <tr>
+                <td>Salaire brut</td>
+                <td class="right">Reference generale des gains</td>
+                <td class="right">{{ number_format($bulletin->brut_mensuel, 0, ',', ' ') }}</td>
+            </tr>
+            <tr>
+                <td>Salaire taxable</td>
+                <td class="right">Base fiscale avant CNPS</td>
+                <td class="right">{{ number_format($bulletin->salaire_taxable, 0, ',', ' ') }}</td>
+            </tr>
+            <tr>
+                <td>Salaire cotisable</td>
+                <td class="right">Base CNPS/PVID</td>
+                <td class="right">{{ number_format($bulletin->salaire_cotisable, 0, ',', ' ') }}</td>
+            </tr>
+            <tr>
+                <td>Base IRPP</td>
+                <td class="right">Salaire taxable - CNPS salariale</td>
+                <td class="right">{{ $irpp ? number_format($irpp->base, 0, ',', ' ') : '-' }}</td>
             </tr>
         </table>
 
@@ -267,8 +302,21 @@
             </tr>
         </table>
 
+        @if($bulletin->charges_patronales->isNotEmpty())
+            <h4>Charges patronales</h4>
+            <table>
+                <thead><tr><th>Charge</th><th class="right">Base</th><th class="right">Taux</th><th class="right">Montant</th></tr></thead>
+                <tbody>
+                @foreach($bulletin->charges_patronales as $charge)
+                    <tr><td>{{ $charge->libelle }}</td><td class="right">{{ number_format($charge->base, 0, ',', ' ') }}</td><td class="right">{{ number_format($charge->taux, 2, ',', ' ') }} %</td><td class="right">{{ number_format($charge->montant, 0, ',', ' ') }}</td></tr>
+                @endforeach
+                <tr class="total"><td colspan="3">Total charges patronales</td><td class="right">{{ number_format($bulletin->total_charges_patronales, 0, ',', ' ') }}</td></tr>
+                </tbody>
+            </table>
+        @endif
+
         <p class="small">
-            Les impots et le PVID sont calcules sur le salaire theorique et les elements imposables/cotisables. La penalite biometrie est deduite apres calcul des impots.
+            Les impots, le PVID et les charges patronales sont calcules sur les bases obtenues apres deduction de la penalite biometrie.
         </p>
     </div>
 @endforeach

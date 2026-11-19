@@ -30,6 +30,7 @@
         <h3 class="text-primary"><i class="fa fa-users"></i> {{ $title }}</h3>
 
         <div class="btn-toolbar" style="margin-bottom: 15px;">
+            <a class="btn btn-default" href="{{ route('personnels_banques.index') }}"><i class="fa fa-university"></i> Affecter a une banque</a>
             <a class="btn btn-primary" href="{{ route('personnel_management', ['ajouter' => 1]) }}">
                 <i class="fa fa-plus"></i> Nouveau Personnel
             </a>

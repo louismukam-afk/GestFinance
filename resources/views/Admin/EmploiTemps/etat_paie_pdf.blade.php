@@ -31,6 +31,9 @@
         <thead>
             <tr>
                 <th>Employe permanent</th>
+                <th class="right">Salaire base</th>
+                <th class="right">Salaire taxable</th>
+                <th class="right">Salaire cotisable</th>
                 @foreach($colonnesGains as $colonne)
                     <th class="right">{{ $colonne['libelle'] }}</th>
                 @endforeach
@@ -52,6 +55,9 @@
                 @php($retenueGlobale = $ligne->total_retenues + $ligne->penalite_biometrie + $ligne->total_sanctions + $ligne->total_acomptes)
                 <tr>
                     <td>{{ $ligne->nom_personnel }}</td>
+                    <td class="right">{{ number_format($ligne->salaire_base, 0, ',', ' ') }}</td>
+                    <td class="right">{{ number_format($ligne->salaire_taxable, 0, ',', ' ') }}</td>
+                    <td class="right">{{ number_format($ligne->salaire_cotisable, 0, ',', ' ') }}</td>
                     @foreach($colonnesGains as $colonne)
                         <td class="right">{{ number_format($gainsLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
                     @endforeach
@@ -68,6 +74,9 @@
             @endforeach
             <tr class="total">
                 <td>Total</td>
+                <td class="right">{{ number_format($etat->lignes->sum('salaire_base'), 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($etat->lignes->sum('salaire_taxable'), 0, ',', ' ') }}</td>
+                <td class="right">{{ number_format($etat->lignes->sum('salaire_cotisable'), 0, ',', ' ') }}</td>
                 @foreach($colonnesGains as $colonne)
                     <td class="right">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_gains ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
                 @endforeach

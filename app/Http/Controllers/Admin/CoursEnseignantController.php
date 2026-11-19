@@ -340,34 +340,40 @@ class CoursEnseignantController extends Controller
         $cours = $query->orderBy('id_specialite')->orderBy('date_debut')->get();
 
         $rows = $cours->flatMap(function ($item) use ($request) {
+            $programme = $item->programme;
+
+            if (!$programme) {
+                return collect();
+            }
+
             return $item->seances
                 ->when($request->periode_journee, fn($items) => $items->filter(fn($seance) => ($seance->plage->periode_journee ?? null) === $request->periode_journee))
                 ->when($request->format_plage, fn($items) => $items->filter(fn($seance) => ($seance->plage->format_plage ?? null) === $request->format_plage))
                 ->sortBy(['jour_semaine', 'id_plage_horaire'])
-                ->map(function ($seance) use ($item) {
-                return [
-                    'jour_index' => $seance->jour_semaine,
-                    'plage_id' => $seance->id_plage_horaire,
-                    'specialite' => $item->programme->specialite->nom_specialite ?? '-',
-                    'specialite_code' => $item->programme->specialite->code_specialite ?? null,
-                    'cycle' => $item->programme->cycle->nom_cycle ?? '-',
-                    'filiere' => $item->programme->filiere->nom_filiere ?? '-',
-                    'niveau' => $item->programme->niveau->nom_niveau ?? '-',
-                    'matiere' => $item->programme->matiere->nom_matiere ?? '-',
-                    'code' => $item->programme->code_matiere_specialite,
-                    'type_matiere' => $item->programme->type_matiere,
-                    'semestre' => $this->displaySemestre($item->semestre ?: $item->programme->semestre),
-                    'enseignant' => $item->personnel->nom ?? '-',
-                    'salle' => $item->salle->nom_salle ?? '-',
-                    'entite' => $item->programme->entite->nom_entite ?? '-',
-                    'annee' => $item->programme->annee_academique->nom ?? '-',
-                    'jour' => $this->jours[$seance->jour_semaine] ?? '-',
-                    'plage' => optional($seance->plage)->libelle . ' (' . substr((string) optional($seance->plage)->heure_debut, 0, 5) . ' - ' . substr((string) optional($seance->plage)->heure_fin, 0, 5) . ')',
-                    'volume' => $seance->duree_heures,
-                    'volume_total' => (float) ($item->volume_horaire_prevu ?? 0),
-                    'periode' => optional($item->date_debut)->format('d/m/Y') . ' - ' . optional($item->date_fin)->format('d/m/Y'),
-                ];
-            });
+                ->map(function ($seance) use ($item, $programme) {
+                    return [
+                        'jour_index' => $seance->jour_semaine,
+                        'plage_id' => $seance->id_plage_horaire,
+                        'specialite' => $programme->specialite->nom_specialite ?? '-',
+                        'specialite_code' => $programme->specialite->code_specialite ?? null,
+                        'cycle' => $programme->cycle->nom_cycle ?? '-',
+                        'filiere' => $programme->filiere->nom_filiere ?? '-',
+                        'niveau' => $programme->niveau->nom_niveau ?? '-',
+                        'matiere' => $programme->matiere->nom_matiere ?? '-',
+                        'code' => $programme->code_matiere_specialite,
+                        'type_matiere' => $programme->type_matiere,
+                        'semestre' => $this->displaySemestre($item->semestre ?: $programme->semestre),
+                        'enseignant' => $item->personnel->nom ?? '-',
+                        'salle' => $item->salle->nom_salle ?? '-',
+                        'entite' => $programme->entite->nom_entite ?? '-',
+                        'annee' => $programme->annee_academique->nom ?? '-',
+                        'jour' => $this->jours[$seance->jour_semaine] ?? '-',
+                        'plage' => optional($seance->plage)->libelle . ' (' . substr((string) optional($seance->plage)->heure_debut, 0, 5) . ' - ' . substr((string) optional($seance->plage)->heure_fin, 0, 5) . ')',
+                        'volume' => $seance->duree_heures,
+                        'volume_total' => (float) ($item->volume_horaire_prevu ?? 0),
+                        'periode' => optional($item->date_debut)->format('d/m/Y') . ' - ' . optional($item->date_fin)->format('d/m/Y'),
+                    ];
+                });
         });
 
         $matrix = [];
@@ -515,23 +521,29 @@ class CoursEnseignantController extends Controller
         $cours = $query->orderBy('id_personnel')->orderBy('date_debut')->get();
 
         $rows = $cours->flatMap(function ($item) {
-            return $item->seances->sortBy(['jour_semaine', 'id_plage_horaire'])->map(function ($seance) use ($item) {
+            $programme = $item->programme;
+
+            if (!$programme) {
+                return collect();
+            }
+
+            return $item->seances->sortBy(['jour_semaine', 'id_plage_horaire'])->map(function ($seance) use ($item, $programme) {
                 return [
                     'jour_index' => $seance->jour_semaine,
                     'plage_id' => $seance->id_plage_horaire,
                     'enseignant' => $item->personnel->nom ?? '-',
-                    'matiere' => $item->programme->matiere->nom_matiere ?? '-',
-                    'code' => $item->programme->code_matiere_specialite,
-                    'semestre' => $this->displaySemestre($item->semestre ?: $item->programme->semestre),
-                    'specialite' => $item->programme->specialite->nom_specialite ?? '-',
-                    'specialite_code' => $item->programme->specialite->code_specialite ?? null,
-                    'cycle' => $item->programme->cycle->nom_cycle ?? '-',
-                    'filiere' => $item->programme->filiere->nom_filiere ?? '-',
-                    'niveau' => $item->programme->niveau->nom_niveau ?? '-',
-                    'type_matiere' => $item->programme->type_matiere,
+                    'matiere' => $programme->matiere->nom_matiere ?? '-',
+                    'code' => $programme->code_matiere_specialite,
+                    'semestre' => $this->displaySemestre($item->semestre ?: $programme->semestre),
+                    'specialite' => $programme->specialite->nom_specialite ?? '-',
+                    'specialite_code' => $programme->specialite->code_specialite ?? null,
+                    'cycle' => $programme->cycle->nom_cycle ?? '-',
+                    'filiere' => $programme->filiere->nom_filiere ?? '-',
+                    'niveau' => $programme->niveau->nom_niveau ?? '-',
+                    'type_matiere' => $programme->type_matiere,
                     'salle' => $item->salle->nom_salle ?? '-',
-                    'entite' => $item->programme->entite->nom_entite ?? '-',
-                    'annee' => $item->programme->annee_academique->nom ?? '-',
+                    'entite' => $programme->entite->nom_entite ?? '-',
+                    'annee' => $programme->annee_academique->nom ?? '-',
                     'volume' => $seance->duree_heures,
                     'volume_total' => (float) ($item->volume_horaire_prevu ?? 0),
                     'periode' => optional($item->date_debut)->format('d/m/Y') . ' - ' . optional($item->date_fin)->format('d/m/Y'),

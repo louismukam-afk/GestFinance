@@ -49,6 +49,10 @@
                 <input type="number" step="0.01" name="montant_mensuel" class="form-control" required>
             </div>
             <div class="col-md-2">
+                <label>Minimum categoriel</label>
+                <input type="number" step="0.01" name="salaire_minimum_categoriel" class="form-control" placeholder="Base anciennete">
+            </div>
+            <div class="col-md-2">
                 <label>Date debut</label>
                 <input type="date" name="date_debut" class="form-control" required>
             </div>
@@ -80,6 +84,7 @@
                     <th>Personnel</th>
                     <th>Annee / Entite</th>
                     <th>Salaire mensuel</th>
+                    <th>Minimum categoriel</th>
                     <th>Periode</th>
                     <th>Statut</th>
                     <th>Observations</th>
@@ -113,6 +118,7 @@
                                 </select>
                             </td>
                             <td><input type="number" step="0.01" name="montant_mensuel" value="{{ $salaire->montant_mensuel }}" class="form-control" required></td>
+                            <td><input type="number" step="0.01" name="salaire_minimum_categoriel" value="{{ $salaire->salaire_minimum_categoriel }}" class="form-control" placeholder="{{ $salaire->montant_mensuel }}"></td>
                             <td>
                                 <input type="date" name="date_debut" value="{{ optional($salaire->date_debut)->format('Y-m-d') }}" class="form-control mb-1" required>
                                 <input type="date" name="date_fin" value="{{ optional($salaire->date_fin)->format('Y-m-d') }}" class="form-control">
@@ -134,7 +140,7 @@
                             </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted">Aucun salaire permanent enregistre.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted">Aucun salaire permanent enregistre.</td></tr>
                 @endforelse
             </tbody>
         </table>

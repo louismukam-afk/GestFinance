@@ -15,7 +15,12 @@ use App\Models\PresencePermanent;
 use App\Models\SalairePermanent;
 use App\Models\SeanceCours;
 use App\Models\TauxHoraire;
+use App\Models\TauxImpot;
 use App\Models\personnel;
+use App\Services\BiometriePersonnelMatcher;
+use App\Services\DecompteHeuresEnseignant;
+use App\Services\RapportImportBiometrie;
+use App\Services\ConsolidationImpots;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,14 +42,18 @@ class BiometrieHeureController extends Controller
         $heures = $this->heuresRealiseesCollection($request);
         $totaux = $this->totauxParEnseignant($heures);
 
-        $unmatchedPointages = BiometriePointage::whereNull('id_personnel')
+        $pointagesCours = BiometriePointage::whereHas('import', function ($query) {
+            $query->whereNull('type_import')->orWhereIn('type_import', ['cours', 'manuel']);
+        });
+
+        $unmatchedPointages = (clone $pointagesCours)->whereNull('id_personnel')
             ->select('nom_biometrie', 'numero_biometrie')
             ->whereNotNull('nom_biometrie')
             ->groupBy('nom_biometrie', 'numero_biometrie')
             ->orderBy('nom_biometrie')
             ->get();
 
-        $biometrieIdentites = BiometriePointage::query()
+        $biometrieIdentites = (clone $pointagesCours)
             ->select('nom_biometrie', 'numero_biometrie', DB::raw('COUNT(*) as total'))
             ->whereNotNull('nom_biometrie')
             ->groupBy('nom_biometrie', 'numero_biometrie')
@@ -56,10 +65,107 @@ class BiometrieHeureController extends Controller
             'imports' => $imports,
             'heures' => $heures,
             'totaux' => $totaux,
-            'personnels' => personnel::orderBy('nom')->get(),
+            'personnels' => personnel::whereIn('type_personnel', ['vacataire', 'permanent'])
+                ->whereHas('cours_enseignants', fn($query) => $query->where('statut', 'actif')->whereHas('seances.plage', fn($plage) => $plage->where('type_plage', 'cours')))
+                ->orderBy('nom')->get(),
             'unmatchedPointages' => $unmatchedPointages,
             'biometrieIdentites' => $biometrieIdentites,
         ]);
+    }
+
+    public function historique(Request $request)
+    {
+        $request->validate([
+            'date_debut' => 'nullable|date',
+            'date_fin' => 'nullable|date'.($request->filled('date_debut') ? '|after_or_equal:date_debut' : ''),
+        ]);
+        $imports = BiometrieImport::where(fn($query) => $query->whereNull('type_import')->orWhere('type_import', 'cours'))
+            ->when($request->date_debut, fn($query) => $query->whereDate('date_fin', '>=', $request->date_debut))
+            ->when($request->date_fin, fn($query) => $query->whereDate('date_debut', '<=', $request->date_fin))
+            ->withCount('heures_realisees')
+            ->latest('id')->paginate(25)->withQueryString();
+
+        return view('Admin.EmploiTemps.biometrie.historique', [
+            'title' => 'Historique des consolidations des heures vacataires',
+            'imports' => $imports,
+        ]);
+    }
+
+    public function rapportImport(Request $request, BiometrieImport $import)
+    {
+        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        $data = $request->validate(['rapport' => 'required|in:discipline,financier']);
+        $heures = $this->heuresRealiseesCollection(new Request(['id_biometrie_import' => $import->id]));
+        abort_if($heures->isEmpty(), 422, 'Cet import ne contient aucune heure consolidee.');
+        $heures->loadMissing('cours.programme.specialite');
+        $service = new RapportImportBiometrie();
+        $disciplines = DisciplinePersonnel::where('id_biometrie_import', $import->id)->get();
+
+        return Pdf::loadView('Admin.EmploiTemps.biometrie.rapport_import', [
+            'title' => $data['rapport'] === 'discipline' ? 'Rapport de discipline des enseignants' : 'Rapport financier de consolidation',
+            'rapport' => $data['rapport'],
+            'import' => $import,
+            'groupes' => $data['rapport'] === 'discipline' ? $service->discipline($heures, $disciplines) : collect(),
+            'finances' => $data['rapport'] === 'financier' ? $service->finances($heures) : collect(),
+        ])->setPaper('a4', 'landscape')->stream('rapport_'.$data['rapport'].'_import_'.$import->id.'.pdf');
+    }
+
+    public function impotsImport(BiometrieImport $import)
+    {
+        $heures = $this->heuresImportFiscal($import);
+        $defaut = TauxImpot::where('par_defaut', true)->firstOrFail();
+
+        return view('Admin.EmploiTemps.impots.consolidation', [
+            'title' => 'Consolidation des impots - import #'.$import->id,
+            'import' => $import,
+            'defaut' => $defaut,
+            'taux' => TauxImpot::orderBy('nom')->get(),
+            'lignes' => (new ConsolidationImpots())->lignes($heures, $defaut),
+        ]);
+    }
+
+    public function enregistrerImpotsImport(Request $request, BiometrieImport $import)
+    {
+        $heures = $this->heuresImportFiscal($import);
+        $data = $request->validate([
+            'taux_personnels' => 'required|array|max:5000',
+            'taux_personnels.*' => 'nullable|integer|exists:taux_impots,id',
+        ]);
+        $allowed = $heures->pluck('id_personnel')->unique()->flip();
+        foreach (array_keys($data['taux_personnels']) as $id) {
+            if (!$allowed->has($id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['taux_personnels' => 'Un personnel selectionne ne figure pas dans cet import.']);
+            }
+        }
+        DB::transaction(function () use ($data) {
+            foreach ($data['taux_personnels'] as $id => $tauxId) {
+                personnel::whereKey($id)->update(['id_taux_impot' => $tauxId ?: null]);
+            }
+        });
+
+        return redirect()->route('biometrie_heures.impots', $import->id)->with('success', 'Taux d impots des personnels enregistres.');
+    }
+
+    public function pdfImpotsImport(BiometrieImport $import)
+    {
+        $heures = $this->heuresImportFiscal($import);
+        $defaut = TauxImpot::where('par_defaut', true)->firstOrFail();
+
+        return Pdf::loadView('Admin.EmploiTemps.impots.pdf', [
+            'title' => 'Consolidation des impots',
+            'import' => $import,
+            'lignes' => (new ConsolidationImpots())->lignes($heures, $defaut),
+        ])->setPaper('a4', 'landscape')->stream('impots_import_'.$import->id.'.pdf');
+    }
+
+    private function heuresImportFiscal(BiometrieImport $import)
+    {
+        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        $heures = $this->heuresRealiseesCollection(new Request(['id_biometrie_import' => $import->id]));
+        abort_if($heures->isEmpty(), 422, 'Cet import ne contient aucune heure consolidee.');
+        $heures->loadMissing('personnel.taux_impot');
+
+        return $heures;
     }
 
     public function exportExcel(Request $request)
@@ -69,19 +175,24 @@ class BiometrieHeureController extends Controller
 
     public function exportPdf(Request $request)
     {
+        $request->validate(['tableau' => 'nullable|in:complet,detail,totaux']);
+        $tableau = $request->input('tableau') ?: 'complet';
         $heures = $this->heuresRealiseesCollection($request);
         $pdf = Pdf::loadView('Admin.EmploiTemps.biometrie.pdf', [
-            'title' => 'Decompte des heures realisees',
+            'title' => $tableau === 'totaux' ? 'Recapitulatif global des heures et paiements' : 'Decompte des heures realisees',
+            'tableau' => $tableau,
             'heures' => $heures,
             'totaux' => $this->totauxParEnseignant($heures),
         ])->setPaper('a4', 'landscape');
 
-        return $pdf->download('heures_realisees_enseignants.pdf');
+        return $tableau === 'complet'
+            ? $pdf->download('heures_realisees_enseignants.pdf')
+            : $pdf->stream('heures_enseignants_'.$tableau.'.pdf');
     }
 
     public function permanentIndex(Request $request)
     {
-        $imports = BiometrieImport::where('type_import', 'permanent')->latest()->get();
+        $imports = BiometrieImport::whereIn('type_import', ['permanent', 'permanent_manuel'])->latest()->get();
         $presences = $this->presencesPermanentsCollection($request);
         $permanentImportIds = $imports->pluck('id');
         $unmatchedPointages = BiometriePointage::whereIn('id_biometrie_import', $permanentImportIds)
@@ -108,6 +219,29 @@ class BiometrieHeureController extends Controller
             'unmatchedPointages' => $unmatchedPointages,
             'biometrieIdentites' => $biometrieIdentites,
         ]);
+    }
+
+    public function permanentExportPdf(Request $request)
+    {
+        $request->validate([
+            'id_biometrie_import' => 'nullable|integer|exists:biometrie_imports,id',
+            'id_personnel' => 'nullable|integer|exists:personnels,id',
+            'date_debut' => 'nullable|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_debut',
+        ]);
+        $presences = $this->presencesPermanentsCollection($request);
+        if ($presences->isEmpty()) {
+            return back()->withErrors(['presences' => 'Aucune presence consolidee ne correspond aux criteres.']);
+        }
+
+        $pdf = Pdf::loadView('Admin.EmploiTemps.biometrie.permanents_pdf', [
+            'title' => 'Pointages biometriques consolides',
+            'presences' => $presences,
+            'totaux' => $this->totauxPermanents($presences),
+        ])->setPaper('a4', 'landscape');
+
+        $suffixe = $request->id_personnel ? 'personnel_' . $request->id_personnel : 'tous';
+        return $pdf->download('pointages_permanents_' . $suffixe . '.pdf');
     }
 
     public function permanentStore(Request $request)
@@ -181,7 +315,7 @@ class BiometrieHeureController extends Controller
 
                 $date = $periodeStart->copy();
                 while ($date->lte($periodeEnd)) {
-                    if ($date->dayOfWeekIso === (int) $emploi->jour_semaine && !$this->isPaidNonWorkingDay($date)) {
+                    if ($date->dayOfWeekIso === (int) $emploi->jour_semaine) {
                         $this->consoliderPresencePermanent($import, $emploi, $date);
                         $processedDatesByPersonnel[$emploi->id_personnel][$date->toDateString()] = true;
                         $count++;
@@ -207,11 +341,194 @@ class BiometrieHeureController extends Controller
     {
         $deleted = PresencePermanent::where('id_biometrie_import', $import->id)->delete();
         $import->update([
-            'statut' => 'importe',
+            'statut' => $import->type_import === 'permanent_manuel' ? 'manuel' : 'importe',
             'total_consolidees' => 0,
+            'total_lignes' => $import->type_import === 'permanent_manuel' ? 0 : $import->total_lignes,
         ]);
 
         return back()->with('success', "{$deleted} consolidation(s) permanente(s) supprimee(s).");
+    }
+
+    public function permanentManualCreate()
+    {
+        $selectedImportId = request('id_biometrie_import');
+        $imports = BiometrieImport::where('type_import', 'permanent_manuel')->latest()->get();
+        $emplois = EmploiPermanent::with(['personnel', 'plage', 'annee_academique', 'entite'])
+            ->where('statut', 'actif')
+            ->whereHas('personnel', fn($query) => $query->where('type_personnel', 'permanent'))
+            ->orderBy('id_personnel')
+            ->orderBy('jour_semaine')
+            ->get();
+
+        $jours = [
+            1 => 'Lundi',
+            2 => 'Mardi',
+            3 => 'Mercredi',
+            4 => 'Jeudi',
+            5 => 'Vendredi',
+            6 => 'Samedi',
+            7 => 'Dimanche',
+        ];
+        $emploisData = $emplois->mapWithKeys(function ($emploi) use ($jours) {
+            return [$emploi->id => [
+                'jour' => (int) $emploi->jour_semaine,
+                'jour_label' => $jours[$emploi->jour_semaine] ?? '-',
+                'debut' => substr((string) ($emploi->plage->heure_debut ?? ''), 0, 5),
+                'fin' => substr((string) ($emploi->plage->heure_fin ?? ''), 0, 5),
+                'date_debut' => optional($emploi->date_debut)->format('Y-m-d'),
+                'date_fin' => optional($emploi->date_fin)->format('Y-m-d'),
+            ]];
+        });
+
+        return view('Admin.EmploiTemps.biometrie.permanents_manual', [
+            'title' => 'Saisie manuelle des presences permanentes',
+            'imports' => $imports,
+            'selectedImport' => $selectedImportId ? $imports->firstWhere('id', (int) $selectedImportId) : null,
+            'emplois' => $emplois,
+            'emploisData' => $emploisData,
+            'jours' => $jours,
+            'presencesManuelles' => PresencePermanent::with(['personnel', 'plage', 'import'])
+                ->whereHas('import', fn($query) => $query->where('type_import', 'permanent_manuel'))
+                ->when($selectedImportId, fn($query) => $query->where('id_biometrie_import', $selectedImportId))
+                ->orderByDesc('date_presence')
+                ->latest('id')
+                ->get(),
+        ]);
+    }
+
+    public function permanentManualStore(Request $request)
+    {
+        $data = $request->validate([
+            'id_biometrie_import' => 'nullable|integer|exists:biometrie_imports,id',
+            'libelle' => 'nullable|string|max:255',
+            'date_debut_import' => 'required_without:id_biometrie_import|nullable|date',
+            'date_fin_import' => 'required_without:id_biometrie_import|nullable|date|after_or_equal:date_debut_import',
+            'id_emploi_permanent' => 'required|integer|exists:emploi_permanents,id',
+            'date_presence' => 'required|date',
+            'heure_debut_reelle' => 'required|date_format:H:i',
+            'heure_fin_reelle' => 'required|date_format:H:i',
+            'observation' => 'nullable|string|max:1000',
+        ]);
+
+        $emploi = EmploiPermanent::with(['personnel', 'plage'])->findOrFail($data['id_emploi_permanent']);
+        if (!$emploi->personnel || $emploi->personnel->type_personnel !== 'permanent' || !$emploi->plage) {
+            return back()->withErrors(['id_emploi_permanent' => 'Cet emploi permanent est incomplet ou invalide.'])->withInput();
+        }
+
+        if (!empty($data['id_biometrie_import'])) {
+            $import = BiometrieImport::where('type_import', 'permanent_manuel')->findOrFail($data['id_biometrie_import']);
+        } else {
+            $import = null;
+        }
+
+        $date = Carbon::parse($data['date_presence'])->startOfDay();
+        $importStart = Carbon::parse($import?->date_debut ?? $data['date_debut_import'])->startOfDay();
+        $importEnd = Carbon::parse($import?->date_fin ?? $data['date_fin_import'])->endOfDay();
+        if ($date->lt($importStart) || $date->gt($importEnd)) {
+            return back()->withErrors(['date_presence' => 'La date doit etre comprise dans la periode de l\'import manuel.'])->withInput();
+        }
+        if ($date->lt(Carbon::parse($emploi->date_debut)->startOfDay())
+            || ($emploi->date_fin && $date->gt(Carbon::parse($emploi->date_fin)->endOfDay()))) {
+            return back()->withErrors(['date_presence' => 'La date doit etre comprise dans la periode de cet emploi permanent.'])->withInput();
+        }
+        if ($date->dayOfWeekIso !== (int) $emploi->jour_semaine) {
+            return back()->withErrors(['date_presence' => 'La date choisie ne correspond pas au jour programme pour cet emploi.'])->withInput();
+        }
+
+        if (!$import) {
+            $import = BiometrieImport::create([
+                'libelle' => $data['libelle'] ?: 'Saisie manuelle permanent du ' . now()->format('d/m/Y H:i'),
+                'date_debut' => $data['date_debut_import'],
+                'date_fin' => $data['date_fin_import'],
+                'statut' => 'manuel',
+                'type_import' => 'permanent_manuel',
+                'observations' => 'Import cree depuis la saisie manuelle des presences permanentes.',
+                'id_user' => auth()->id() ?? 0,
+            ]);
+        }
+
+        $plannedStart = Carbon::parse($date->format('Y-m-d') . ' ' . $emploi->plage->heure_debut);
+        $plannedEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $emploi->plage->heure_fin);
+        if ($plannedEnd->lessThanOrEqualTo($plannedStart)) {
+            $plannedEnd->addDay();
+        }
+        $realStart = Carbon::parse($date->format('Y-m-d') . ' ' . $data['heure_debut_reelle']);
+        $realEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $data['heure_fin_reelle']);
+        if ($realEnd->lessThanOrEqualTo($realStart)) {
+            $realEnd->addDay();
+        }
+
+        $plannedDuration = $this->plannedDuration($plannedStart, $plannedEnd, $emploi->plage);
+        [$duration, $calculationObservation] = $this->permanentPresenceDuration(
+            $emploi,
+            $realStart,
+            $realEnd,
+            $plannedStart,
+            $plannedEnd,
+            $plannedDuration
+        );
+        $salaire = $this->salairePermanentForDate(
+            $emploi->id_personnel,
+            $date,
+            $emploi->id_annee_academique,
+            $emploi->id_entite
+        );
+        $salaireJournalier = SalairePermanentController::salaireJournalier($salaire, $date);
+        $heuresJour = $this->heuresReferenceSalairePermanent($plannedDuration);
+        $tauxHoraire = $heuresJour > 0 ? round($salaireJournalier / $heuresJour, 6) : 0;
+        $montantDu = $tauxHoraire > 0 ? round($tauxHoraire * min($duration, $heuresJour), 2) : 0;
+        $penalite = max(round($salaireJournalier - $montantDu, 2), 0);
+        $observation = trim(implode(' ', array_filter([
+            $data['observation'] ?? null,
+            $calculationObservation,
+            'Saisie manuelle.',
+        ])));
+
+        PresencePermanent::updateOrCreate(
+            [
+                'id_biometrie_import' => $import->id,
+                'id_emploi_permanent' => $emploi->id,
+                'date_presence' => $date->toDateString(),
+            ],
+            [
+                'id_personnel' => $emploi->id_personnel,
+                'id_plage_horaire' => $emploi->id_plage_horaire,
+                'id_annee_academique' => $emploi->id_annee_academique,
+                'id_entite' => $emploi->id_entite,
+                'jour_semaine' => $emploi->jour_semaine,
+                'heure_debut_prevue' => $plannedStart->format('H:i:s'),
+                'heure_fin_prevue' => $plannedEnd->format('H:i:s'),
+                'heure_debut_reelle' => $realStart->format('H:i:s'),
+                'heure_fin_reelle' => $realEnd->format('H:i:s'),
+                'duree_prevue' => $plannedDuration,
+                'duree_realisee' => $duration,
+                'salaire_journalier' => $salaireJournalier,
+                'montant_du' => $montantDu,
+                'penalite_montant' => $penalite,
+                'statut' => $duration >= $plannedDuration ? 'present' : ($duration > 0 ? 'partiel' : 'absent'),
+                'observation' => $observation,
+                'id_user' => auth()->id() ?? 0,
+            ]
+        );
+
+        $this->syncDisciplineForPresencePermanent(
+            $import,
+            $emploi,
+            $date,
+            $plannedStart,
+            $plannedDuration,
+            $realStart,
+            $duration,
+            $observation,
+            true
+        );
+
+        $total = $import->presences_permanents()->count();
+        $import->update(['total_lignes' => $total, 'total_consolidees' => $total]);
+
+        return redirect()
+            ->route('biometrie_permanents.manual.create', ['id_biometrie_import' => $import->id])
+            ->with('success', 'Presence permanente enregistree manuellement.');
     }
 
     public function manualCreate()
@@ -417,40 +734,7 @@ class BiometrieHeureController extends Controller
             'id_user' => auth()->id() ?? 0,
         ]);
 
-        $rows = $this->readBiometrieFile(public_path($path));
-        $personnels = personnel::all();
-        $created = 0;
-        $unmatched = 0;
-
-        DB::transaction(function () use ($rows, $import, $personnels, &$created, &$unmatched) {
-            foreach ($rows as $row) {
-                $date = $this->parseDateTime($row['date_time'] ?? null);
-                if (!$date) {
-                    continue;
-                }
-
-                $personnel = $this->matchPersonnel($row['name'] ?? '', $personnels);
-                if (!$personnel) {
-                    $unmatched++;
-                }
-
-                BiometriePointage::create([
-                    'id_biometrie_import' => $import->id,
-                    'id_personnel' => $personnel?->id,
-                    'departement' => $row['department'] ?? null,
-                    'nom_biometrie' => $row['name'] ?? null,
-                    'numero_biometrie' => $row['no'] ?? null,
-                    'date_heure_pointage' => $date,
-                    'location_id' => $row['location_id'] ?? null,
-                    'id_number' => $row['id_number'] ?? null,
-                    'verify_code' => $row['verify_code'] ?? null,
-                    'card_no' => $row['card_no'] ?? null,
-                    'raw_data' => $row,
-                    'id_user' => auth()->id() ?? 0,
-                ]);
-                $created++;
-            }
-        });
+        [$created, $unmatched, $ignored] = $this->importBiometriePointages($import, public_path($path));
 
         $import->update([
             'total_lignes' => $created,
@@ -458,7 +742,7 @@ class BiometrieHeureController extends Controller
         ]);
 
         return redirect()->route('biometrie_heures.index')
-            ->with('success', "{$created} pointage(s) importe(s). {$unmatched} non associe(s) a un enseignant.");
+            ->with('success', "{$created} pointage(s) importe(s). {$unmatched} en attente de correspondance. {$ignored} hors personnel avec cours planifie ignore(s).");
     }
 
     public function consolider(BiometrieImport $import)
@@ -477,8 +761,10 @@ class BiometrieHeureController extends Controller
 
         $cours = CoursEnseignant::with(['personnel', 'programme', 'seances.plage', 'taux_horaire'])
             ->where('statut', 'actif')
-            ->whereDate('date_debut', '>=', $start->toDateString())
-            ->whereDate('date_fin', '<=', $end->toDateString())
+            ->whereIn('id_personnel', $this->personnelsCoursPourImport($import))
+            ->whereIn('id_personnel', $import->pointages()->whereNotNull('id_personnel')->select('id_personnel'))
+            ->whereDate('date_debut', '<=', $end->toDateString())
+            ->whereDate('date_fin', '>=', $start->toDateString())
             ->get();
 
         $count = 0;
@@ -551,8 +837,8 @@ class BiometrieHeureController extends Controller
     {
         $data = $request->validate([
             'id_personnel' => 'required|integer|exists:personnels,id',
-            'nom_biometrie' => 'nullable|string|max:255',
-            'numero_biometrie' => 'nullable|string|max:255',
+            'nom_biometrie' => 'required_without:numero_biometrie|nullable|string|max:255',
+            'numero_biometrie' => 'required_without:nom_biometrie|nullable|string|max:255',
         ]);
 
         DB::table('biometrie_personnel_mappings')->updateOrInsert(
@@ -567,6 +853,12 @@ class BiometrieHeureController extends Controller
                 'created_at' => now(),
             ]
         );
+
+        if (!empty($data['nom_biometrie'])) {
+            personnel::whereKey($data['id_personnel'])->update([
+                'nom_biometrie' => trim($data['nom_biometrie']),
+            ]);
+        }
 
         BiometriePointage::query()
             ->when(!empty($data['numero_biometrie']), fn($q) => $q->where('numero_biometrie', $data['numero_biometrie']))
@@ -585,18 +877,25 @@ class BiometrieHeureController extends Controller
     private function importBiometriePointages(BiometrieImport $import, string $path): array
     {
         $rows = $this->readBiometrieFile($path);
-        $personnels = personnel::all();
+        $matcher = $this->personnelMatcher();
+        $eligibleIds = $import->type_import === 'permanent'
+            ? null : $this->personnelsCoursPourImport($import)->all();
         $created = 0;
         $unmatched = 0;
+        $ignored = 0;
 
-        DB::transaction(function () use ($rows, $import, $personnels, &$created, &$unmatched) {
+        DB::transaction(function () use ($rows, $import, $matcher, $eligibleIds, &$created, &$unmatched, &$ignored) {
             foreach ($rows as $row) {
                 $date = $this->parseDateTime($row['date_time'] ?? null);
                 if (!$date) {
                     continue;
                 }
 
-                $personnel = $this->matchPersonnel($row['name'] ?? '', $personnels);
+                $personnel = $matcher->match($row['name'] ?? '', isset($row['no']) ? (string) $row['no'] : null);
+                if ($personnel && $eligibleIds !== null && !in_array($personnel->id, $eligibleIds)) {
+                    $ignored++;
+                    continue;
+                }
                 if (!$personnel) {
                     $unmatched++;
                 }
@@ -619,7 +918,17 @@ class BiometrieHeureController extends Controller
             }
         });
 
-        return [$created, $unmatched];
+        return [$created, $unmatched, $ignored];
+    }
+
+    private function personnelsCoursPourImport(BiometrieImport $import)
+    {
+        return CoursEnseignant::where('statut', 'actif')
+            ->whereDate('date_debut', '<=', $import->date_fin->toDateString())
+            ->whereDate('date_fin', '>=', $import->date_debut->toDateString())
+            ->whereHas('personnel', fn($query) => $query->whereIn('type_personnel', ['vacataire', 'permanent']))
+            ->whereHas('seances.plage', fn($query) => $query->where('type_plage', 'cours'))
+            ->distinct()->pluck('id_personnel');
     }
 
     private function consoliderPresencePermanent(BiometrieImport $import, EmploiPermanent $emploi, Carbon $date): void
@@ -651,8 +960,14 @@ class BiometrieHeureController extends Controller
             );
             $statut = $duration >= $plannedDuration ? 'present' : ($duration > 0 ? 'partiel' : 'absent');
         } elseif ($pointages->count() === 1) {
-            $realStart = Carbon::parse($pointages->first()->date_heure_pointage);
-            $observation = 'Pointage unique detecte : entree ou sortie manquante.';
+            $singlePointage = Carbon::parse($pointages->first()->date_heure_pointage);
+            [$duration, $realStart, $realEnd, $observation] = $this->singlePermanentPointageDuration(
+                $singlePointage,
+                $plannedStart,
+                $plannedEnd,
+                $plannedDuration
+            );
+            $statut = $duration > 0 ? 'partiel' : 'absent';
         }
 
         $salaire = $this->salairePermanentForDate(
@@ -717,11 +1032,6 @@ class BiometrieHeureController extends Controller
                 continue;
             }
 
-            $plage = $this->defaultPermanentPlageForPersonnel($personnel);
-            if (!$plage) {
-                continue;
-            }
-
             $date = max(Carbon::parse($salaire->date_debut)->startOfDay(), $start);
             $periodeEnd = $salaire->date_fin
                 ? min(Carbon::parse($salaire->date_fin)->endOfDay(), $end)
@@ -730,21 +1040,12 @@ class BiometrieHeureController extends Controller
             while ($date->lte($periodeEnd)) {
                 $dateKey = $date->toDateString();
                 if (!$this->isPaidNonWorkingDay($date) && empty($processedDatesByPersonnel[$personnel->id][$dateKey])) {
-                    $emploi = new EmploiPermanent([
-                        'id_personnel' => $personnel->id,
-                        'id_plage_horaire' => $plage->id,
-                        'id_annee_academique' => $salaire->id_annee_academique,
-                        'id_entite' => $salaire->id_entite,
-                        'jour_semaine' => $date->dayOfWeekIso,
-                        'date_debut' => $dateKey,
-                        'date_fin' => $dateKey,
-                        'statut' => 'actif',
-                    ]);
-                    $emploi->id = -1000000 - (int) $personnel->id;
-                    $emploi->setRelation('personnel', $personnel);
-                    $emploi->setRelation('plage', $plage);
-
-                    $this->consoliderPresencePermanent($import, $emploi, $date);
+                    $this->enregistrerJourPayeSansHoraire(
+                        $import,
+                        $salaire,
+                        $date,
+                        'Jour paye non travaille : aucun horaire programme.'
+                    );
                     $processedDatesByPersonnel[$personnel->id][$dateKey] = true;
                     $count++;
                 }
@@ -754,6 +1055,43 @@ class BiometrieHeureController extends Controller
         }
 
         return $count;
+    }
+
+    private function enregistrerJourPayeSansHoraire(BiometrieImport $import, SalairePermanent $salaire, Carbon $date, string $observation): void
+    {
+        $salaireJournalier = SalairePermanentController::salaireJournalier($salaire, $date);
+        PresencePermanent::updateOrCreate(
+            [
+                'id_biometrie_import' => $import->id,
+                'id_emploi_permanent' => -1 * (int) $salaire->id_personnel,
+                'date_presence' => $date->toDateString(),
+            ],
+            [
+                'id_personnel' => $salaire->id_personnel,
+                'id_plage_horaire' => null,
+                'id_annee_academique' => $salaire->id_annee_academique,
+                'id_entite' => $salaire->id_entite,
+                'jour_semaine' => $date->dayOfWeekIso,
+                'heure_debut_prevue' => null,
+                'heure_fin_prevue' => null,
+                'heure_debut_reelle' => null,
+                'heure_fin_reelle' => null,
+                'duree_prevue' => 0,
+                'duree_realisee' => 0,
+                'salaire_journalier' => $salaireJournalier,
+                'montant_du' => $salaireJournalier,
+                'penalite_montant' => 0,
+                'statut' => 'jour_paye',
+                'observation' => $observation,
+                'id_user' => auth()->id() ?? 0,
+            ]
+        );
+
+        DisciplinePersonnel::where('id_biometrie_import', $import->id)
+            ->where('id_personnel', $salaire->id_personnel)
+            ->whereDate('date_discipline', $date->toDateString())
+            ->where('statut', 'non_justifie')
+            ->update(['statut' => 'annule']);
     }
 
     private function defaultPermanentPlageForPersonnel(personnel $personnel): ?PlageHoraire
@@ -790,34 +1128,7 @@ class BiometrieHeureController extends Controller
 
             while ($date->lte($periodeEnd)) {
                 if ($this->isPaidNonWorkingDay($date) && empty($processedDatesByPersonnel[$salaire->id_personnel][$date->toDateString()])) {
-                    $salaireJournalier = SalairePermanentController::salaireJournalier($salaire, $date);
-
-                    PresencePermanent::updateOrCreate(
-                        [
-                            'id_biometrie_import' => $import->id,
-                            'id_emploi_permanent' => -1 * (int) $salaire->id_personnel,
-                            'date_presence' => $date->toDateString(),
-                        ],
-                        [
-                            'id_personnel' => $salaire->id_personnel,
-                            'id_plage_horaire' => null,
-                            'id_annee_academique' => $salaire->id_annee_academique,
-                            'id_entite' => $salaire->id_entite,
-                            'jour_semaine' => $date->dayOfWeekIso,
-                            'heure_debut_prevue' => null,
-                            'heure_fin_prevue' => null,
-                            'heure_debut_reelle' => null,
-                            'heure_fin_reelle' => null,
-                            'duree_prevue' => 0,
-                            'duree_realisee' => 0,
-                            'salaire_journalier' => $salaireJournalier,
-                            'montant_du' => $salaireJournalier,
-                            'penalite_montant' => 0,
-                            'statut' => 'jour_paye',
-                            'observation' => $this->paidDayLabel($date),
-                            'id_user' => auth()->id() ?? 0,
-                        ]
-                    );
+                    $this->enregistrerJourPayeSansHoraire($import, $salaire, $date, $this->paidDayLabel($date));
                     $count++;
                 }
 
@@ -858,7 +1169,7 @@ class BiometrieHeureController extends Controller
             $easter->copy()->addDays(39)->toDateString(),
         ];
         $movableMuslim = [
-            2026 => ['2026-03-20', '2026-05-27', '2026-08-25'],
+            2026 => ['2026-03-20', '2026-05-27'],
             2027 => ['2027-03-10', '2027-03-16'],
             2028 => ['2028-02-27'],
         ];
@@ -900,6 +1211,28 @@ class BiometrieHeureController extends Controller
             : null;
 
         return [round($duration, 2), $observation];
+    }
+
+    private function singlePermanentPointageDuration(Carbon $pointage, Carbon $plannedStart, Carbon $plannedEnd, float $plannedDuration): array
+    {
+        $midpoint = $plannedStart->copy()->addMinutes((int) floor($plannedStart->diffInMinutes($plannedEnd) / 2));
+        $isLikelyEntry = $pointage->lessThanOrEqualTo($midpoint);
+
+        if ($isLikelyEntry) {
+            $realStart = $pointage;
+            $realEnd = $plannedEnd;
+        } else {
+            $realStart = $plannedStart;
+            $realEnd = $pointage;
+        }
+
+        $duration = 0;
+        $missing = $plannedDuration;
+        $observation = 'Pointage unique detecte : '
+            . ($isLikelyEntry ? 'sortie manquante' : 'entree manquante')
+            . ($missing > 0 ? ', ' . number_format($missing, 2, ',', ' ') . ' h non comptabilisee(s).' : '.');
+
+        return [round($duration, 2), $realStart, $realEnd, $observation];
     }
 
     private function heuresReferenceSalairePermanent(float $plannedDuration): float
@@ -947,7 +1280,7 @@ class BiometrieHeureController extends Controller
         $plannedEnd = Carbon::parse($date->format('Y-m-d') . ' ' . ($emploi->plage->heure_fin ?? $plannedStart->format('H:i:s')));
         $hasPointageInPlage = $realStart && $realStart->betweenIncluded($plannedStart, $plannedEnd);
 
-        if (!$hasPointageOnDay || !$hasPointageInPlage) {
+        if (!$hasPointageOnDay || !$hasPointageInPlage || $duration <= 0) {
             DisciplinePersonnel::updateOrCreate(
                 array_merge($base, ['type_discipline' => 'absence']),
                 [
@@ -1136,11 +1469,7 @@ class BiometrieHeureController extends Controller
     private function dailyPointagesForCours(BiometrieImport $import, CoursEnseignant $cours, Carbon $date)
     {
         return BiometriePointage::where('id_biometrie_import', $import->id)
-            ->where(function ($q) use ($cours) {
-                $q->where('id_personnel', $cours->id_personnel)
-                    ->orWhereIn('numero_biometrie', $this->mappedBiometrieNumbers($cours->id_personnel))
-                    ->orWhereIn('nom_biometrie', $this->mappedBiometrieNames($cours->id_personnel));
-            })
+            ->where('id_personnel', $cours->id_personnel)
             ->whereBetween('date_heure_pointage', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('date_heure_pointage')
             ->get();
@@ -1149,11 +1478,7 @@ class BiometrieHeureController extends Controller
     private function dailyPointagesForPersonnel(BiometrieImport $import, int $personnelId, Carbon $date)
     {
         return BiometriePointage::where('id_biometrie_import', $import->id)
-            ->where(function ($q) use ($personnelId) {
-                $q->where('id_personnel', $personnelId)
-                    ->orWhereIn('numero_biometrie', $this->mappedBiometrieNumbers($personnelId))
-                    ->orWhereIn('nom_biometrie', $this->mappedBiometrieNames($personnelId));
-            })
+            ->where('id_personnel', $personnelId)
             ->whereBetween('date_heure_pointage', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('date_heure_pointage')
             ->get();
@@ -1323,7 +1648,8 @@ class BiometrieHeureController extends Controller
     private function readBiometrieFile(string $path): array
     {
         try {
-            return $this->readWithSpreadsheet($path);
+            $rows = $this->readWithSpreadsheet($path);
+            return $rows ?: $this->readLegacyBiometrie($path);
         } catch (\Throwable) {
             return $this->readLegacyBiometrie($path);
         }
@@ -1428,15 +1754,69 @@ class BiometrieHeureController extends Controller
     private function readLegacyBiometrie(string $path): array
     {
         $content = file_get_contents($path);
-        $text = preg_replace('/[^\x20-\x7E\r\n\t\/:-]/', ' ', $content);
-        preg_match_all('/@\s*([A-Z][A-Z ]{2,})\s+@\s*([A-Za-z .\'-]{2,}?)\s+@\s*(\d{1,10})\s+@\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/s', $text, $matches, PREG_SET_ORDER);
+        $cleanField = static function ($value): string {
+            $clean = '';
+            $value = (string) $value;
 
-        return collect($matches)->map(fn($row) => [
+            for ($index = 0, $length = strlen($value); $index < $length; $index++) {
+                $byte = ord($value[$index]);
+                $clean .= ($byte >= 32 && $byte <= 126) || in_array($byte, [9, 10, 13], true)
+                    ? $value[$index]
+                    : ' ';
+            }
+
+            return trim(preg_replace('/\s+/', ' ', $clean));
+        };
+
+        $rows = [];
+        foreach (explode('OUR COMPANY', $content) as $block) {
+            $fields = explode('@', $block, 5);
+            if (count($fields) < 4) {
+                continue;
+            }
+
+            $name = $cleanField($fields[1]);
+            $numberField = $cleanField($fields[2]);
+            $dateField = $cleanField($fields[3]);
+
+            if (!preg_match('/^(\d{1,10})(.*)$/', $numberField, $numberMatch)
+                || !preg_match('/\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}/', $dateField, $dateMatch)
+                || !preg_match('/[A-Za-z]/', $name)) {
+                continue;
+            }
+
+            // The legacy format repeats a row marker after the name, number and date.
+            $marker = trim($numberMatch[2]);
+            if ($marker !== '' && str_ends_with($name, $marker)) {
+                $name = trim(substr($name, 0, -strlen($marker)));
+            }
+
+            $rows[] = [
+                'department' => 'OUR COMPANY',
+                'name' => $name,
+                'no' => $numberMatch[1],
+                'date_time' => $dateMatch[0],
+            ];
+        }
+
+        if (!empty($rows)) {
+            return $rows;
+        }
+
+        preg_match_all('/@\s*([A-Z][A-Z ]{2,})\s+@\s*([A-Za-z .\'-]{2,}?)\s+@\s*(\d{1,10})\s+@\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/is', $content, $matches, PREG_SET_ORDER);
+
+        $rows = collect($matches)->map(fn($row) => [
             'department' => trim($row[1]),
             'name' => trim($row[2]),
             'no' => trim($row[3]),
             'date_time' => trim($row[4]),
         ])->all();
+
+        if (!empty($rows)) {
+            return $rows;
+        }
+
+        return [];
     }
 
     private function normalizeHeader($header): string
@@ -1481,69 +1861,22 @@ class BiometrieHeureController extends Controller
         }
     }
 
-    private function matchPersonnel(string $name, $personnels): ?personnel
-    {
-        $needle = $this->normalizeName($name);
-        if ($needle === '') {
-            return null;
-        }
-
-        return $personnels->first(function ($personnel) use ($needle) {
-            $haystack = $this->normalizeName($personnel->nom);
-
-            return $haystack === $needle
-                || str_contains($haystack, $needle)
-                || str_contains($needle, $haystack);
-        });
-    }
-
-    private function normalizeName(string $name): string
-    {
-        $name = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) ?: $name);
-        $name = preg_replace('/[^a-z0-9]/', '', $name);
-
-        return trim($name ?? '');
-    }
-
     private function reassocierPointages(BiometrieImport $import): void
     {
-        $personnels = personnel::all();
-        $mappings = DB::table('biometrie_personnel_mappings')->get();
-
-        foreach ($import->pointages as $pointage) {
-            if ($pointage->id_personnel) {
-                continue;
-            }
-
-            $mapping = $mappings->first(function ($mapping) use ($pointage) {
-                return ($mapping->numero_biometrie && $mapping->numero_biometrie === $pointage->numero_biometrie)
-                    || ($mapping->nom_biometrie && $mapping->nom_biometrie === $pointage->nom_biometrie);
-            });
-
-            $personnelId = $mapping->id_personnel ?? $this->matchPersonnel($pointage->nom_biometrie ?? '', $personnels)?->id;
-
-            if ($personnelId) {
+        $matcher = $this->personnelMatcher();
+        foreach ($import->pointages()->get() as $pointage) {
+            $personnelId = $matcher->match($pointage->nom_biometrie, $pointage->numero_biometrie)?->id;
+            if ($pointage->id_personnel != $personnelId) {
                 $pointage->update(['id_personnel' => $personnelId]);
             }
         }
+        $import->unsetRelation('pointages');
+        $import->update(['total_non_associees' => $import->pointages()->whereNull('id_personnel')->count()]);
     }
 
-    private function mappedBiometrieNumbers(int $personnelId): array
+    private function personnelMatcher(): BiometriePersonnelMatcher
     {
-        return DB::table('biometrie_personnel_mappings')
-            ->where('id_personnel', $personnelId)
-            ->whereNotNull('numero_biometrie')
-            ->pluck('numero_biometrie')
-            ->all();
-    }
-
-    private function mappedBiometrieNames(int $personnelId): array
-    {
-        return DB::table('biometrie_personnel_mappings')
-            ->where('id_personnel', $personnelId)
-            ->whereNotNull('nom_biometrie')
-            ->pluck('nom_biometrie')
-            ->all();
+        return new BiometriePersonnelMatcher(personnel::all(), DB::table('biometrie_personnel_mappings')->get());
     }
 
     private function heuresQuery(Request $request)
@@ -1606,15 +1939,7 @@ class BiometrieHeureController extends Controller
 
     private function totauxParEnseignant($heures)
     {
-        return $heures->groupBy('id_personnel')->map(function ($items) {
-            return [
-                'enseignant' => $items->first()->personnel->nom ?? '-',
-                'heures_prevues' => $items->sum('duree_prevue'),
-                'heures_realisees' => $items->sum('duree_realisee'),
-                'heures_non_comptabilisees' => max($items->sum('duree_prevue') - $items->sum('duree_realisee'), 0),
-                'montant_total' => $items->sum('montant_total'),
-            ];
-        })->values();
+        return (new DecompteHeuresEnseignant())->totaux($heures);
     }
 
     private function totauxPermanents($presences)

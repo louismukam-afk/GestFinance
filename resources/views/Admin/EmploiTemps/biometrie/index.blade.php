@@ -176,11 +176,18 @@
     </form>
 
     <div class="mb-3">
+        <a href="{{ route('biometrie_heures.historique') }}" class="btn btn-default"><i class="fa fa-history"></i> Historique des consolidations</a>
         <a href="{{ route('biometrie_heures.excel', request()->query()) }}" class="btn btn-success">Export Excel</a>
         <a href="{{ route('biometrie_heures.pdf', request()->query()) }}" class="btn btn-danger">Export PDF</a>
         <button type="button" onclick="window.print()" class="btn btn-dark">Imprimer</button>
     </div>
 
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-2">
+        <h4>Detail des heures consolidees</h4>
+        <a href="{{ route('biometrie_heures.pdf', array_merge(request()->query(), ['tableau' => 'detail'])) }}" target="_blank" rel="noopener" class="btn btn-danger">
+            <i class="fa fa-file-pdf-o" aria-hidden="true"></i> PDF detail
+        </a>
+    </div>
     <div class="table-responsive">
         <table class="table table-bordered table-striped">
             <thead class="table-dark">
@@ -195,7 +202,8 @@
                     <th>Realise</th>
                     <th>Non comptabilise</th>
                     <th>Taux</th>
-                    <th>Montant</th>
+                    <th>Montant brut</th>
+                    <th>Sanction</th>
                     <th>Statut</th>
                     <th>Observation</th>
                 </tr>
@@ -218,11 +226,12 @@
                         <td class="{{ $nonComptabilise > 0 ? 'biometrie-anomalie' : '' }}">{{ number_format($nonComptabilise, 2, ',', ' ') }} h</td>
                         <td>{{ number_format($heure->montant_taux, 0, ',', ' ') }}</td>
                         <td>{{ number_format($heure->montant_total, 0, ',', ' ') }}</td>
+                        <td>{{ number_format($nonComptabilise * $heure->montant_taux, 0, ',', ' ') }}</td>
                         <td><span class="badge badge-{{ $heure->statut === 'realise' ? 'success' : 'warning' }}">{{ $heure->statut }}</span></td>
                         <td class="{{ $isAnomalie ? 'biometrie-anomalie' : '' }}">{{ $heure->observation }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="13" class="text-center text-muted">Aucune heure consolidee.</td></tr>
+                    <tr><td colspan="14" class="text-center text-muted">Aucune heure consolidee.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -273,31 +282,58 @@
     @endif
 
     <div class="card mt-4">
-        <div class="card-header"><strong>Totaux par enseignant</strong></div>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+            <strong>Totaux par enseignant</strong>
+            <a href="{{ route('biometrie_heures.pdf', array_merge(request()->query(), ['tableau' => 'totaux'])) }}" target="_blank" rel="noopener" class="btn btn-danger">
+                <i class="fa fa-file-pdf-o" aria-hidden="true"></i> PDF recapitulatif
+            </a>
+        </div>
         <div class="card-body table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
                     <tr>
                         <th>Enseignant</th>
+                        <th>Mois</th>
                         <th>Total heures prevues</th>
                         <th>Total heures realisees</th>
                         <th>Total non comptabilise</th>
-                        <th>Montant total</th>
+                        <th>Heures payables</th>
+                        <th>Montant brut</th>
+                        <th>Sanction</th>
+                        <th>Net a payer</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($totaux as $total)
                         <tr>
                             <td>{{ $total['enseignant'] }}</td>
+                            <td>{{ $total['mois'] }}</td>
                             <td>{{ number_format($total['heures_prevues'], 2, ',', ' ') }} h</td>
                             <td>{{ number_format($total['heures_realisees'], 2, ',', ' ') }} h</td>
                             <td class="{{ ($total['heures_non_comptabilisees'] ?? 0) > 0 ? 'biometrie-anomalie' : '' }}">{{ number_format($total['heures_non_comptabilisees'] ?? 0, 2, ',', ' ') }} h</td>
+                            <td>{{ number_format($total['heures_payables'], 2, ',', ' ') }} h</td>
+                            <td>{{ number_format($total['montant_brut'], 0, ',', ' ') }}</td>
+                            <td>{{ number_format($total['montant_sanction'], 0, ',', ' ') }}</td>
                             <td>{{ number_format($total['montant_total'], 0, ',', ' ') }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="text-center text-muted">Aucun total disponible.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted">Aucun total disponible.</td></tr>
                     @endforelse
                 </tbody>
+                @if($totaux->isNotEmpty())
+                    <tfoot>
+                        <tr class="font-weight-bold">
+                            <th colspan="2">TOTAL GENERAL</th>
+                            <th>{{ number_format($totaux->sum('heures_prevues'), 2, ',', ' ') }} h</th>
+                            <th>{{ number_format($totaux->sum('heures_realisees'), 2, ',', ' ') }} h</th>
+                            <th>{{ number_format($totaux->sum('heures_non_comptabilisees'), 2, ',', ' ') }} h</th>
+                            <th>{{ number_format($totaux->sum('heures_payables'), 2, ',', ' ') }} h</th>
+                            <th>{{ number_format($totaux->sum('montant_brut'), 0, ',', ' ') }}</th>
+                            <th>{{ number_format($totaux->sum('montant_sanction'), 0, ',', ' ') }}</th>
+                            <th>{{ number_format($totaux->sum('montant_total'), 0, ',', ' ') }}</th>
+                        </tr>
+                    </tfoot>
+                @endif
             </table>
         </div>
     </div>

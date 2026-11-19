@@ -17,6 +17,8 @@ class personnel extends Model
     protected  $fillable = [
      'nom',
     'nom_biometrie',
+    'id_banque',
+    'id_taux_impot',
     'date_naissance',
     'lieu_naissance',
     'adresse',
@@ -39,6 +41,16 @@ class personnel extends Model
         'horaire_travail',
 
     ];
+    public function taux_impot()
+    {
+        return $this->belongsTo(TauxImpot::class, 'id_taux_impot');
+    }
+
+    public function banque()
+    {
+        return $this->belongsTo(banque::class, 'id_banque');
+    }
+
     public function users()
     {
         return $this->belongsTo(\Encore\Admin\Auth\Database\Administrator::class, 'id_user');

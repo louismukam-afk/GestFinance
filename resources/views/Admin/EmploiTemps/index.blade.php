@@ -4,167 +4,51 @@
 <div class="container">
     <h3 class="text-primary">{{ $title }}</h3>
 
+    @php
+        $items = [
+            ['href' => route('personnel_management'), 'icon' => 'fa-users', 'label' => '1. Personnel'],
+            ['href' => route('personnels_banques.index'), 'icon' => 'fa-university', 'label' => 'Banques du personnel'],
+            ['href' => route('personnel_entites.index'), 'icon' => 'fa-sitemap', 'label' => '2. Affectation entites'],
+            ['href' => route('plages_horaires.index'), 'icon' => 'fa-clock-o', 'label' => '3. Plages horaires'],
+            ['href' => route('emplois_permanents.index'), 'icon' => 'fa-briefcase', 'label' => '4. Emplois permanents'],
+            ['href' => route('salaires_permanents.index'), 'icon' => 'fa-credit-card', 'label' => '5. Salaires permanents'],
+            ['href' => route('paie_permanents.index') . '#rubriques-salaire', 'icon' => 'fa-list', 'label' => '6. Rubriques salaire'],
+            ['href' => route('paie_permanents.index') . '#affectations-rubriques', 'icon' => 'fa-link', 'label' => '7. Affecter rubriques'],
+            ['href' => route('paie_permanents.index') . '#baremes-irpp', 'icon' => 'fa-percent', 'label' => '8. Baremes IRPP'],
+            ['href' => route('paie_permanents.index') . '#acomptes-personnel', 'icon' => 'fa-minus-circle', 'label' => '9. Acomptes'],
+            ['href' => route('biometrie_permanents.index'), 'icon' => 'fa-id-card', 'label' => '10. Biometrie permanents'],
+            ['href' => route('paie_permanents.index'), 'icon' => 'fa-calculator', 'label' => '11. Generer paie'],
+            ['href' => route('paie_permanents.index') . '#bulletins-paie', 'icon' => 'fa-list-alt', 'label' => '12. Bulletins de paie'],
+            ['href' => route('paie_permanents.index') . '#etats-paie', 'icon' => 'fa-table', 'label' => '13. Etats de paie'],
+            ['href' => route('discipline_personnels.index'), 'icon' => 'fa-exclamation-triangle', 'label' => 'Discipline personnel'],
+            ['href' => route('matieres.index'), 'icon' => 'fa-book', 'label' => 'Matieres'],
+            ['href' => route('programmes_specialites.index'), 'icon' => 'fa-book', 'label' => 'Programmes specialite'],
+            ['href' => route('cours_enseignants.index'), 'icon' => 'fa-calendar', 'label' => 'Cours enseignants'],
+            ['href' => route('cours_enseignants.emploi_specialite'), 'icon' => 'fa-table', 'label' => 'Emplois specialites'],
+            ['href' => route('cours_enseignants.emploi_enseignant'), 'icon' => 'fa-user', 'label' => 'Emplois enseignants'],
+            ['href' => route('cours_enseignants.volumes_specialite'), 'icon' => 'fa-bar-chart', 'label' => 'Volumes horaires'],
+            ['href' => route('biometrie_heures.index'), 'icon' => 'fa-calculator', 'label' => 'Decompte heures'],
+            ['href' => route('biometrie_heures.historique'), 'icon' => 'fa-history', 'label' => 'Historique consolidations vacataires'],
+            ['href' => route('salles.index'), 'icon' => 'fa-building', 'label' => 'Salles'],
+            ['href' => route('taux_horaires.index'), 'icon' => 'fa-money', 'label' => 'Taux horaires'],
+            ['href' => route('taux_impots.index'), 'icon' => 'fa-percent', 'label' => 'Taux d impots'],
+            ['href' => route('virements_vacataires.index'), 'icon' => 'fa-exchange', 'label' => 'Etats de virement enseignants'],
+            ['href' => route('virements_vacataires.historique'), 'icon' => 'fa-history', 'label' => 'Historique ordres de virement'],
+            ['href' => route('bulletins_vacataires.index'), 'icon' => 'fa-file-text-o', 'label' => 'Bulletins de paie vacataires'],
+        ];
+    @endphp
+
     <div class="row text-center pad-top">
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('personnel_management') }}">
-                    <i class="fa fa-users fa-5x"></i>
-                    <h4>Personnel</h4>
-                </a>
+        @foreach($items as $item)
+            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
+                <div class="div-square">
+                    <a href="{{ $item['href'] }}">
+                        <i class="fa {{ $item['icon'] }} fa-5x"></i>
+                        <h4>{{ $item['label'] }}</h4>
+                    </a>
+                </div>
             </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('matieres.index') }}">
-                    <i class="fa fa-book fa-5x"></i>
-                    <h4>Matieres</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('programmes_specialites.index') }}">
-                    <i class="fa fa-book fa-5x"></i>
-                    <h4>Programmes de specialite</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('cours_enseignants.index') }}">
-                    <i class="fa fa-calendar fa-5x"></i>
-                    <h4>Cours enseignants</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('cours_enseignants.emploi_specialite') }}">
-                    <i class="fa fa-table fa-5x"></i>
-                    <h4>Emplois specialites</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('cours_enseignants.emploi_enseignant') }}">
-                    <i class="fa fa-user fa-5x"></i>
-                    <h4>Emplois enseignants</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('emplois_permanents.index') }}">
-                    <i class="fa fa-briefcase fa-5x"></i>
-                    <h4>Emplois permanents</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('cours_enseignants.volumes_specialite') }}">
-                    <i class="fa fa-bar-chart fa-5x"></i>
-                    <h4>Volumes horaires</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('biometrie_heures.index') }}">
-                    <i class="fa fa-calculator fa-5x"></i>
-                    <h4>Decompte heures</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('biometrie_permanents.index') }}">
-                    <i class="fa fa-id-card fa-5x"></i>
-                    <h4>Biometrie permanents</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('salles.index') }}">
-                    <i class="fa fa-building fa-5x"></i>
-                    <h4>Salles</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('plages_horaires.index') }}">
-                    <i class="fa fa-clock-o fa-5x"></i>
-                    <h4>Plages horaires</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('taux_horaires.index') }}">
-                    <i class="fa fa-money fa-5x"></i>
-                    <h4>Taux horaires</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('salaires_permanents.index') }}">
-                    <i class="fa fa-credit-card fa-5x"></i>
-                    <h4>Salaires permanents</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('paie_permanents.index') }}">
-                    <i class="fa fa-file-text fa-5x"></i>
-                    <h4>Paie permanents</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('paie_permanents.index') }}#bulletins-paie">
-                    <i class="fa fa-list-alt fa-5x"></i>
-                    <h4>Bulletins de paie</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('paie_permanents.index') }}#etats-paie">
-                    <i class="fa fa-table fa-5x"></i>
-                    <h4>Etats de paie</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('paie_permanents.index') }}#acomptes-sanctions">
-                    <i class="fa fa-minus-circle fa-5x"></i>
-                    <h4>Acomptes et sanctions</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('discipline_personnels.index') }}">
-                    <i class="fa fa-exclamation-triangle fa-5x"></i>
-                    <h4>Discipline personnel</h4>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-6">
-            <div class="div-square">
-                <a href="{{ route('personnel_entites.index') }}">
-                    <i class="fa fa-sitemap fa-5x"></i>
-                    <h4>Affectation entites</h4>
-                </a>
-            </div>
-        </div>
+        @endforeach
     </div>
 </div>
 @endsection

@@ -24,6 +24,7 @@ class EtatPaie extends Model
         'total_penalites',
         'total_sanctions',
         'total_acomptes',
+        'total_charges_patronales',
         'total_net_a_payer',
         'statut',
         'observations',
@@ -39,6 +40,7 @@ class EtatPaie extends Model
         'total_penalites' => 'float',
         'total_sanctions' => 'float',
         'total_acomptes' => 'float',
+        'total_charges_patronales' => 'float',
         'total_net_a_payer' => 'float',
     ];
 

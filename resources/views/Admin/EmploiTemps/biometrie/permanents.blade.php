@@ -4,7 +4,10 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="text-primary">{{ $title }}</h3>
-        <a href="{{ route('emploi_temps.index') }}" class="btn btn-secondary">Retour</a>
+        <div>
+            <a href="{{ route('biometrie_permanents.manual.create') }}" class="btn btn-primary">Saisie manuelle</a>
+            <a href="{{ route('emploi_temps.index') }}" class="btn btn-secondary">Retour</a>
+        </div>
     </div>
 
     @if(session('success'))
@@ -74,10 +77,14 @@
                             <td>{{ number_format($import->total_non_associees, 0, ',', ' ') }}</td>
                             <td>{{ number_format($import->total_consolidees, 0, ',', ' ') }}</td>
                             <td>
-                                <form method="POST" action="{{ route('biometrie_permanents.consolider', $import) }}" style="display:inline">
-                                    @csrf
-                                    <button class="btn btn-xs btn-primary" onclick="return confirm('Relancer la consolidation permanente ? Les anciennes lignes de cet import seront recalculees.')">Consolider / Reactualiser</button>
-                                </form>
+                                @if($import->type_import === 'permanent_manuel')
+                                    <a href="{{ route('biometrie_permanents.manual.create', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-primary">Ajouter une presence</a>
+                                @else
+                                    <form method="POST" action="{{ route('biometrie_permanents.consolider', $import) }}" style="display:inline">
+                                        @csrf
+                                        <button class="btn btn-xs btn-primary" onclick="return confirm('Relancer la consolidation permanente ? Les anciennes lignes de cet import seront recalculees.')">Consolider / Reactualiser</button>
+                                    </form>
+                                @endif
                                 <form method="POST" action="{{ route('biometrie_permanents.clear', $import) }}" style="display:inline">
                                     @csrf @method('DELETE')
                                     <button class="btn btn-xs btn-warning" onclick="return confirm('Supprimer uniquement les consolidations permanentes de cet import ?')">Vider</button>
@@ -161,6 +168,7 @@
 
     <div class="mb-3">
         <button type="button" onclick="window.print()" class="btn btn-dark">Imprimer</button>
+        <a href="{{ route('biometrie_permanents.pdf', request()->only(['id_biometrie_import', 'id_personnel', 'search_personnel', 'date_debut', 'date_fin'])) }}" class="btn btn-danger">Exporter les pointages PDF</a>
     </div>
 
     <div class="table-responsive">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AcompteSalaire;
 use App\Models\BaremeIrpp;
+use App\Models\BaremeRetenueFixe;
 use App\Models\BiometrieImport;
 use App\Models\BulletinPaie;
 use App\Models\ConfigRubriquePersonnel;
@@ -13,6 +14,7 @@ use App\Models\LigneBulletinPaie;
 use App\Models\LigneEtatPaie;
 use App\Models\ParametreCac;
 use App\Models\ParametrePvid;
+use App\Models\ParametreChargePatronale;
 use App\Models\PersonnelEntite;
 use App\Models\PresencePermanent;
 use App\Models\RubriquePaie;
@@ -29,11 +31,68 @@ use Illuminate\Support\Str;
 
 class PaiePermanentController extends Controller
 {
+    public function historiqueBulletins(Request $request)
+    {
+        $bulletins = BulletinPaie::with(['personnel', 'import', 'salaire_permanent', 'entite'])
+            ->when($request->id_personnel, fn($q) => $q->where('id_personnel', $request->id_personnel))
+            ->when($request->statut, fn($q) => $q->where('statut', $request->statut))
+            ->when($request->periode_debut, fn($q) => $q->whereDate('periode_fin', '>=', $request->periode_debut))
+            ->when($request->periode_fin, fn($q) => $q->whereDate('periode_debut', '<=', $request->periode_fin))
+            ->when($request->reference, fn($q) => $q->where('id', $request->reference))
+            ->orderByDesc('periode_debut')->orderBy('id_personnel')->paginate(50)->withQueryString();
+
+        return view('Admin.EmploiTemps.historique_bulletins', [
+            'title' => 'Historique des bulletins de paie', 'bulletins' => $bulletins,
+            'personnels' => personnel::where('type_personnel', 'permanent')->orderBy('nom')->get(),
+        ]);
+    }
+
+    public function historiqueEtats(Request $request)
+    {
+        $etats = EtatPaie::with(['annee_academique', 'entite'])
+            ->when($request->reference, fn($q) => $q->where('reference', 'like', '%' . $request->reference . '%'))
+            ->when($request->statut, fn($q) => $q->where('statut', $request->statut))
+            ->when($request->id_entite, fn($q) => $q->where('id_entite', $request->id_entite))
+            ->when($request->periode_debut, fn($q) => $q->whereDate('periode_fin', '>=', $request->periode_debut))
+            ->when($request->periode_fin, fn($q) => $q->whereDate('periode_debut', '<=', $request->periode_fin))
+            ->orderByDesc('date_generation')->paginate(50)->withQueryString();
+
+        return view('Admin.EmploiTemps.historique_etats_paie', [
+            'title' => 'Historique des etats de paie', 'etats' => $etats,
+            'entites' => entite::orderBy('nom_entite')->get(),
+        ]);
+    }
+
+    public function updateStatutBulletin(Request $request, BulletinPaie $bulletin)
+    {
+        $data = $request->validate(['statut' => 'required|in:brouillon,valide,paye']);
+        $niveaux = ['brouillon' => 0, 'valide' => 1, 'paye' => 2];
+        if ($niveaux[$data['statut']] < $niveaux[$bulletin->statut]) {
+            return back()->withErrors(['statut' => 'Le statut d un bulletin ne peut pas etre retrograde.']);
+        }
+        if ($data['statut'] === 'valide' && $bulletin->statut === 'brouillon') {
+            $this->affecterAcomptesEtSanctionsAuBulletin($bulletin);
+        }
+        $bulletin->update(['statut' => $data['statut']]);
+        return back()->with('success', 'Statut du bulletin mis a jour.');
+    }
+
+    public function updateStatutEtat(Request $request, EtatPaie $etat)
+    {
+        $data = $request->validate(['statut' => 'required|in:genere,valide,paye']);
+        $niveaux = ['genere' => 0, 'valide' => 1, 'paye' => 2];
+        if ($niveaux[$data['statut']] < $niveaux[$etat->statut]) {
+            return back()->withErrors(['statut' => 'Le statut d un etat ne peut pas etre retrograde.']);
+        }
+        $etat->update(['statut' => $data['statut']]);
+        return back()->with('success', 'Statut de l etat de paie mis a jour.');
+    }
+
     public function index(Request $request)
     {
         return view('Admin.EmploiTemps.paie_permanents', [
             'title' => 'Paie des permanents',
-            'bulletins' => BulletinPaie::with(['personnel', 'import', 'lignes'])
+            'bulletins' => BulletinPaie::with(['personnel', 'import', 'salaire_permanent', 'entite', 'lignes', 'charges_patronales'])
                 ->when($request->id_personnel, fn($q) => $q->where('id_personnel', $request->id_personnel))
                 ->when($request->periode_debut, fn($q) => $q->whereDate('periode_debut', '>=', $request->periode_debut))
                 ->when($request->periode_fin, fn($q) => $q->whereDate('periode_fin', '<=', $request->periode_fin))
@@ -43,11 +102,13 @@ class PaiePermanentController extends Controller
             'imports' => BiometrieImport::where('type_import', 'permanent')->latest()->get(),
             'rubriques' => RubriquePaie::orderBy('ordre')->orderBy('libelle')->get(),
             'configs' => ConfigRubriquePersonnel::with(['personnel', 'rubrique'])->latest()->limit(80)->get(),
-            'acomptes' => AcompteSalaire::with('personnel')->latest()->limit(80)->get(),
-            'sanctions' => SanctionSalaire::with('personnel')->latest()->limit(80)->get(),
+            'acomptes' => AcompteSalaire::with(['personnel', 'bulletin'])->latest()->limit(80)->get(),
+            'sanctions' => SanctionSalaire::with(['personnel', 'bulletin'])->latest()->limit(80)->get(),
             'baremesIrpp' => BaremeIrpp::orderByDesc('date_debut')->orderBy('ordre')->get(),
             'parametresCac' => ParametreCac::orderByDesc('date_debut')->get(),
             'parametresPvid' => ParametrePvid::orderByDesc('date_debut')->get(),
+            'baremesRetenues' => BaremeRetenueFixe::orderBy('code')->orderBy('ordre')->get(),
+            'chargesPatronales' => ParametreChargePatronale::orderBy('ordre')->get(),
             'annees' => annee_academique::orderByDesc('id')->get(),
             'entites' => entite::orderBy('nom_entite')->get(),
             'etatsPaie' => EtatPaie::with(['annee_academique', 'entite'])
@@ -84,6 +145,50 @@ class PaiePermanentController extends Controller
         return back()->with('success', 'Rubrique de paie creee.');
     }
 
+    public function updateRubrique(Request $request, RubriquePaie $rubrique)
+    {
+        if ($rubrique->systeme) {
+            return back()->withErrors(['rubrique' => 'Les rubriques systeme ne peuvent pas etre modifiees depuis cette interface.']);
+        }
+
+        $data = $request->validate([
+            'libelle' => 'required|string|max:255',
+            'type' => 'required|in:gain,retenue',
+            'mode_calcul' => 'required|in:fixe,pourcentage,kilometrage,bareme,manuel',
+            'base_calcul' => 'nullable|in:salaire_base,brut,taxable,cotisable,net,irpp',
+            'valeur_defaut' => 'nullable|numeric|min:0',
+            'plafond' => 'nullable|numeric|min:0',
+            'imposable' => 'nullable|boolean',
+            'cotisable' => 'nullable|boolean',
+            'actif' => 'nullable|boolean',
+        ]);
+
+        $data['valeur_defaut'] = $data['valeur_defaut'] ?? 0;
+        $data['imposable'] = $request->boolean('imposable');
+        $data['cotisable'] = $request->boolean('cotisable');
+        $data['actif'] = $request->boolean('actif');
+
+        $rubrique->update($data);
+
+        return back()->with('success', 'Rubrique de paie modifiee.');
+    }
+
+    public function destroyRubrique(RubriquePaie $rubrique)
+    {
+        if ($rubrique->systeme) {
+            return back()->withErrors(['rubrique' => 'Les rubriques systeme ne peuvent pas etre supprimees.']);
+        }
+
+        if ($rubrique->configs_personnel()->exists()) {
+            $rubrique->update(['actif' => false]);
+            return back()->with('success', 'Rubrique desactivee car elle est deja affectee a un personnel.');
+        }
+
+        $rubrique->delete();
+
+        return back()->with('success', 'Rubrique de paie supprimee.');
+    }
+
     public function storeConfig(Request $request)
     {
         $data = $request->validate([
@@ -107,6 +212,35 @@ class PaiePermanentController extends Controller
         return back()->with('success', 'Rubrique affectee au personnel.');
     }
 
+    public function updateConfig(Request $request, ConfigRubriquePersonnel $config)
+    {
+        $data = $request->validate([
+            'id_personnel' => 'required|integer|exists:personnels,id',
+            'id_rubrique_paie' => 'required|integer|exists:rubriques_paie,id',
+            'date_debut' => 'required|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_debut',
+            'valeur' => 'required|numeric|min:0',
+            'quantite' => 'nullable|numeric|min:0',
+            'appliquer_ce_mois' => 'nullable|boolean',
+            'statut' => 'required|in:actif,inactif',
+            'observations' => 'nullable|string|max:1000',
+        ]);
+
+        $data['quantite'] = $data['quantite'] ?? 1;
+        $data['appliquer_ce_mois'] = $request->boolean('appliquer_ce_mois');
+
+        $config->update($data);
+
+        return back()->with('success', 'Affectation de rubrique modifiee.');
+    }
+
+    public function destroyConfig(ConfigRubriquePersonnel $config)
+    {
+        $config->delete();
+
+        return back()->with('success', 'Affectation de rubrique supprimee.');
+    }
+
     public function storeAcompte(Request $request)
     {
         $data = $request->validate([
@@ -120,9 +254,43 @@ class PaiePermanentController extends Controller
         $data['statut'] = 'actif';
         $data['id_user'] = auth()->id() ?? 0;
 
-        AcompteSalaire::create($data);
+        $acompte = AcompteSalaire::create($data);
+        $this->recalculerBrouillonPourMois($acompte->id_personnel, $acompte->periode_imputation);
 
         return back()->with('success', 'Acompte sur salaire enregistre.');
+    }
+
+    public function updateAcompte(Request $request, AcompteSalaire $acompte)
+    {
+        if ($acompte->id_bulletin_paie && in_array($acompte->bulletin?->statut, ['valide', 'paye'], true)) {
+            return back()->withErrors(['acompte' => 'Cet acompte appartient a un bulletin verrouille.']);
+        }
+
+        $data = $request->validate([
+            'id_personnel' => 'required|integer|exists:personnels,id',
+            'date_acompte' => 'required|date',
+            'montant' => 'required|numeric|min:0',
+            'periode_imputation' => 'required|date_format:Y-m',
+            'motif' => 'nullable|string|max:255',
+            'statut' => 'required|in:actif,inactif',
+        ]);
+
+        $acompte->update($data);
+        $this->recalculerBulletinLie($acompte->id_bulletin_paie);
+
+        return back()->with('success', 'Acompte sur salaire modifie.');
+    }
+
+    public function destroyAcompte(AcompteSalaire $acompte)
+    {
+        if ($acompte->id_bulletin_paie && in_array($acompte->bulletin?->statut, ['valide', 'paye'], true)) {
+            return back()->withErrors(['acompte' => 'Cet acompte appartient a un bulletin verrouille.']);
+        }
+        $bulletinId = $acompte->id_bulletin_paie;
+        $acompte->delete();
+        $this->recalculerBulletinLie($bulletinId);
+
+        return back()->with('success', 'Acompte sur salaire supprime.');
     }
 
     public function storeSanction(Request $request)
@@ -145,9 +313,109 @@ class PaiePermanentController extends Controller
         $data['statut'] = 'active';
         $data['id_user'] = auth()->id() ?? 0;
 
-        SanctionSalaire::create($data);
+        $sanction = SanctionSalaire::create($data);
+        $mois = $sanction->mois_application ?: optional($sanction->periode_debut_application)->format('Y-m');
+        $this->recalculerBrouillonPourMois($sanction->id_personnel, $mois);
 
         return back()->with('success', 'Sanction salariale enregistree.');
+    }
+
+    public function updateSanction(Request $request, SanctionSalaire $sanction)
+    {
+        if ($sanction->id_bulletin_paie && in_array($sanction->bulletin?->statut, ['valide', 'paye'], true)) {
+            return back()->withErrors(['sanction' => 'Cette sanction appartient a un bulletin verrouille.']);
+        }
+
+        $data = $request->validate([
+            'id_personnel' => 'required|integer|exists:personnels,id',
+            'date_sanction' => 'required|date',
+            'montant' => 'required|numeric|min:0',
+            'motif' => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'mois_application' => 'nullable|date_format:Y-m',
+            'statut' => 'required|in:active,annulee',
+        ]);
+        $sanction->update($data);
+        $this->recalculerBulletinLie($sanction->id_bulletin_paie);
+
+        return back()->with('success', 'Sanction modifiee et bulletin brouillon recalcule.');
+    }
+
+    public function destroySanction(SanctionSalaire $sanction)
+    {
+        if ($sanction->id_bulletin_paie && in_array($sanction->bulletin?->statut, ['valide', 'paye'], true)) {
+            return back()->withErrors(['sanction' => 'Cette sanction appartient a un bulletin verrouille.']);
+        }
+        $bulletinId = $sanction->id_bulletin_paie;
+        $sanction->delete();
+        $this->recalculerBulletinLie($bulletinId);
+
+        return back()->with('success', 'Sanction supprimee et bulletin brouillon recalcule.');
+    }
+
+    public function storeBaremeRetenue(Request $request)
+    {
+        BaremeRetenueFixe::create($this->validateBaremeRetenue($request) + ['id_user' => auth()->id() ?? 0]);
+        return back()->with('success', 'Tranche de retenue enregistree.');
+    }
+
+    public function updateBaremeRetenue(Request $request, BaremeRetenueFixe $bareme)
+    {
+        $bareme->update($this->validateBaremeRetenue($request));
+        return back()->with('success', 'Tranche de retenue modifiee.');
+    }
+
+    public function destroyBaremeRetenue(BaremeRetenueFixe $bareme)
+    {
+        $bareme->delete();
+        return back()->with('success', 'Tranche de retenue supprimee.');
+    }
+
+    private function validateBaremeRetenue(Request $request): array
+    {
+        $data = $request->validate([
+            'code' => 'required|in:tdl,rav', 'libelle' => 'required|string|max:255',
+            'montant_min' => 'required|numeric|min:0', 'montant_max' => 'nullable|numeric|gt:montant_min',
+            'montant' => 'required|numeric|min:0', 'date_debut' => 'required|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_debut', 'ordre' => 'nullable|integer|min:0',
+            'actif' => 'nullable|boolean',
+        ]);
+        $data['ordre'] = $data['ordre'] ?? 0;
+        $data['actif'] = $request->boolean('actif', true);
+        return $data;
+    }
+
+    public function storeChargePatronale(Request $request)
+    {
+        ParametreChargePatronale::create($this->validateChargePatronale($request) + ['id_user' => auth()->id() ?? 0]);
+        return back()->with('success', 'Charge patronale enregistree.');
+    }
+
+    public function updateChargePatronale(Request $request, ParametreChargePatronale $charge)
+    {
+        $charge->update($this->validateChargePatronale($request));
+        return back()->with('success', 'Charge patronale modifiee.');
+    }
+
+    public function destroyChargePatronale(ParametreChargePatronale $charge)
+    {
+        $charge->delete();
+        return back()->with('success', 'Charge patronale supprimee.');
+    }
+
+    private function validateChargePatronale(Request $request): array
+    {
+        $data = $request->validate([
+            'code' => 'required|string|max:50', 'libelle' => 'required|string|max:255',
+            'nature' => 'required|in:sociale,fiscale',
+            'base_calcul' => 'required|in:brut,cotisable_plafonne,cotisable_non_plafonne',
+            'taux' => 'required|numeric|min:0', 'plafond' => 'nullable|numeric|min:0',
+            'date_debut' => 'required|date', 'date_fin' => 'nullable|date|after_or_equal:date_debut',
+            'ordre' => 'nullable|integer|min:0', 'actif' => 'nullable|boolean',
+        ]);
+        $data['ordre'] = $data['ordre'] ?? 0;
+        $data['actif'] = $request->boolean('actif', true);
+        return $data;
     }
 
     public function storeBaremeIrpp(Request $request)
@@ -293,15 +561,152 @@ class PaiePermanentController extends Controller
         $fin = Carbon::parse($data['periode_fin'])->endOfDay();
         $personnels = $this->personnelsAPayer($debut, $fin, $data['id_personnel'] ?? null);
         $count = 0;
+        $skipped = 0;
 
-        DB::transaction(function () use ($personnels, $debut, $fin, $data, &$count) {
+        DB::transaction(function () use ($personnels, $debut, $fin, $data, &$count, &$skipped) {
             foreach ($personnels as $personnel) {
+                if ($this->bulletinVerrouilleExiste($personnel->id, $debut, $fin)) {
+                    $skipped++;
+                    continue;
+                }
+
                 $this->genererBulletinPersonnel($personnel, $debut, $fin, $data['id_biometrie_import'] ?? null);
                 $count++;
             }
         });
 
-        return back()->with('success', "{$count} bulletin(s) brouillon genere(s).");
+        $message = "{$count} bulletin(s) brouillon genere(s).";
+        if ($skipped > 0) {
+            $message .= " {$skipped} bulletin(s) deja valide(s) ignore(s).";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function regenererBulletinsPeriode(Request $request)
+    {
+        $data = $request->validate([
+            'periode_debut' => 'required|date',
+            'periode_fin' => 'required|date|after_or_equal:periode_debut',
+            'id_biometrie_import' => 'nullable|integer|exists:biometrie_imports,id',
+            'id_personnel' => 'nullable|integer|exists:personnels,id',
+        ]);
+
+        $debut = Carbon::parse($data['periode_debut'])->startOfDay();
+        $fin = Carbon::parse($data['periode_fin'])->endOfDay();
+        $personnels = $this->personnelsAPayer($debut, $fin, $data['id_personnel'] ?? null);
+        $deleted = 0;
+        $generated = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($personnels, $debut, $fin, $data, &$deleted, &$generated, &$skipped) {
+            $brouillons = BulletinPaie::where('statut', 'brouillon')
+                ->whereDate('periode_debut', $debut->toDateString())
+                ->whereDate('periode_fin', $fin->toDateString())
+                ->when($data['id_personnel'] ?? null, fn($q) => $q->where('id_personnel', $data['id_personnel']))
+                ->get();
+
+            foreach ($brouillons as $bulletin) {
+                $bulletin->lignes()->delete();
+                $bulletin->delete();
+                $deleted++;
+            }
+
+            foreach ($personnels as $personnel) {
+                if ($this->bulletinVerrouilleExiste($personnel->id, $debut, $fin)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $this->genererBulletinPersonnel($personnel, $debut, $fin, $data['id_biometrie_import'] ?? null);
+                $generated++;
+            }
+        });
+
+        $message = "{$deleted} ancien(s) brouillon(s) supprime(s), {$generated} bulletin(s) regenere(s).";
+        if ($skipped > 0) {
+            $message .= " {$skipped} bulletin(s) valide(s) conserve(s).";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function regenererBulletinsMois(Request $request)
+    {
+        $data = $request->validate(['mois' => 'required|date_format:Y-m']);
+        $mois = Carbon::parse($data['mois'] . '-01');
+        $debut = $mois->copy()->startOfMonth()->startOfDay();
+        $fin = $mois->copy()->endOfMonth()->endOfDay();
+        $bulletins = BulletinPaie::with('personnel')
+            ->where('statut', 'brouillon')
+            ->whereDate('periode_debut', '<=', $fin->toDateString())
+            ->whereDate('periode_fin', '>=', $debut->toDateString())
+            ->get();
+
+        if ($bulletins->isEmpty()) {
+            return back()->withErrors(['regeneration' => 'Aucun bulletin brouillon existant pour ce mois.']);
+        }
+
+        DB::transaction(function () use ($bulletins) {
+            foreach ($bulletins as $bulletin) {
+                $personnel = $bulletin->personnel;
+                $importIdOriginal = $bulletin->id_biometrie_import;
+                $periodeDebutOriginale = Carbon::parse($bulletin->periode_debut)->startOfDay();
+                $periodeFinOriginale = Carbon::parse($bulletin->periode_fin)->endOfDay();
+                $bulletin->delete();
+
+                if ($personnel) {
+                    $this->genererBulletinPersonnel(
+                        $personnel,
+                        $periodeDebutOriginale,
+                        $periodeFinOriginale,
+                        $importIdOriginal
+                    );
+                }
+            }
+        });
+
+        return back()->with('success', $bulletins->count() . ' bulletin(s) regenere(s) avec leur import biometrie d origine.');
+    }
+
+    public function destroyBulletinsMois(Request $request)
+    {
+        $data = $request->validate(['mois' => 'required|date_format:Y-m']);
+        $mois = Carbon::parse($data['mois'] . '-01');
+        $debut = $mois->copy()->startOfMonth()->toDateString();
+        $fin = $mois->copy()->endOfMonth()->toDateString();
+        $query = BulletinPaie::whereDate('periode_debut', '<=', $fin)
+            ->whereDate('periode_fin', '>=', $debut);
+        $proteges = (clone $query)->whereIn('statut', ['valide', 'paye'])->count();
+        $brouillons = (clone $query)->where('statut', 'brouillon')->get();
+
+        DB::transaction(function () use ($brouillons) {
+            foreach ($brouillons as $bulletin) {
+                AcompteSalaire::where('id_bulletin_paie', $bulletin->id)->update(['id_bulletin_paie' => null]);
+                SanctionSalaire::where('id_bulletin_paie', $bulletin->id)->update(['id_bulletin_paie' => null]);
+                $bulletin->delete();
+            }
+        });
+
+        $message = $brouillons->count() . ' bulletin(s) brouillon supprime(s) pour ' . $mois->format('m/Y') . '.';
+        if ($proteges > 0) {
+            $message .= " {$proteges} bulletin(s) valide(s) ou paye(s) conserve(s).";
+        }
+        return back()->with('success', $message);
+    }
+
+    public function destroyBulletin(BulletinPaie $bulletin)
+    {
+        if ($bulletin->statut !== 'brouillon') {
+            return back()->withErrors(['bulletin' => 'Seuls les bulletins brouillon peuvent etre supprimes.']);
+        }
+
+        DB::transaction(function () use ($bulletin) {
+            $bulletin->lignes()->delete();
+            $bulletin->delete();
+        });
+
+        return back()->with('success', 'Bulletin brouillon supprime.');
     }
 
     public function valider(BulletinPaie $bulletin)
@@ -353,7 +758,7 @@ class PaiePermanentController extends Controller
             'statut' => 'nullable|in:brouillon,valide,paye',
         ]);
 
-        $bulletins = BulletinPaie::with(['personnel', 'lignes', 'import'])
+        $bulletins = BulletinPaie::with(['personnel', 'lignes', 'import', 'salaire_permanent', 'entite', 'annee_academique', 'charges_patronales'])
             ->whereDate('periode_debut', '>=', $data['periode_debut'])
             ->whereDate('periode_fin', '<=', $data['periode_fin'])
             ->when($data['id_personnel'] ?? null, fn($q) => $q->where('id_personnel', $data['id_personnel']))
@@ -369,7 +774,7 @@ class PaiePermanentController extends Controller
             'bulletins' => $bulletins,
             'periodeDebut' => Carbon::parse($data['periode_debut']),
             'periodeFin' => Carbon::parse($data['periode_fin']),
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('a3', 'portrait');
 
         return $pdf->download('bulletins_paie_' . Carbon::parse($data['periode_debut'])->format('Y_m') . '.pdf');
     }
@@ -394,10 +799,12 @@ class PaiePermanentController extends Controller
             $data['id_entite'] ?? null
         );
 
-        $bulletins = BulletinPaie::with(['personnel', 'lignes'])
+        $bulletins = BulletinPaie::with(['personnel', 'lignes', 'charges_patronales'])
             ->whereDate('periode_debut', '<=', $fin->toDateString())
             ->whereDate('periode_fin', '>=', $debut->toDateString())
             ->when($data['statut'] ?? null, fn($q) => $q->where('statut', $data['statut']))
+            ->when($data['id_annee_academique'] ?? null, fn($q) => $q->where('id_annee_academique', $data['id_annee_academique']))
+            ->when($data['id_entite'] ?? null, fn($q) => $q->where('id_entite', $data['id_entite']))
             ->when($personnelIds !== null, fn($q) => $q->whereIn('id_personnel', $personnelIds))
             ->orderBy('id_personnel')
             ->get();
@@ -458,13 +865,18 @@ class PaiePermanentController extends Controller
 
     public function regenererEtatPaie(EtatPaie $etat)
     {
+        if ($etat->statut !== 'genere') {
+            return back()->withErrors(['etat_paie' => 'Seul un etat genere non valide peut etre regenere.']);
+        }
         $debut = $etat->periode_debut->copy()->startOfDay();
         $fin = $etat->periode_fin->copy()->endOfDay();
         $personnelIds = $this->personnelIdsPourEtatPaie($debut, $fin, $etat->id_annee_academique, $etat->id_entite);
 
-        $bulletins = BulletinPaie::with(['personnel', 'lignes'])
+        $bulletins = BulletinPaie::with(['personnel', 'lignes', 'charges_patronales'])
             ->whereDate('periode_debut', '<=', $fin->toDateString())
             ->whereDate('periode_fin', '>=', $debut->toDateString())
+            ->when($etat->id_annee_academique, fn($q) => $q->where('id_annee_academique', $etat->id_annee_academique))
+            ->when($etat->id_entite, fn($q) => $q->where('id_entite', $etat->id_entite))
             ->when($personnelIds !== null, fn($q) => $q->whereIn('id_personnel', $personnelIds))
             ->orderBy('id_personnel')
             ->get();
@@ -484,6 +896,9 @@ class PaiePermanentController extends Controller
 
     public function destroyEtatPaie(EtatPaie $etat)
     {
+        if ($etat->statut !== 'genere') {
+            return back()->withErrors(['etat_paie' => 'Seul un etat genere non valide peut etre supprime.']);
+        }
         $etat->delete();
 
         return redirect()
@@ -507,6 +922,15 @@ class PaiePermanentController extends Controller
             ->get();
     }
 
+    private function bulletinVerrouilleExiste(int $personnelId, Carbon $debut, Carbon $fin): bool
+    {
+        return BulletinPaie::where('id_personnel', $personnelId)
+            ->whereDate('periode_debut', $debut->toDateString())
+            ->whereDate('periode_fin', $fin->toDateString())
+            ->whereIn('statut', ['valide', 'paye'])
+            ->exists();
+    }
+
     private function remplirEtatPaieDepuisBulletins(EtatPaie $etat, $bulletins): void
     {
         foreach ($bulletins as $bulletin) {
@@ -523,14 +947,22 @@ class PaiePermanentController extends Controller
                 'id_personnel' => $bulletin->id_personnel,
                 'nom_personnel' => $bulletin->personnel->nom ?? '-',
                 'salaire_base' => $bulletin->salaire_base,
+                'salaire_taxable' => $bulletin->salaire_taxable,
+                'salaire_cotisable' => $bulletin->salaire_cotisable,
                 'total_gains' => $bulletin->total_gains,
                 'total_retenues' => $retenuesHorsAcomptesSanctions,
                 'penalite_biometrie' => $bulletin->penalite_biometrie,
                 'total_sanctions' => $bulletin->total_sanctions,
                 'total_acomptes' => $bulletin->total_acomptes,
+                'total_charges_patronales' => $bulletin->total_charges_patronales,
                 'net_a_payer' => $bulletin->net_a_payer,
                 'detail_gains' => $gains,
                 'detail_retenues' => $retenues,
+                'detail_charges_patronales' => $bulletin->charges_patronales->map(fn($charge) => [
+                    'code' => $charge->code, 'libelle' => $charge->libelle,
+                    'nature' => $charge->nature, 'base' => (float) $charge->base,
+                    'taux' => (float) $charge->taux, 'montant' => (float) $charge->montant,
+                ])->values()->all(),
             ]);
         }
 
@@ -542,6 +974,7 @@ class PaiePermanentController extends Controller
             'total_penalites' => $etat->lignes->sum('penalite_biometrie'),
             'total_sanctions' => $etat->lignes->sum('total_sanctions'),
             'total_acomptes' => $etat->lignes->sum('total_acomptes'),
+            'total_charges_patronales' => $etat->lignes->sum('total_charges_patronales'),
             'total_net_a_payer' => $etat->lignes->sum('net_a_payer'),
         ]);
     }
@@ -641,8 +1074,45 @@ class PaiePermanentController extends Controller
             ->update(['id_bulletin_paie' => $bulletin->id]);
     }
 
+    private function recalculerBulletinLie(?int $bulletinId): void
+    {
+        if (!$bulletinId) {
+            return;
+        }
+        $bulletin = BulletinPaie::find($bulletinId);
+        if ($bulletin && $bulletin->statut === 'brouillon') {
+            $this->recalculerBulletin($bulletin, Carbon::parse($bulletin->periode_debut), Carbon::parse($bulletin->periode_fin));
+        }
+    }
+
+    private function recalculerBrouillonPourMois(int $personnelId, ?string $mois): void
+    {
+        if (!$mois) {
+            return;
+        }
+        $date = Carbon::parse($mois . '-01');
+        $bulletin = BulletinPaie::where('id_personnel', $personnelId)
+            ->where('statut', 'brouillon')
+            ->whereDate('periode_debut', '<=', $date->copy()->endOfMonth()->toDateString())
+            ->whereDate('periode_fin', '>=', $date->copy()->startOfMonth()->toDateString())
+            ->first();
+        if ($bulletin) {
+            $this->recalculerBulletin($bulletin, Carbon::parse($bulletin->periode_debut), Carbon::parse($bulletin->periode_fin));
+        }
+    }
+
     private function genererBulletinPersonnel(personnel $personnel, Carbon $debut, Carbon $fin, ?int $importId): BulletinPaie
     {
+        $bulletinVerrouille = BulletinPaie::where('id_personnel', $personnel->id)
+            ->whereDate('periode_debut', $debut->toDateString())
+            ->whereDate('periode_fin', $fin->toDateString())
+            ->whereIn('statut', ['valide', 'paye'])
+            ->first();
+
+        if ($bulletinVerrouille) {
+            return $bulletinVerrouille;
+        }
+
         $salaire = $this->salairePermanentPourPeriode($personnel->id, $debut, $fin);
         $salaireContrat = (float) ($salaire->montant_mensuel ?? 0);
         $consolidation = $this->consolidationBiometrie($personnel->id, $debut, $fin, $importId, $salaireContrat);
@@ -657,6 +1127,9 @@ class PaiePermanentController extends Controller
             ],
             [
                 'id_biometrie_import' => $importId,
+                'id_salaire_permanent' => $salaire?->id,
+                'id_annee_academique' => $salaire?->id_annee_academique,
+                'id_entite' => $salaire?->id_entite,
                 'salaire_base' => $salaireTheorique,
                 'penalite_biometrie' => $penaliteBiometrie,
                 'statut' => 'brouillon',
@@ -667,6 +1140,7 @@ class PaiePermanentController extends Controller
         $bulletin->lignes()->delete();
 
         $this->ajouterLigne($bulletin, null, 'salaire_base_consolide', 'Salaire de base theorique', 'gain', 'plus', 'fixe', 'salaire_base', $salaireTheorique, 0, 1, $salaireTheorique, true, true, 1);
+        $this->ajouterPrimeAnciennete($bulletin, $personnel, $salaire, $fin);
 
         $configs = ConfigRubriquePersonnel::with('rubrique')
             ->where('id_personnel', $personnel->id)
@@ -676,6 +1150,10 @@ class PaiePermanentController extends Controller
 
         foreach ($configs as $config) {
             $rubrique = $config->rubrique;
+            if ($rubrique->code === 'prime_anciennete') {
+                continue;
+            }
+
             $base = $this->baseCalcul($rubrique->base_calcul, $salaireTheorique, $salaireTheorique, 0, 0, 0);
             $montant = $this->montantRubrique($rubrique, $config->valeur, $config->quantite, $base);
             if ($montant <= 0) {
@@ -706,20 +1184,85 @@ class PaiePermanentController extends Controller
         return $bulletin;
     }
 
-    private function recalculerBulletin(BulletinPaie $bulletin, Carbon $debut, Carbon $fin): void
+    private function ajouterPrimeAnciennete(BulletinPaie $bulletin, personnel $personnel, ?SalairePermanent $salaire, Carbon $dateCalcul): void
     {
-        $bulletin->load('lignes');
-        $gains = $bulletin->lignes->where('sens', 'plus')->sum('montant');
-        $taxable = $bulletin->lignes->where('sens', 'plus')->where('imposable', true)->sum('montant');
-        $cotisable = $bulletin->lignes->where('sens', 'plus')->where('cotisable', true)->sum('montant');
+        $rubrique = RubriquePaie::where('code', 'prime_anciennete')
+            ->where('actif', true)
+            ->first();
 
-        $systemRetenues = $this->calculRetenuesSysteme($bulletin, $taxable, $cotisable);
-        foreach ($systemRetenues as $line) {
-            $this->ajouterLigne(...$line);
+        if (!$rubrique) {
+            return;
         }
 
-        if ($bulletin->penalite_biometrie > 0) {
-            $this->ajouterLigne($bulletin, null, 'penalite_biometrie', 'Penalite biometrie', 'retenue', 'moins', 'manuel', 'net', 0, 0, 1, $bulletin->penalite_biometrie, false, false, 890);
+        $dateEmbauche = $personnel->date_recrutement ? Carbon::parse($personnel->date_recrutement)->startOfDay() : null;
+        if (!$dateEmbauche || $dateEmbauche->greaterThan($dateCalcul)) {
+            return;
+        }
+
+        $anciennete = $dateEmbauche->diffInYears($dateCalcul);
+        $taux = $this->tauxPrimeAnciennete($anciennete);
+        if ($taux <= 0) {
+            return;
+        }
+
+        $base = $salaire
+            ? (float) ($salaire->salaire_minimum_categoriel ?: $salaire->montant_mensuel ?: 0)
+            : 0;
+        $montant = round($base * ($taux / 100), 2);
+        if ($base <= 0 || $montant <= 0) {
+            return;
+        }
+
+        $this->ajouterLigne(
+            $bulletin,
+            $rubrique,
+            'prime_anciennete',
+            $rubrique->libelle,
+            'gain',
+            'plus',
+            'pourcentage',
+            'salaire_minimum_categoriel',
+            $base,
+            $taux,
+            1,
+            $montant,
+            $rubrique->imposable,
+            $rubrique->cotisable,
+            $rubrique->ordre
+        );
+    }
+
+    private function tauxPrimeAnciennete(int $anciennete): float
+    {
+        if ($anciennete < 2) {
+            return 0;
+        }
+
+        return 4 + (($anciennete - 2) * 2);
+    }
+
+    private function recalculerBulletin(BulletinPaie $bulletin, Carbon $debut, Carbon $fin): void
+    {
+        $bulletin->lignes()->whereIn('code', [
+            'cnps_salarial', 'irpp', 'cac', 'rav', 'ccf', 'tdl',
+            'penalite_biometrie', 'acomptes', 'sanctions',
+        ])->delete();
+        $bulletin->load('lignes');
+        $gains = $bulletin->lignes->where('sens', 'plus')->sum('montant');
+        $penaliteBiometrie = min((float) $bulletin->penalite_biometrie, (float) $gains);
+        $baseApresPenalite = max($gains - $penaliteBiometrie, 0);
+        $taxableAvantPenalite = $bulletin->lignes->where('sens', 'plus')->where('imposable', true)->sum('montant');
+        $cotisableAvantPenalite = $bulletin->lignes->where('sens', 'plus')->where('cotisable', true)->sum('montant');
+        $taxable = max($taxableAvantPenalite - $penaliteBiometrie, 0);
+        $cotisable = max($cotisableAvantPenalite - $penaliteBiometrie, 0);
+
+        if ($penaliteBiometrie > 0) {
+            $this->ajouterLigne($bulletin, null, 'penalite_biometrie', 'Penalite biometrie', 'retenue', 'moins', 'manuel', 'brut', $gains, 0, 1, $penaliteBiometrie, false, false, 890);
+        }
+
+        $systemRetenues = $this->calculRetenuesSysteme($bulletin, $baseApresPenalite, $taxable, $cotisable);
+        foreach ($systemRetenues as $line) {
+            $this->ajouterLigne(...$line);
         }
 
         $acomptes = AcompteSalaire::where('id_personnel', $bulletin->id_personnel)
@@ -751,8 +1294,11 @@ class PaiePermanentController extends Controller
         $bulletin->load('lignes');
         $totalRetenues = $bulletin->lignes->where('sens', 'moins')->sum('montant');
         $net = max($gains - $totalRetenues, 0);
+        $totalChargesPatronales = $this->calculerChargesPatronales($bulletin, $baseApresPenalite, $cotisable);
 
         $bulletin->update([
+            'penalite_biometrie' => $penaliteBiometrie,
+            'base_apres_penalite' => $baseApresPenalite,
             'brut_mensuel' => $gains,
             'salaire_taxable' => $taxable,
             'salaire_cotisable' => $cotisable,
@@ -760,13 +1306,15 @@ class PaiePermanentController extends Controller
             'total_retenues' => $totalRetenues,
             'total_acomptes' => $acomptes,
             'total_sanctions' => $sanctions,
+            'total_charges_patronales' => $totalChargesPatronales,
             'net_a_payer' => $net,
             'solde_du' => $net,
         ]);
     }
 
-    private function calculRetenuesSysteme(BulletinPaie $bulletin, float $taxable, float $cotisable): array
+    private function calculRetenuesSysteme(BulletinPaie $bulletin, float $baseApresPenalite, float $taxable, float $cotisable): array
     {
+        $seuilCcfPvid = 62000.0;
         $rubriques = RubriquePaie::where('actif', true)->where('systeme', true)->get()->keyBy('code');
         $lines = [];
         $cnpsRubrique = $rubriques->get('cnps_salarial');
@@ -774,16 +1322,19 @@ class PaiePermanentController extends Controller
         $pvidTaux = (float) ($parametrePvid?->taux ?? $cnpsRubrique?->valeur_defaut ?? 0);
         $pvidPlafond = (float) ($parametrePvid?->plafond ?? $cnpsRubrique?->plafond ?? $cotisable);
         $cnpsBase = $pvidPlafond > 0 ? min($cotisable, $pvidPlafond) : $cotisable;
-        $cnps = ($cnpsRubrique && $pvidTaux > 0) ? round($cnpsBase * ($pvidTaux / 100), 2) : 0;
+        $cnps = ($cnpsRubrique && $pvidTaux > 0 && $baseApresPenalite >= $seuilCcfPvid)
+            ? round($cnpsBase * ($pvidTaux / 100), 2)
+            : 0;
 
         if ($cnpsRubrique && $cnps > 0) {
             $lines[] = [$bulletin, $cnpsRubrique, 'cnps_salarial', $cnpsRubrique->libelle, 'retenue', 'moins', 'pourcentage', 'cotisable', $cnpsBase, $pvidTaux, 1, $cnps, false, false, $cnpsRubrique->ordre];
         }
 
         $irppRubrique = $rubriques->get('irpp');
-        $irpp = $irppRubrique ? $this->calculIrpp(max($taxable - $cnps, 0), $bulletin->periode_debut) : 0;
+        $revenuAnnuelNetImposable = $taxable < 63000 ? 0 : max((($taxable * 0.70) - $cnps) * 12 - 500000, 0);
+        $irpp = $irppRubrique ? round($this->calculIrpp($revenuAnnuelNetImposable, $bulletin->periode_debut) / 12, 2) : 0;
         if ($irppRubrique && $irpp > 0) {
-            $lines[] = [$bulletin, $irppRubrique, 'irpp', $irppRubrique->libelle, 'retenue', 'moins', 'bareme', 'taxable', max($taxable - $cnps, 0), 0, 1, $irpp, false, false, $irppRubrique->ordre];
+            $lines[] = [$bulletin, $irppRubrique, 'irpp', $irppRubrique->libelle, 'retenue', 'moins', 'bareme', 'revenu_annuel_net_imposable', $revenuAnnuelNetImposable, 0, 1, $irpp, false, false, $irppRubrique->ordre];
         }
 
         foreach (['cac', 'rav', 'ccf', 'tdl'] as $code) {
@@ -791,13 +1342,19 @@ class PaiePermanentController extends Controller
             if (!$rubrique) {
                 continue;
             }
-            $base = $rubrique->base_calcul === 'irpp' ? $irpp : $taxable;
+            $base = match (true) {
+                $rubrique->base_calcul === 'irpp' => $irpp,
+                in_array($code, ['tdl', 'ccf'], true) => $baseApresPenalite,
+                default => $taxable,
+            };
             $taux = $code === 'cac'
                 ? $this->tauxCac($bulletin->periode_debut)
                 : (float) $rubrique->valeur_defaut;
-            $montant = $rubrique->mode_calcul === 'fixe'
-                ? (float) $rubrique->valeur_defaut
-                : round($base * ($taux / 100), 2);
+            $montant = $code === 'ccf' && $baseApresPenalite < $seuilCcfPvid
+                ? 0
+                : (in_array($code, ['tdl', 'rav'], true)
+                ? $this->montantRetenueFixe($code, $base, $bulletin->periode_debut)
+                : ($rubrique->mode_calcul === 'fixe' ? (float) $rubrique->valeur_defaut : round($base * ($taux / 100), 2)));
 
             if ($montant > 0) {
                 $lines[] = [$bulletin, $rubrique, $code, $rubrique->libelle, 'retenue', 'moins', $rubrique->mode_calcul, $rubrique->base_calcul, $base, $taux, 1, $montant, false, false, $rubrique->ordre];
@@ -807,12 +1364,52 @@ class PaiePermanentController extends Controller
         return $lines;
     }
 
+    private function montantRetenueFixe(string $code, float $base, Carbon|string $date): float
+    {
+        return (float) (BaremeRetenueFixe::applicable($date)
+            ->where('code', $code)
+            ->where('montant_min', '<', $base)
+            ->where(fn($q) => $q->whereNull('montant_max')->orWhere('montant_max', '>=', $base))
+            ->orderByDesc('montant_min')->value('montant') ?? 0);
+    }
+
+    private function calculerChargesPatronales(BulletinPaie $bulletin, float $brut, float $cotisable): float
+    {
+        $bulletin->charges_patronales()->delete();
+        $total = 0;
+        foreach (ParametreChargePatronale::applicable($bulletin->periode_debut)->orderBy('ordre')->get() as $parametre) {
+            $base = match ($parametre->base_calcul) {
+                'cotisable_plafonne' => min($cotisable, (float) ($parametre->plafond ?: $cotisable)),
+                'cotisable_non_plafonne' => $cotisable,
+                default => $brut,
+            };
+            $montant = round($base * ((float) $parametre->taux / 100), 2);
+            $bulletin->charges_patronales()->create([
+                'id_parametre' => $parametre->id, 'code' => $parametre->code,
+                'libelle' => $parametre->libelle, 'nature' => $parametre->nature,
+                'base_calcul' => $parametre->base_calcul, 'base' => $base,
+                'taux' => $parametre->taux, 'montant' => $montant, 'ordre' => $parametre->ordre,
+            ]);
+            $total += $montant;
+        }
+        return round($total, 2);
+    }
+
     private function calculIrpp(float $base, Carbon|string $date): float
     {
         $tranches = BaremeIrpp::applicable($date)
             ->orderBy('montant_min')
             ->orderBy('ordre')
             ->get();
+
+        if ($tranches->isEmpty()) {
+            $tranches = collect([
+                (object) ['montant_min' => 0, 'montant_max' => 2000000, 'taux' => 10],
+                (object) ['montant_min' => 2000000, 'montant_max' => 3000000, 'taux' => 15],
+                (object) ['montant_min' => 3000000, 'montant_max' => 5000000, 'taux' => 25],
+                (object) ['montant_min' => 5000000, 'montant_max' => null, 'taux' => 35],
+            ]);
+        }
 
         $impot = 0;
 
@@ -916,16 +1513,10 @@ class PaiePermanentController extends Controller
 
         $totauxMensuels = $presences
             ->groupBy(fn($presence) => optional($presence->date_presence)->format('Y-m'))
-            ->map(function ($monthItems) {
+            ->map(function ($monthItems) use ($salaireContrat) {
                 $presence = $monthItems->first();
                 $date = $presence->date_presence ? Carbon::parse($presence->date_presence) : now();
-                $salaire = $this->salairePermanentPourConsolidation(
-                    $presence->id_personnel,
-                    $date,
-                    $presence->id_annee_academique,
-                    $presence->id_entite
-                );
-                $salaireMensuel = (float) ($salaire->montant_mensuel ?? 0);
+                $salaireMensuel = $salaireContrat;
                 $tauxHoraire = $date->daysInMonth > 0
                     ? round(($salaireMensuel / $date->daysInMonth) / 8, 6)
                     : 0;
@@ -940,7 +1531,8 @@ class PaiePermanentController extends Controller
                 ];
             });
 
-        $salaireTheorique = (float) $totauxMensuels->sum('salaire');
+        $nombreMois = max($totauxMensuels->count(), 1);
+        $salaireTheorique = round($salaireContrat * $nombreMois, 2);
         $penaliteMontant = (float) $totauxMensuels->sum('penalite');
 
         return [
@@ -950,22 +1542,4 @@ class PaiePermanentController extends Controller
         ];
     }
 
-    private function salairePermanentPourConsolidation(int $personnelId, Carbon $date, ?int $anneeId, ?int $entiteId): ?SalairePermanent
-    {
-        return SalairePermanent::where('id_personnel', $personnelId)
-            ->where('statut', 'actif')
-            ->when($anneeId, fn($q) => $q->where(function ($sub) use ($anneeId) {
-                $sub->whereNull('id_annee_academique')->orWhere('id_annee_academique', $anneeId);
-            }))
-            ->when($entiteId, fn($q) => $q->where(function ($sub) use ($entiteId) {
-                $sub->whereNull('id_entite')->orWhere('id_entite', $entiteId);
-            }))
-            ->whereDate('date_debut', '<=', $date->toDateString())
-            ->where(function ($query) use ($date) {
-                $query->whereNull('date_fin')
-                    ->orWhereDate('date_fin', '>=', $date->toDateString());
-            })
-            ->orderByDesc('date_debut')
-            ->first();
-    }
 }

@@ -14,10 +14,14 @@ class BulletinPaie extends Model
     protected $fillable = [
         'id_personnel',
         'id_biometrie_import',
+        'id_salaire_permanent',
+        'id_annee_academique',
+        'id_entite',
         'periode_debut',
         'periode_fin',
         'salaire_base',
         'penalite_biometrie',
+        'base_apres_penalite',
         'brut_mensuel',
         'salaire_taxable',
         'salaire_cotisable',
@@ -25,6 +29,7 @@ class BulletinPaie extends Model
         'total_retenues',
         'total_acomptes',
         'total_sanctions',
+        'total_charges_patronales',
         'net_a_payer',
         'solde_du',
         'statut',
@@ -37,6 +42,7 @@ class BulletinPaie extends Model
         'periode_fin' => 'date',
         'salaire_base' => 'float',
         'penalite_biometrie' => 'float',
+        'base_apres_penalite' => 'float',
         'brut_mensuel' => 'float',
         'salaire_taxable' => 'float',
         'salaire_cotisable' => 'float',
@@ -44,6 +50,7 @@ class BulletinPaie extends Model
         'total_retenues' => 'float',
         'total_acomptes' => 'float',
         'total_sanctions' => 'float',
+        'total_charges_patronales' => 'float',
         'net_a_payer' => 'float',
         'solde_du' => 'float',
     ];
@@ -58,8 +65,28 @@ class BulletinPaie extends Model
         return $this->belongsTo(BiometrieImport::class, 'id_biometrie_import');
     }
 
+    public function salaire_permanent()
+    {
+        return $this->belongsTo(SalairePermanent::class, 'id_salaire_permanent');
+    }
+
+    public function annee_academique()
+    {
+        return $this->belongsTo(annee_academique::class, 'id_annee_academique');
+    }
+
+    public function entite()
+    {
+        return $this->belongsTo(entite::class, 'id_entite');
+    }
+
     public function lignes()
     {
         return $this->hasMany(LigneBulletinPaie::class, 'id_bulletin')->orderBy('ordre');
+    }
+
+    public function charges_patronales()
+    {
+        return $this->hasMany(ChargePatronaleBulletin::class, 'id_bulletin')->orderBy('ordre');
     }
 }

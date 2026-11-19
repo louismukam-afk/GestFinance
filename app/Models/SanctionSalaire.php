@@ -39,6 +39,11 @@ class SanctionSalaire extends Model
         return $this->belongsTo(personnel::class, 'id_personnel');
     }
 
+    public function bulletin()
+    {
+        return $this->belongsTo(BulletinPaie::class, 'id_bulletin_paie');
+    }
+
     public function scopeActives(Builder $query): Builder
     {
         return $query->where('statut', 'active');

@@ -51,6 +51,10 @@
 </style>
 
 <div class="container">
+    <div class="mb-3">
+        <a href="{{ route('paie_permanents.bulletins.historique') }}" class="btn btn-primary">Historique des bulletins</a>
+        <a href="{{ route('paie_permanents.etats.historique') }}" class="btn btn-default">Historique des etats de paie</a>
+    </div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="text-primary">{{ $title }}</h3>
         <a href="{{ route('emploi_temps.index') }}" class="btn btn-secondary">Retour</a>
@@ -62,6 +66,19 @@
     @if($errors->any())
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
+
+    <div class="card mb-4">
+        <div class="card-header"><strong>Ordre de traitement de la paie</strong></div>
+        <div class="card-body">
+            <a href="{{ route('salaires_permanents.index') }}" class="btn btn-default btn-sm">1. Salaires permanents</a>
+            <a href="#rubriques-salaire" class="btn btn-default btn-sm">2. Rubriques salaire</a>
+            <a href="#affectations-rubriques" class="btn btn-default btn-sm">3. Affecter rubriques</a>
+            <a href="#baremes-irpp" class="btn btn-default btn-sm">4. Baremes et charges</a>
+            <a href="#acomptes-personnel" class="btn btn-default btn-sm">5. Acomptes</a>
+            <a href="#bulletins-paie" class="btn btn-default btn-sm">6. Bulletins</a>
+            <a href="#etats-paie" class="btn btn-default btn-sm">7. Etats de paie</a>
+        </div>
+    </div>
 
     <div class="card mb-4">
         <div class="card-header"><strong>Generer les bulletins brouillon</strong></div>
@@ -260,7 +277,7 @@
 
     <div class="row">
         <div class="col-md-6">
-            <div class="card mb-4">
+            <div class="card mb-4" id="rubriques-salaire">
                 <div class="card-header"><strong>Nouvelle rubrique de paie</strong></div>
                 <div class="card-body">
                     <form method="POST" action="{{ route('paie_permanents.rubriques.store') }}">
@@ -292,6 +309,7 @@
                                     <option value="taxable">Taxable</option>
                                     <option value="cotisable">Cotisable</option>
                                     <option value="net">Net</option>
+                                    <option value="irpp">IRPP</option>
                                 </select>
                             </div>
                             <div class="col-md-4 mt-2"><label>Valeur defaut</label><input type="number" step="0.0001" name="valeur_defaut" value="0" class="form-control"></div>
@@ -309,7 +327,7 @@
         </div>
 
         <div class="col-md-6">
-            <div class="card mb-4">
+            <div class="card mb-4" id="affectations-rubriques">
                 <div class="card-header"><strong>Affecter une rubrique a un permanent</strong></div>
                 <div class="card-body">
                     <form method="POST" action="{{ route('paie_permanents.configs.store') }}">
@@ -351,7 +369,7 @@
 
     <div class="row">
         <div class="col-md-8">
-            <div class="card mb-4">
+            <div class="card mb-4" id="baremes-irpp">
                 <div class="card-header"><strong>Bareme IRPP</strong></div>
                 <div class="card-body paie-param-card">
                     <form method="POST" action="{{ route('paie_permanents.baremes_irpp.store') }}" class="mb-3">
@@ -543,9 +561,53 @@
         </div>
     </div>
 
+    <div class="card mb-4" id="charges-paie">
+        <div class="card-header"><strong>Charges patronales et baremes fixes</strong></div>
+        <div class="card-body">
+            <p class="text-muted">Ces parametres sont enregistres en base. Les bulletins conservent le detail des charges calculees.</p>
+            <form method="POST" action="{{ route('paie_permanents.charges_patronales.store') }}" class="row mb-3">
+                @csrf
+                <div class="col-md-2"><input name="code" class="form-control" placeholder="Code" required></div>
+                <div class="col-md-2"><input name="libelle" class="form-control" placeholder="Libelle" required></div>
+                <div class="col-md-1"><select name="nature" class="form-control"><option value="sociale">Sociale</option><option value="fiscale">Fiscale</option></select></div>
+                <div class="col-md-2"><select name="base_calcul" class="form-control"><option value="brut">Brut apres penalite</option><option value="cotisable_plafonne">Cotisable plafonne</option><option value="cotisable_non_plafonne">Cotisable non plafonne</option></select></div>
+                <div class="col-md-1"><input name="taux" type="number" step="0.0001" min="0" class="form-control" placeholder="Taux %" required></div>
+                <div class="col-md-1"><input name="plafond" type="number" step="0.01" min="0" class="form-control" placeholder="Plafond"></div>
+                <div class="col-md-2"><input name="date_debut" type="date" value="{{ now()->startOfYear()->format('Y-m-d') }}" class="form-control" required></div>
+                <input type="hidden" name="actif" value="1"><div class="col-md-1"><button class="btn btn-primary">Ajouter</button></div>
+            </form>
+            <div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Charge</th><th>Nature</th><th>Base</th><th>Taux</th><th>Plafond</th><th>Validite</th><th>Actions</th></tr></thead><tbody>
+            @foreach($chargesPatronales as $charge)
+                <tr><td colspan="7"><form method="POST" action="{{ route('paie_permanents.charges_patronales.update', $charge) }}" class="form-inline">@csrf @method('PUT')
+                    <input name="code" value="{{ $charge->code }}" class="form-control input-sm" style="width:140px" required><input name="libelle" value="{{ $charge->libelle }}" class="form-control input-sm" style="width:210px" required>
+                    <select name="nature" class="form-control input-sm"><option value="sociale" {{ $charge->nature === 'sociale' ? 'selected' : '' }}>Sociale</option><option value="fiscale" {{ $charge->nature === 'fiscale' ? 'selected' : '' }}>Fiscale</option></select>
+                    <select name="base_calcul" class="form-control input-sm"><option value="brut" {{ $charge->base_calcul === 'brut' ? 'selected' : '' }}>Brut</option><option value="cotisable_plafonne" {{ $charge->base_calcul === 'cotisable_plafonne' ? 'selected' : '' }}>Cotisable plafonne</option><option value="cotisable_non_plafonne" {{ $charge->base_calcul === 'cotisable_non_plafonne' ? 'selected' : '' }}>Cotisable non plafonne</option></select>
+                    <input name="taux" type="number" step="0.0001" value="{{ $charge->taux }}" class="form-control input-sm" style="width:90px" required><input name="plafond" type="number" step="0.01" value="{{ $charge->plafond }}" class="form-control input-sm" style="width:110px"><input name="date_debut" type="date" value="{{ optional($charge->date_debut)->format('Y-m-d') }}" class="form-control input-sm" required><input type="hidden" name="actif" value="1">
+                    <button class="btn btn-xs btn-primary">Modifier</button></form><form method="POST" action="{{ route('paie_permanents.charges_patronales.destroy', $charge) }}" style="display:inline">@csrf @method('DELETE')<button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cette charge ?')">Supprimer</button></form></td></tr>
+            @endforeach
+            </tbody></table></div>
+
+            <form method="POST" action="{{ route('paie_permanents.baremes_retenues.store') }}" class="row mt-4 mb-3">
+                @csrf
+                <div class="col-md-1"><select name="code" class="form-control"><option value="tdl">TDL</option><option value="rav">RAV</option></select></div>
+                <div class="col-md-2"><input name="libelle" value="TDL / RAV" class="form-control" required></div>
+                <div class="col-md-2"><input name="montant_min" type="number" step="0.01" min="0" class="form-control" placeholder="Minimum" required></div>
+                <div class="col-md-2"><input name="montant_max" type="number" step="0.01" min="0" class="form-control" placeholder="Maximum"></div>
+                <div class="col-md-2"><input name="montant" type="number" step="0.01" min="0" class="form-control" placeholder="Retenue" required></div>
+                <div class="col-md-2"><input name="date_debut" type="date" value="{{ now()->startOfYear()->format('Y-m-d') }}" class="form-control" required></div>
+                <input type="hidden" name="actif" value="1"><div class="col-md-1"><button class="btn btn-primary">Ajouter</button></div>
+            </form>
+            <div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>Taxe</th><th>Minimum</th><th>Maximum</th><th>Montant</th><th>Action</th></tr></thead><tbody>
+            @foreach($baremesRetenues as $bareme)
+                <tr><td colspan="5"><form method="POST" action="{{ route('paie_permanents.baremes_retenues.update', $bareme) }}" class="form-inline">@csrf @method('PUT')<select name="code" class="form-control input-sm"><option value="tdl" {{ $bareme->code === 'tdl' ? 'selected' : '' }}>TDL</option><option value="rav" {{ $bareme->code === 'rav' ? 'selected' : '' }}>RAV</option></select><input name="libelle" value="{{ $bareme->libelle }}" class="form-control input-sm" required><input name="montant_min" type="number" step="0.01" value="{{ $bareme->montant_min }}" class="form-control input-sm" required><input name="montant_max" type="number" step="0.01" value="{{ $bareme->montant_max }}" class="form-control input-sm"><input name="montant" type="number" step="0.01" value="{{ $bareme->montant }}" class="form-control input-sm" required><input name="date_debut" type="date" value="{{ optional($bareme->date_debut)->format('Y-m-d') }}" class="form-control input-sm" required><input type="hidden" name="actif" value="1"><button class="btn btn-xs btn-primary">Modifier</button></form><form method="POST" action="{{ route('paie_permanents.baremes_retenues.destroy', $bareme) }}" style="display:inline">@csrf @method('DELETE')<button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cette tranche ?')">Supprimer</button></form></td></tr>
+            @endforeach
+            </tbody></table></div>
+        </div>
+    </div>
+
     <div class="row" id="acomptes-sanctions">
         <div class="col-md-6">
-            <div class="card mb-4">
+            <div class="card mb-4" id="acomptes-personnel">
                 <div class="card-header"><strong>Acompte sur salaire</strong></div>
                 <div class="card-body">
                     <form method="POST" action="{{ route('paie_permanents.acomptes.store') }}">
@@ -620,8 +682,43 @@
     </form>
 
     <div class="card mb-4" id="bulletins-paie">
-        <div class="card-header"><strong>Bulletins de paie</strong></div>
+        <div class="card-header"><strong>Bulletins de paie generes sur la periode</strong></div>
         <div class="card-body">
+            <form method="POST" action="{{ route('paie_permanents.bulletins.regenerer_periode') }}" class="mb-3">
+                @csrf
+                <div class="row">
+                    <div class="col-md-2">
+                        <label>Debut periode</label>
+                        <input type="date" name="periode_debut" value="{{ old('periode_debut', request('periode_debut')) }}" class="form-control" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label>Fin periode</label>
+                        <input type="date" name="periode_fin" value="{{ old('periode_fin', request('periode_fin')) }}" class="form-control" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label>Personnel</label>
+                        <select name="id_personnel" class="form-control">
+                            <option value="">Tous les permanents</option>
+                            @foreach($personnels as $personnel)
+                                <option value="{{ $personnel->id }}" {{ old('id_personnel', request('id_personnel')) == $personnel->id ? 'selected' : '' }}>{{ $personnel->nom }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label>Import biometrie</label>
+                        <select name="id_biometrie_import" class="form-control">
+                            <option value="">Sans import specifique</option>
+                            @foreach($imports as $import)
+                                <option value="{{ $import->id }}">{{ $import->libelle }} - {{ optional($import->periode_debut)->format('d/m/Y') }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-warning w-100" onclick="return confirm('Supprimer les brouillons de cette periode puis regenerer ? Les bulletins valides seront conserves.')">Regenerer</button>
+                    </div>
+                </div>
+            </form>
+
             <form method="POST" action="{{ route('paie_permanents.bulletins.valider_global') }}" class="mb-3">
                 @csrf
                 <div class="row">
@@ -745,12 +842,17 @@
                         </td>
                         <td>
                             @if($bulletin->statut === 'brouillon')
-                                <form method="POST" action="{{ route('paie_permanents.bulletins.valider', $bulletin) }}">
+                                <form method="POST" action="{{ route('paie_permanents.bulletins.valider', $bulletin) }}" class="paie-action-form">
                                     @csrf
                                     <button class="btn btn-xs btn-success" onclick="return confirm('Valider ce bulletin ? Les acomptes et sanctions seront affectes a ce bulletin.')">Valider</button>
                                 </form>
+                                <form method="POST" action="{{ route('paie_permanents.bulletins.destroy', $bulletin) }}" class="paie-action-form">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer ce bulletin brouillon ?')">Supprimer</button>
+                                </form>
                             @else
-                                -
+                                <span class="text-muted">Verrouille</span>
                             @endif
                         </td>
                     </tr>
@@ -764,39 +866,249 @@
     </div>
 
     <div class="card mb-4">
-        <div class="card-header"><strong>Dernieres configurations, acomptes et sanctions</strong></div>
+        <div class="card-header"><strong>Tableau des rubriques de salaire</strong></div>
+        <div class="card-body table-responsive paie-param-card">
+            <table class="table table-sm table-bordered paie-param-table" style="min-width: 1180px;">
+                <thead>
+                    <tr>
+                        <th style="width: 210px;">Libelle</th>
+                        <th style="width: 105px;">Type</th>
+                        <th style="width: 130px;">Calcul</th>
+                        <th style="width: 125px;">Base</th>
+                        <th class="w-minmax">Valeur</th>
+                        <th class="w-minmax">Plafond</th>
+                        <th class="w-small">Imp.</th>
+                        <th class="w-small">Cot.</th>
+                        <th class="w-small">Actif</th>
+                        <th style="width: 210px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($rubriques as $rubrique)
+                        <tr>
+                            <td colspan="10" style="padding: 0;">
+                                <form method="POST" action="{{ route('paie_permanents.rubriques.update', $rubrique) }}" id="rubrique-update-{{ $rubrique->id }}"></form>
+                                <form method="POST" action="{{ route('paie_permanents.rubriques.destroy', $rubrique) }}" id="rubrique-delete-{{ $rubrique->id }}"></form>
+                                <input form="rubrique-update-{{ $rubrique->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                <input form="rubrique-update-{{ $rubrique->id }}" type="hidden" name="_method" value="PUT">
+                                <input form="rubrique-delete-{{ $rubrique->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                <input form="rubrique-delete-{{ $rubrique->id }}" type="hidden" name="_method" value="DELETE">
+                                <table class="table table-sm mb-0" style="table-layout: fixed; min-width: 1180px;">
+                                    <tr>
+                                        <td style="width: 210px;"><input form="rubrique-update-{{ $rubrique->id }}" name="libelle" value="{{ $rubrique->libelle }}" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }} required></td>
+                                        <td style="width: 105px;">
+                                            <select form="rubrique-update-{{ $rubrique->id }}" name="type" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }}>
+                                                <option value="gain" {{ $rubrique->type === 'gain' ? 'selected' : '' }}>Gain</option>
+                                                <option value="retenue" {{ $rubrique->type === 'retenue' ? 'selected' : '' }}>Retenue</option>
+                                            </select>
+                                        </td>
+                                        <td style="width: 130px;">
+                                            <select form="rubrique-update-{{ $rubrique->id }}" name="mode_calcul" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }}>
+                                                @foreach(['fixe' => 'Fixe', 'pourcentage' => 'Pourcentage', 'kilometrage' => 'Kilometrage', 'bareme' => 'Bareme', 'manuel' => 'Manuel'] as $value => $label)
+                                                    <option value="{{ $value }}" {{ $rubrique->mode_calcul === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                        </td>
+                                        <td style="width: 125px;">
+                                            <select form="rubrique-update-{{ $rubrique->id }}" name="base_calcul" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }}>
+                                                <option value="">Aucune</option>
+                                                @foreach(['salaire_base' => 'Salaire base', 'brut' => 'Brut', 'taxable' => 'Taxable', 'cotisable' => 'Cotisable', 'net' => 'Net', 'irpp' => 'IRPP'] as $value => $label)
+                                                    <option value="{{ $value }}" {{ $rubrique->base_calcul === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                        </td>
+                                        <td class="w-minmax"><input form="rubrique-update-{{ $rubrique->id }}" type="number" step="0.0001" name="valeur_defaut" value="{{ number_format($rubrique->valeur_defaut, 4, '.', '') }}" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }}></td>
+                                        <td class="w-minmax"><input form="rubrique-update-{{ $rubrique->id }}" type="number" step="0.01" name="plafond" value="{{ $rubrique->plafond !== null ? number_format($rubrique->plafond, 2, '.', '') : '' }}" class="form-control input-sm" {{ $rubrique->systeme ? 'disabled' : '' }}></td>
+                                        <td class="w-small text-center"><input form="rubrique-update-{{ $rubrique->id }}" type="checkbox" name="imposable" value="1" {{ $rubrique->imposable ? 'checked' : '' }} {{ $rubrique->systeme ? 'disabled' : '' }}></td>
+                                        <td class="w-small text-center"><input form="rubrique-update-{{ $rubrique->id }}" type="checkbox" name="cotisable" value="1" {{ $rubrique->cotisable ? 'checked' : '' }} {{ $rubrique->systeme ? 'disabled' : '' }}></td>
+                                        <td class="w-small text-center"><input form="rubrique-update-{{ $rubrique->id }}" type="checkbox" name="actif" value="1" {{ $rubrique->actif ? 'checked' : '' }} {{ $rubrique->systeme ? 'disabled' : '' }}></td>
+                                        <td style="width: 210px;">
+                                            @if($rubrique->systeme)
+                                                <span class="badge badge-info">Systeme</span>
+                                            @else
+                                                <button form="rubrique-update-{{ $rubrique->id }}" class="btn btn-xs btn-primary">Modifier</button>
+                                                <button form="rubrique-delete-{{ $rubrique->id }}" class="btn btn-xs btn-danger" onclick="return confirm('Supprimer ou desactiver cette rubrique ?')">Supprimer</button>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="10" class="text-center text-muted">Aucune rubrique.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header"><strong>Tableau des rubriques affectees au personnel</strong></div>
+        <div class="card-body table-responsive paie-param-card">
+            <table class="table table-sm table-bordered paie-param-table" style="min-width: 1260px;">
+                <thead>
+                    <tr>
+                        <th style="width: 210px;">Personnel</th>
+                        <th style="width: 210px;">Rubrique</th>
+                        <th class="w-minmax">Valeur</th>
+                        <th class="w-minmax">Quantite</th>
+                        <th class="w-date">Debut</th>
+                        <th class="w-date">Fin</th>
+                        <th class="w-small">Mois</th>
+                        <th style="width: 95px;">Statut</th>
+                        <th style="width: 180px;">Observations</th>
+                        <th class="w-action">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($configs as $config)
+                        <tr>
+                            <td colspan="10" style="padding: 0;">
+                                <form method="POST" action="{{ route('paie_permanents.configs.update', $config) }}" id="config-update-{{ $config->id }}"></form>
+                                <form method="POST" action="{{ route('paie_permanents.configs.destroy', $config) }}" id="config-delete-{{ $config->id }}"></form>
+                                <input form="config-update-{{ $config->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                <input form="config-update-{{ $config->id }}" type="hidden" name="_method" value="PUT">
+                                <input form="config-delete-{{ $config->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                <input form="config-delete-{{ $config->id }}" type="hidden" name="_method" value="DELETE">
+                                <table class="table table-sm mb-0" style="table-layout: fixed; min-width: 1260px;">
+                                    <tr>
+                                        <td style="width: 210px;">
+                                            <select form="config-update-{{ $config->id }}" name="id_personnel" class="form-control input-sm" required>
+                                                @foreach($personnels as $personnel)
+                                                    <option value="{{ $personnel->id }}" {{ $config->id_personnel == $personnel->id ? 'selected' : '' }}>{{ $personnel->nom }}</option>
+                                                @endforeach
+                                            </select>
+                                        </td>
+                                        <td style="width: 210px;">
+                                            <select form="config-update-{{ $config->id }}" name="id_rubrique_paie" class="form-control input-sm" required>
+                                                @foreach($rubriques->where('systeme', false) as $rubrique)
+                                                    <option value="{{ $rubrique->id }}" {{ $config->id_rubrique_paie == $rubrique->id ? 'selected' : '' }}>{{ $rubrique->libelle }}</option>
+                                                @endforeach
+                                            </select>
+                                        </td>
+                                        <td class="w-minmax"><input form="config-update-{{ $config->id }}" type="number" step="0.0001" name="valeur" value="{{ number_format($config->valeur, 4, '.', '') }}" class="form-control input-sm" required></td>
+                                        <td class="w-minmax"><input form="config-update-{{ $config->id }}" type="number" step="0.0001" name="quantite" value="{{ number_format($config->quantite, 4, '.', '') }}" class="form-control input-sm"></td>
+                                        <td class="w-date"><input form="config-update-{{ $config->id }}" type="date" name="date_debut" value="{{ optional($config->date_debut)->format('Y-m-d') }}" class="form-control input-sm" required></td>
+                                        <td class="w-date"><input form="config-update-{{ $config->id }}" type="date" name="date_fin" value="{{ optional($config->date_fin)->format('Y-m-d') }}" class="form-control input-sm"></td>
+                                        <td class="w-small text-center"><input form="config-update-{{ $config->id }}" type="checkbox" name="appliquer_ce_mois" value="1" {{ $config->appliquer_ce_mois ? 'checked' : '' }}></td>
+                                        <td style="width: 95px;">
+                                            <select form="config-update-{{ $config->id }}" name="statut" class="form-control input-sm">
+                                                <option value="actif" {{ $config->statut === 'actif' ? 'selected' : '' }}>Actif</option>
+                                                <option value="inactif" {{ $config->statut === 'inactif' ? 'selected' : '' }}>Inactif</option>
+                                            </select>
+                                        </td>
+                                        <td style="width: 180px;"><input form="config-update-{{ $config->id }}" name="observations" value="{{ $config->observations }}" class="form-control input-sm"></td>
+                                        <td class="w-action">
+                                            <button form="config-update-{{ $config->id }}" class="btn btn-xs btn-primary">Modifier</button>
+                                            <button form="config-delete-{{ $config->id }}" class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cette affectation ?')">Supprimer</button>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="10" class="text-center text-muted">Aucune affectation de rubrique.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header"><strong>Tableau des acomptes et sanctions</strong></div>
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <h5>Rubriques personnel</h5>
-                    <ul class="list-group">
-                        @forelse($configs as $config)
-                            <li class="list-group-item">{{ $config->personnel->nom ?? '-' }} - {{ $config->rubrique->libelle ?? '-' }} : {{ number_format($config->valeur, 2, ',', ' ') }}</li>
-                        @empty
-                            <li class="list-group-item text-muted">Aucune configuration.</li>
-                        @endforelse
-                    </ul>
-                </div>
-                <div class="col-md-4">
-                    <h5>Acomptes</h5>
-                    <ul class="list-group">
+            <h5>Acomptes</h5>
+            <div class="table-responsive paie-param-card">
+                <table class="table table-sm table-bordered paie-param-table" style="min-width: 1060px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 220px;">Personnel</th>
+                            <th class="w-date">Date</th>
+                            <th style="width: 130px;">Mois</th>
+                            <th class="w-minmax">Montant</th>
+                            <th style="width: 220px;">Motif</th>
+                            <th style="width: 95px;">Statut</th>
+                            <th class="w-action">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         @forelse($acomptes as $acompte)
-                            <li class="list-group-item">{{ $acompte->personnel->nom ?? '-' }} - {{ $acompte->periode_imputation }} : {{ number_format($acompte->montant, 0, ',', ' ') }}</li>
+                            @php($acompteVerrouille = $acompte->bulletin && in_array($acompte->bulletin->statut, ['valide', 'paye'], true))
+                            <tr>
+                                <td colspan="7" style="padding: 0;">
+                                    <form method="POST" action="{{ route('paie_permanents.acomptes.update', $acompte) }}" id="acompte-update-{{ $acompte->id }}"></form>
+                                    <form method="POST" action="{{ route('paie_permanents.acomptes.destroy', $acompte) }}" id="acompte-delete-{{ $acompte->id }}"></form>
+                                    <input form="acompte-update-{{ $acompte->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                    <input form="acompte-update-{{ $acompte->id }}" type="hidden" name="_method" value="PUT">
+                                    <input form="acompte-delete-{{ $acompte->id }}" type="hidden" name="_token" value="{{ csrf_token() }}">
+                                    <input form="acompte-delete-{{ $acompte->id }}" type="hidden" name="_method" value="DELETE">
+                                    <table class="table table-sm mb-0" style="table-layout: fixed; min-width: 1060px;">
+                                        <tr>
+                                            <td style="width: 220px;">
+                                                <select form="acompte-update-{{ $acompte->id }}" name="id_personnel" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }} required>
+                                                    @foreach($personnels as $personnel)
+                                                        <option value="{{ $personnel->id }}" {{ $acompte->id_personnel == $personnel->id ? 'selected' : '' }}>{{ $personnel->nom }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </td>
+                                            <td class="w-date"><input form="acompte-update-{{ $acompte->id }}" type="date" name="date_acompte" value="{{ optional($acompte->date_acompte)->format('Y-m-d') }}" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }} required></td>
+                                            <td style="width: 130px;"><input form="acompte-update-{{ $acompte->id }}" type="month" name="periode_imputation" value="{{ $acompte->periode_imputation }}" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }} required></td>
+                                            <td class="w-minmax"><input form="acompte-update-{{ $acompte->id }}" type="number" step="0.01" name="montant" value="{{ number_format($acompte->montant, 2, '.', '') }}" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }} required></td>
+                                            <td style="width: 220px;"><input form="acompte-update-{{ $acompte->id }}" name="motif" value="{{ $acompte->motif }}" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }}></td>
+                                            <td style="width: 95px;">
+                                                <select form="acompte-update-{{ $acompte->id }}" name="statut" class="form-control input-sm" {{ $acompteVerrouille ? 'disabled' : '' }}>
+                                                    <option value="actif" {{ $acompte->statut === 'actif' ? 'selected' : '' }}>Actif</option>
+                                                    <option value="inactif" {{ $acompte->statut === 'inactif' ? 'selected' : '' }}>Inactif</option>
+                                                </select>
+                                            </td>
+                                            <td class="w-action">
+                                                @if($acompteVerrouille)
+                                                    <span class="badge badge-success">Bulletin valide</span>
+                                                @else
+                                                    <button form="acompte-update-{{ $acompte->id }}" class="btn btn-xs btn-primary">Modifier</button>
+                                                    <button form="acompte-delete-{{ $acompte->id }}" class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet acompte ?')">Supprimer</button>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
                         @empty
-                            <li class="list-group-item text-muted">Aucun acompte.</li>
+                            <tr><td colspan="7" class="text-center text-muted">Aucun acompte.</td></tr>
                         @endforelse
-                    </ul>
-                </div>
-                <div class="col-md-4">
-                    <h5>Sanctions</h5>
-                    <ul class="list-group">
+                    </tbody>
+                </table>
+            </div>
+
+            <h5 class="mt-4">Sanctions enregistrees</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Personnel</th>
+                            <th>Periode</th>
+                            <th>Motif</th>
+                            <th class="text-right">Montant</th>
+                            <th>Statut</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         @forelse($sanctions as $sanction)
-                            <li class="list-group-item">{{ $sanction->personnel->nom ?? '-' }} - {{ $sanction->mois_application ?: optional($sanction->periode_debut_application)->format('d/m/Y') }} : {{ number_format($sanction->montant, 0, ',', ' ') }}</li>
+                            <tr><td colspan="6"><form method="POST" action="{{ route('paie_permanents.sanctions.update', $sanction) }}" class="form-inline">@csrf @method('PUT')
+                                <input type="hidden" name="id_personnel" value="{{ $sanction->id_personnel }}"><input type="hidden" name="date_sanction" value="{{ optional($sanction->date_sanction)->format('Y-m-d') }}">
+                                <span style="min-width:180px">{{ $sanction->personnel->nom ?? '-' }}</span>
+                                <input type="month" name="mois_application" value="{{ $sanction->mois_application }}" class="form-control input-sm mx-1">
+                                <input name="motif" value="{{ $sanction->motif }}" class="form-control input-sm mx-1" required>
+                                <input type="number" name="montant" value="{{ $sanction->montant }}" min="0" step="0.01" class="form-control input-sm mx-1" required>
+                                <select name="statut" class="form-control input-sm mx-1"><option value="active" {{ $sanction->statut === 'active' ? 'selected' : '' }}>Active</option><option value="annulee" {{ $sanction->statut === 'annulee' ? 'selected' : '' }}>Annulee</option></select>
+                                <button class="btn btn-xs btn-primary">Modifier</button></form>
+                                <form method="POST" action="{{ route('paie_permanents.sanctions.destroy', $sanction) }}" style="display:inline">@csrf @method('DELETE')<button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cette sanction ?')">Supprimer</button></form>
+                            </td></tr>
                         @empty
-                            <li class="list-group-item text-muted">Aucune sanction.</li>
+                            <tr><td colspan="6" class="text-center text-muted">Aucune sanction.</td></tr>
                         @endforelse
-                    </ul>
-                </div>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

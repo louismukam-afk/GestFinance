@@ -41,6 +41,7 @@
         <div class="col-md-2"><div class="alert alert-danger"><strong>Penalites</strong><br>{{ number_format($etat->total_penalites, 0, ',', ' ') }}</div></div>
         <div class="col-md-2"><div class="alert alert-danger"><strong>Sanctions</strong><br>{{ number_format($etat->total_sanctions, 0, ',', ' ') }}</div></div>
         <div class="col-md-2"><div class="alert alert-primary"><strong>Net</strong><br>{{ number_format($etat->total_net_a_payer, 0, ',', ' ') }}</div></div>
+        <div class="col-md-2"><div class="alert alert-info"><strong>Charges employeur</strong><br>{{ number_format($etat->total_charges_patronales, 0, ',', ' ') }}</div></div>
     </div>
 
     <div class="card">
@@ -50,6 +51,9 @@
                 <thead class="table-dark">
                     <tr>
                         <th>Employe permanent</th>
+                        <th class="text-end">Salaire base</th>
+                        <th class="text-end">Salaire taxable</th>
+                        <th class="text-end">Salaire cotisable</th>
                         @foreach($colonnesGains as $colonne)
                             <th class="text-end">{{ $colonne['libelle'] }}</th>
                         @endforeach
@@ -71,6 +75,9 @@
                         @php($retenueGlobale = $ligne->total_retenues + $ligne->penalite_biometrie + $ligne->total_sanctions + $ligne->total_acomptes)
                         <tr>
                             <td>{{ $ligne->nom_personnel }}</td>
+                            <td class="text-end">{{ number_format($ligne->salaire_base, 0, ',', ' ') }}</td>
+                            <td class="text-end">{{ number_format($ligne->salaire_taxable, 0, ',', ' ') }}</td>
+                            <td class="text-end">{{ number_format($ligne->salaire_cotisable, 0, ',', ' ') }}</td>
                             @foreach($colonnesGains as $colonne)
                                 <td class="text-end">{{ number_format($gainsLigne->get($colonne['code'], 0), 0, ',', ' ') }}</td>
                             @endforeach
@@ -89,6 +96,9 @@
                 <tfoot>
                     <tr class="table-secondary fw-bold">
                         <td>Total</td>
+                        <td class="text-end">{{ number_format($etat->lignes->sum('salaire_base'), 0, ',', ' ') }}</td>
+                        <td class="text-end">{{ number_format($etat->lignes->sum('salaire_taxable'), 0, ',', ' ') }}</td>
+                        <td class="text-end">{{ number_format($etat->lignes->sum('salaire_cotisable'), 0, ',', ' ') }}</td>
                         @foreach($colonnesGains as $colonne)
                             <td class="text-end">{{ number_format($etat->lignes->sum(fn($ligne) => collect($ligne->detail_gains ?? [])->where('code', $colonne['code'])->sum('montant')), 0, ',', ' ') }}</td>
                         @endforeach

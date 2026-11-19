@@ -31,4 +31,9 @@ class AcompteSalaire extends Model
     {
         return $this->belongsTo(personnel::class, 'id_personnel');
     }
+
+    public function bulletin()
+    {
+        return $this->belongsTo(BulletinPaie::class, 'id_bulletin_paie');
+    }
 }

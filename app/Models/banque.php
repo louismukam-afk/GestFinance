@@ -19,6 +19,11 @@ class banque extends Model
         'code',
         'id_user',
     ];
+    public function personnels()
+    {
+        return $this->hasMany(personnel::class, 'id_banque');
+    }
+
     public function users()
     {
         return $this->belongsTo(\Encore\Admin\Auth\Database\Administrator::class, 'id_user');

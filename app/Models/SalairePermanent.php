@@ -16,6 +16,7 @@ class SalairePermanent extends Model
         'id_annee_academique',
         'id_entite',
         'montant_mensuel',
+        'salaire_minimum_categoriel',
         'date_debut',
         'date_fin',
         'statut',
@@ -27,6 +28,7 @@ class SalairePermanent extends Model
         'date_debut' => 'date',
         'date_fin' => 'date',
         'montant_mensuel' => 'float',
+        'salaire_minimum_categoriel' => 'float',
     ];
 
     public function personnel()

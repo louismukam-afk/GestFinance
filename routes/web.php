@@ -115,6 +115,8 @@ Route::middleware(['auth'])->group(function () {
         ->except(['show', 'create', 'edit'])
         ->parameters(['personnel-entites' => 'personnel_entite'])
         ->names('personnel_entites');
+    Route::get('emploi-du-temps/emplois-permanents/personnel/{personnel}/modifier', [EmploiPermanentController::class, 'editPersonnel'])->name('emplois_permanents.personnel.edit');
+    Route::get('emploi-du-temps/emplois-permanents/personnel/{personnel}/pdf', [EmploiPermanentController::class, 'pdfPersonnel'])->name('emplois_permanents.personnel.pdf');
     Route::resource('emploi-du-temps/emplois-permanents', EmploiPermanentController::class)
         ->except(['show', 'create', 'edit'])
         ->parameters(['emplois-permanents' => 'emploi_permanent'])
@@ -133,18 +135,62 @@ Route::middleware(['auth'])->group(function () {
     Route::get('emploi-du-temps/volumes-specialites', [CoursEnseignantController::class, 'volumesSpecialite'])->name('cours_enseignants.volumes_specialite');
     Route::get('emploi-du-temps/volumes-specialites/pdf', [CoursEnseignantController::class, 'volumesSpecialitePdf'])->name('cours_enseignants.volumes_specialite_pdf');
     Route::get('emploi-du-temps/decompte-heures', [BiometrieHeureController::class, 'index'])->name('biometrie_heures.index');
+    Route::get('emploi-du-temps/decompte-heures/historique', [BiometrieHeureController::class, 'historique'])->name('biometrie_heures.historique');
+    Route::prefix('emploi-du-temps/virements-vacataires')->name('virements_vacataires.')->controller(\App\Http\Controllers\Admin\VirementVacataireController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/imports/{import}/preparer', 'create')->name('create');
+        Route::get('/historique', 'historique')->name('historique');
+        Route::post('/imports/{import}', 'store')->name('store');
+        Route::get('/{virement}', 'show')->name('show');
+        Route::get('/{virement}/pdf', 'pdf')->name('pdf');
+    });
+    Route::get('emploi-du-temps/decompte-heures/imports/{import}/impots', [BiometrieHeureController::class, 'impotsImport'])->name('biometrie_heures.impots');
+    Route::prefix('emploi-du-temps/bulletins-vacataires')->name('bulletins_vacataires.')->controller(\App\Http\Controllers\Admin\BulletinVacataireController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/imports/{import}', 'show')->name('show');
+        Route::get('/imports/{import}/pdf', 'pdf')->name('pdf');
+    });
+    Route::post('emploi-du-temps/decompte-heures/imports/{import}/impots', [BiometrieHeureController::class, 'enregistrerImpotsImport'])->name('biometrie_heures.impots.store');
+    Route::get('emploi-du-temps/decompte-heures/imports/{import}/impots/pdf', [BiometrieHeureController::class, 'pdfImpotsImport'])->name('biometrie_heures.impots.pdf');
+    Route::resource('emploi-du-temps/taux-impots', \App\Http\Controllers\Admin\TauxImpotController::class)
+        ->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['taux-impots' => 'taux_impot'])->names('taux_impots');
+    Route::get('emploi-du-temps/decompte-heures/imports/{import}/rapport', [BiometrieHeureController::class, 'rapportImport'])->name('biometrie_heures.rapport_import');
     Route::get('emploi-du-temps/biometrie-permanents', [BiometrieHeureController::class, 'permanentIndex'])->name('biometrie_permanents.index');
+    Route::get('emploi-du-temps/biometrie-permanents/pdf', [BiometrieHeureController::class, 'permanentExportPdf'])->name('biometrie_permanents.pdf');
+    Route::get('emploi-du-temps/biometrie-permanents/saisie-manuelle', [BiometrieHeureController::class, 'permanentManualCreate'])->name('biometrie_permanents.manual.create');
+    Route::post('emploi-du-temps/biometrie-permanents/saisie-manuelle', [BiometrieHeureController::class, 'permanentManualStore'])->name('biometrie_permanents.manual.store');
     Route::post('emploi-du-temps/biometrie-permanents/import', [BiometrieHeureController::class, 'permanentStore'])->name('biometrie_permanents.store');
     Route::post('emploi-du-temps/biometrie-permanents/{import}/consolider', [BiometrieHeureController::class, 'permanentConsolider'])->name('biometrie_permanents.consolider');
     Route::delete('emploi-du-temps/biometrie-permanents/{import}/consolidation', [BiometrieHeureController::class, 'permanentClear'])->name('biometrie_permanents.clear');
     Route::prefix('emploi-du-temps/paie-permanents')->name('paie_permanents.')->group(function () {
         Route::get('/', [PaiePermanentController::class, 'index'])->name('index');
+        Route::get('/historique-bulletins', [PaiePermanentController::class, 'historiqueBulletins'])->name('bulletins.historique');
+        Route::get('/historique-etats', [PaiePermanentController::class, 'historiqueEtats'])->name('etats.historique');
+        Route::patch('/bulletins/{bulletin}/statut', [PaiePermanentController::class, 'updateStatutBulletin'])->name('bulletins.statut');
+        Route::patch('/etats/{etat}/statut', [PaiePermanentController::class, 'updateStatutEtat'])->name('etats.statut');
         Route::post('/generer', [PaiePermanentController::class, 'generer'])->name('generer');
         Route::get('/bulletins/pdf', [PaiePermanentController::class, 'exportPdf'])->name('bulletins.pdf');
+        Route::post('/bulletins/regenerer-periode', [PaiePermanentController::class, 'regenererBulletinsPeriode'])->name('bulletins.regenerer_periode');
+        Route::post('/bulletins/regenerer-mois', [PaiePermanentController::class, 'regenererBulletinsMois'])->name('bulletins.regenerer_mois');
+        Route::delete('/bulletins/supprimer-mois', [PaiePermanentController::class, 'destroyBulletinsMois'])->name('bulletins.destroy_mois');
         Route::post('/rubriques', [PaiePermanentController::class, 'storeRubrique'])->name('rubriques.store');
+        Route::put('/rubriques/{rubrique}', [PaiePermanentController::class, 'updateRubrique'])->name('rubriques.update');
+        Route::delete('/rubriques/{rubrique}', [PaiePermanentController::class, 'destroyRubrique'])->name('rubriques.destroy');
         Route::post('/configs', [PaiePermanentController::class, 'storeConfig'])->name('configs.store');
+        Route::put('/configs/{config}', [PaiePermanentController::class, 'updateConfig'])->name('configs.update');
+        Route::delete('/configs/{config}', [PaiePermanentController::class, 'destroyConfig'])->name('configs.destroy');
         Route::post('/acomptes', [PaiePermanentController::class, 'storeAcompte'])->name('acomptes.store');
+        Route::put('/acomptes/{acompte}', [PaiePermanentController::class, 'updateAcompte'])->name('acomptes.update');
+        Route::delete('/acomptes/{acompte}', [PaiePermanentController::class, 'destroyAcompte'])->name('acomptes.destroy');
         Route::post('/sanctions', [PaiePermanentController::class, 'storeSanction'])->name('sanctions.store');
+        Route::put('/sanctions/{sanction}', [PaiePermanentController::class, 'updateSanction'])->name('sanctions.update');
+        Route::delete('/sanctions/{sanction}', [PaiePermanentController::class, 'destroySanction'])->name('sanctions.destroy');
+        Route::post('/baremes-retenues', [PaiePermanentController::class, 'storeBaremeRetenue'])->name('baremes_retenues.store');
+        Route::put('/baremes-retenues/{bareme}', [PaiePermanentController::class, 'updateBaremeRetenue'])->name('baremes_retenues.update');
+        Route::delete('/baremes-retenues/{bareme}', [PaiePermanentController::class, 'destroyBaremeRetenue'])->name('baremes_retenues.destroy');
+        Route::post('/charges-patronales', [PaiePermanentController::class, 'storeChargePatronale'])->name('charges_patronales.store');
+        Route::put('/charges-patronales/{charge}', [PaiePermanentController::class, 'updateChargePatronale'])->name('charges_patronales.update');
+        Route::delete('/charges-patronales/{charge}', [PaiePermanentController::class, 'destroyChargePatronale'])->name('charges_patronales.destroy');
         Route::post('/baremes-irpp', [PaiePermanentController::class, 'storeBaremeIrpp'])->name('baremes_irpp.store');
         Route::put('/baremes-irpp/{bareme}', [PaiePermanentController::class, 'updateBaremeIrpp'])->name('baremes_irpp.update');
         Route::delete('/baremes-irpp/{bareme}', [PaiePermanentController::class, 'destroyBaremeIrpp'])->name('baremes_irpp.destroy');
@@ -161,6 +207,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/etats/{etat}/pdf', [PaiePermanentController::class, 'exportEtatPaiePdf'])->name('etats.pdf');
         Route::post('/bulletins/valider-global', [PaiePermanentController::class, 'validerGlobal'])->name('bulletins.valider_global');
         Route::post('/bulletins/{bulletin}/valider', [PaiePermanentController::class, 'valider'])->name('bulletins.valider');
+        Route::delete('/bulletins/{bulletin}', [PaiePermanentController::class, 'destroyBulletin'])->name('bulletins.destroy');
     });
     Route::get('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualCreate'])->name('biometrie_heures.manual.create');
     Route::post('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualStore'])->name('biometrie_heures.manual.store');
@@ -773,6 +820,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('personnels', [\App\Http\Controllers\Admin\PersonnelController::class, 'index'])
         ->name('personnel_management');
+
+    Route::get('banques-personnels', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'index'])->name('personnels_banques.index');
+    Route::get('banques-personnels/{banque}/affecter', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'create'])->name('personnels_banques.create');
+    Route::post('banques-personnels/{banque}/affecter', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'store'])->name('personnels_banques.store');
+    Route::get('banques-personnels/{banque}', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'show'])->name('personnels_banques.show');
+    Route::put('personnels/{personnel}/banque', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'update'])->name('personnels_banques.update');
+    Route::delete('banques-personnels/{banque}/personnels/{personnel}', [\App\Http\Controllers\Admin\PersonnelBanqueController::class, 'destroy'])->name('personnels_banques.destroy');
 
     Route::get('personnels/import', [\App\Http\Controllers\Admin\PersonnelController::class, 'import'])
         ->name('personnels.import');
