@@ -18,6 +18,9 @@ class BiometrieImport extends Model
         'fichier',
         'statut',
         'type_import',
+        'id_import_parent',
+        'mois_requete',
+        'motif_requete',
         'total_lignes',
         'total_consolidees',
         'total_non_associees',
@@ -28,11 +31,27 @@ class BiometrieImport extends Model
     protected $casts = [
         'date_debut' => 'date',
         'date_fin' => 'date',
+        'mois_requete' => 'date',
     ];
 
     public function pointages()
     {
         return $this->hasMany(BiometriePointage::class, 'id_biometrie_import');
+    }
+
+    public function scopePourEnseignants($query)
+    {
+        return $query->where(fn($q) => $q->whereNull('type_import')->orWhereIn('type_import', ['cours', 'manuel', 'requete']));
+    }
+
+    public function estRequete(): bool
+    {
+        return $this->type_import === 'requete';
+    }
+
+    public function concerneEnseignants(): bool
+    {
+        return $this->type_import === null || in_array($this->type_import, ['cours', 'manuel', 'requete'], true);
     }
 
     public function heures_realisees()

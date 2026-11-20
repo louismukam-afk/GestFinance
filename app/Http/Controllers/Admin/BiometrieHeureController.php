@@ -21,6 +21,8 @@ use App\Services\BiometriePersonnelMatcher;
 use App\Services\DecompteHeuresEnseignant;
 use App\Services\RapportImportBiometrie;
 use App\Services\ConsolidationImpots;
+use App\Services\PaieImportVacataire;
+use App\Models\LigneVirementVacataire;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,15 +36,15 @@ class BiometrieHeureController extends Controller
 {
     public function index(Request $request)
     {
-        $imports = BiometrieImport::where(function ($query) {
-            $query->whereNull('type_import')
-                ->orWhereIn('type_import', ['cours', 'manuel']);
-        })->latest()->get();
+        $request->validate(['id_biometrie_import' => 'nullable|integer|min:1']);
+        $imports = BiometrieImport::pourEnseignants()->latest()->get();
 
-        $heures = $this->heuresRealiseesCollection($request);
+        $importSelectionne = $request->filled('id_biometrie_import') ? $imports->firstWhere('id', (int) $request->id_biometrie_import) : null;
+        abort_if($request->filled('id_biometrie_import') && !$importSelectionne, 404, 'Import biometrie introuvable.');
+        $heures = $importSelectionne ? $this->heuresRealiseesCollection($request) : collect();
         $totaux = $this->totauxParEnseignant($heures);
 
-        $pointagesCours = BiometriePointage::whereHas('import', function ($query) {
+        $pointagesCours = BiometriePointage::where('id_biometrie_import', $importSelectionne?->id ?? 0)->whereHas('import', function ($query) {
             $query->whereNull('type_import')->orWhereIn('type_import', ['cours', 'manuel']);
         });
 
@@ -63,11 +65,16 @@ class BiometrieHeureController extends Controller
         return view('Admin.EmploiTemps.biometrie.index', [
             'title' => 'Decompte des heures realisees',
             'imports' => $imports,
+            'importSelectionne' => $importSelectionne,
+            'orphelins' => [
+                'pointages' => BiometriePointage::whereDoesntHave('import')->count(),
+                'heures' => HeureRealiseeEnseignant::whereDoesntHave('import')->count(),
+            ],
             'heures' => $heures,
             'totaux' => $totaux,
-            'personnels' => personnel::whereIn('type_personnel', ['vacataire', 'permanent'])
+            'personnels' => $importSelectionne ? personnel::whereIn('type_personnel', ['vacataire', 'permanent'])
                 ->whereHas('cours_enseignants', fn($query) => $query->where('statut', 'actif')->whereHas('seances.plage', fn($plage) => $plage->where('type_plage', 'cours')))
-                ->orderBy('nom')->get(),
+                ->orderBy('nom')->get() : collect(),
             'unmatchedPointages' => $unmatchedPointages,
             'biometrieIdentites' => $biometrieIdentites,
         ]);
@@ -79,7 +86,7 @@ class BiometrieHeureController extends Controller
             'date_debut' => 'nullable|date',
             'date_fin' => 'nullable|date'.($request->filled('date_debut') ? '|after_or_equal:date_debut' : ''),
         ]);
-        $imports = BiometrieImport::where(fn($query) => $query->whereNull('type_import')->orWhere('type_import', 'cours'))
+        $imports = BiometrieImport::pourEnseignants()
             ->when($request->date_debut, fn($query) => $query->whereDate('date_fin', '>=', $request->date_debut))
             ->when($request->date_fin, fn($query) => $query->whereDate('date_debut', '<=', $request->date_fin))
             ->withCount('heures_realisees')
@@ -93,7 +100,7 @@ class BiometrieHeureController extends Controller
 
     public function rapportImport(Request $request, BiometrieImport $import)
     {
-        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        abort_unless($import->concerneEnseignants(), 404);
         $data = $request->validate(['rapport' => 'required|in:discipline,financier']);
         $heures = $this->heuresRealiseesCollection(new Request(['id_biometrie_import' => $import->id]));
         abort_if($heures->isEmpty(), 422, 'Cet import ne contient aucune heure consolidee.');
@@ -120,12 +127,13 @@ class BiometrieHeureController extends Controller
             'import' => $import,
             'defaut' => $defaut,
             'taux' => TauxImpot::orderBy('nom')->get(),
-            'lignes' => (new ConsolidationImpots())->lignes($heures, $defaut),
+            'lignes' => $this->lignesFiscales($import, $heures, $defaut),
         ]);
     }
 
     public function enregistrerImpotsImport(Request $request, BiometrieImport $import)
     {
+        abort_if($import->estRequete(), 422, 'Une requete conserve le taux archive de l ordre initial.');
         $heures = $this->heuresImportFiscal($import);
         $data = $request->validate([
             'taux_personnels' => 'required|array|max:5000',
@@ -154,18 +162,30 @@ class BiometrieHeureController extends Controller
         return Pdf::loadView('Admin.EmploiTemps.impots.pdf', [
             'title' => 'Consolidation des impots',
             'import' => $import,
-            'lignes' => (new ConsolidationImpots())->lignes($heures, $defaut),
+            'lignes' => $this->lignesFiscales($import, $heures, $defaut),
         ])->setPaper('a4', 'landscape')->stream('impots_import_'.$import->id.'.pdf');
     }
 
     private function heuresImportFiscal(BiometrieImport $import)
     {
-        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        abort_unless($import->concerneEnseignants(), 404);
         $heures = $this->heuresRealiseesCollection(new Request(['id_biometrie_import' => $import->id]));
         abort_if($heures->isEmpty(), 422, 'Cet import ne contient aucune heure consolidee.');
         $heures->loadMissing('personnel.taux_impot');
 
         return $heures;
+    }
+
+    private function lignesFiscales(BiometrieImport $import, $heures, TauxImpot $defaut)
+    {
+        if (!$import->estRequete()) { return (new ConsolidationImpots())->lignes($heures, $defaut); }
+        return (new PaieImportVacataire())->lignes($import, $heures)->groupBy('id_personnel')->map(function ($items) use ($import) {
+            $premier = $items->first();
+            return ['id_personnel' => $premier['id_personnel'], 'nom' => $premier['nom'], 'id_taux_impot' => null,
+                'taux_nom' => 'Taux archive', 'taux' => $premier['details'][0]['taux'], 'mois' => $import->mois_requete->format('Y-m'),
+                'brut' => round($items->sum('brut_fiscal'), 2), 'impot' => round($items->sum('impot'), 2),
+                'net' => round($items->sum('net_avant_frais'), 2)];
+        })->values();
     }
 
     public function exportExcel(Request $request)
@@ -531,9 +551,11 @@ class BiometrieHeureController extends Controller
             ->with('success', 'Presence permanente enregistree manuellement.');
     }
 
-    public function manualCreate()
+    public function manualCreate(Request $request)
     {
-        $selectedImportId = request('id_biometrie_import');
+        $request->validate(['id_biometrie_import' => 'nullable|integer|min:1']);
+        $selectedImportId = session()->getOldInput('id_biometrie_import', $request->input('id_biometrie_import'));
+        $selectedImport = $selectedImportId ? BiometrieImport::pourEnseignants()->findOrFail($selectedImportId) : null;
         $cours = CoursEnseignant::with([
             'personnel',
             'programme.matiere',
@@ -546,7 +568,9 @@ class BiometrieHeureController extends Controller
             'taux_horaire',
             'seances.plage',
         ])
-            ->where('statut', 'actif')
+            ->when(!$selectedImport, fn($q) => $q->where('statut', 'actif'))
+            ->whereHas('personnel', fn($q) => $q->whereIn('type_personnel', ['vacataire', 'permanent']))
+            ->when($selectedImport, fn($q) => $q->whereDate('date_debut', '<=', $selectedImport->date_fin)->whereDate('date_fin', '>=', $selectedImport->date_debut))
             ->orderBy('id_personnel')
             ->orderByDesc('date_debut')
             ->get();
@@ -579,11 +603,13 @@ class BiometrieHeureController extends Controller
 
         return view('Admin.EmploiTemps.biometrie.manual', [
             'title' => 'Saisie manuelle des heures realisees',
-            'imports' => BiometrieImport::where('statut', 'manuel')->latest()->get(),
-            'selectedImport' => $selectedImportId ? BiometrieImport::find($selectedImportId) : null,
+            'imports' => BiometrieImport::pourEnseignants()->latest()->get(),
+            'selectedImport' => $selectedImport,
+            'requetesAvecOrdre' => \App\Models\VirementVacataire::pluck('id_biometrie_import'),
+            'parentsRequetes' => BiometrieImport::pourEnseignants()->where(fn($q) => $q->whereNull('type_import')->orWhere('type_import', '!=', 'requete'))
+                ->whereHas('heures_realisees')->latest()->get(),
             'heuresManuelles' => HeureRealiseeEnseignant::with(['personnel', 'cours.programme.matiere', 'seance.plage', 'import'])
-                ->whereHas('import', fn($q) => $q->where('statut', 'manuel'))
-                ->when($selectedImportId, fn($q) => $q->where('id_biometrie_import', $selectedImportId))
+                ->where('id_biometrie_import', $selectedImportId ?: 0)
                 ->latest()
                 ->get(),
             'cours' => $cours,
@@ -591,39 +617,62 @@ class BiometrieHeureController extends Controller
         ]);
     }
 
+    public function referenceRequete(Request $request, BiometrieImport $import)
+    {
+        abort_unless($import->estRequete(), 404);
+        $data = $request->validate([
+            'id_cours_enseignant' => 'required|integer|exists:cours_enseignants,id',
+            'id_seance_cours' => 'required|integer|exists:seance_cours,id',
+            'date_seance' => 'required|date_format:Y-m-d',
+        ]);
+        $cours = CoursEnseignant::findOrFail($data['id_cours_enseignant']);
+        $heure = (new PaieImportVacataire())->heuresReference($import, $cours->id_personnel)
+            ->first(fn($h) => $h->id_seance_cours == $data['id_seance_cours']
+                && $h->id_cours_enseignant == $cours->id && $h->date_seance->format('Y-m-d') === $data['date_seance']);
+        abort_unless($heure, 422, 'Aucune seance consolidee pour cette selection.');
+        $pointages = BiometriePointage::where('id_biometrie_import', $import->id_import_parent)
+            ->where('id_personnel', $cours->id_personnel)->whereDate('date_heure_pointage', $data['date_seance'])
+            ->orderBy('date_heure_pointage')->get()->map(fn($p) => $p->date_heure_pointage->format('H:i'));
+        return response()->json([
+            'duree_prevue' => $heure->duree_prevue, 'duree_realisee' => $heure->duree_realisee,
+            'sanction' => $heure->sanction_annulee ? 0 : round(max($heure->duree_prevue - $heure->duree_realisee, 0) * $heure->montant_taux, 2),
+            'montant_realise' => $heure->montant_total, 'taux' => $heure->montant_taux,
+            'observation' => $heure->observation, 'pointages' => $pointages,
+        ]);
+    }
+
     public function manualStore(Request $request)
     {
         $data = $request->validate([
-            'id_biometrie_import' => 'nullable|integer|exists:biometrie_imports,id',
-            'libelle' => 'nullable|string|max:255',
-            'date_debut_import' => 'required_without:id_biometrie_import|nullable|date',
-            'date_fin_import' => 'required_without:id_biometrie_import|nullable|date|after_or_equal:date_debut_import',
+            'id_biometrie_import' => 'required|integer|exists:biometrie_imports,id',
+            'type_requete' => 'required|in:absence_justifiee,presence_manuelle,pointage_incomplet',
             'id_cours_enseignant' => 'required|integer|exists:cours_enseignants,id',
             'id_seance_cours' => 'required|integer|exists:seance_cours,id',
             'date_seance' => 'required|date',
-            'heure_debut_reelle' => 'required|date_format:H:i',
-            'heure_fin_reelle' => 'required|date_format:H:i|after:heure_debut_reelle',
-            'observation' => 'nullable|string|max:1000',
+            'heure_debut_reelle' => 'exclude_if:type_requete,absence_justifiee|required_if:type_requete,presence_manuelle,pointage_incomplet|nullable|date_format:H:i',
+            'heure_fin_reelle' => 'exclude_if:type_requete,absence_justifiee|required_if:type_requete,presence_manuelle,pointage_incomplet|nullable|date_format:H:i|after:heure_debut_reelle',
+            'observation' => 'required|string|max:1000',
         ]);
 
-        $cours = CoursEnseignant::with(['programme', 'taux_horaire'])->findOrFail($data['id_cours_enseignant']);
+        return DB::transaction(function () use ($data) {
+        $cours = CoursEnseignant::with(['programme', 'taux_horaire', 'personnel'])->findOrFail($data['id_cours_enseignant']);
+        abort_unless(in_array($cours->personnel?->type_personnel, ['vacataire', 'permanent'], true), 422, 'Personnel hors cours enseignants.');
         $seance = SeanceCours::with('plage')
             ->where('id_cours_enseignant', $cours->id)
             ->findOrFail($data['id_seance_cours']);
 
-        $import = !empty($data['id_biometrie_import'])
-            ? BiometrieImport::findOrFail($data['id_biometrie_import'])
-            : BiometrieImport::create([
-                'libelle' => $data['libelle'] ?: 'Saisie manuelle du ' . now()->format('d/m/Y H:i'),
-                'date_debut' => $data['date_debut_import'],
-                'date_fin' => $data['date_fin_import'],
-                'statut' => 'manuel',
-                'type_import' => 'manuel',
-                'observations' => 'Import cree depuis la saisie manuelle des heures realisees.',
-                'id_user' => auth()->id() ?? 0,
-            ]);
+        $import = BiometrieImport::pourEnseignants()->lockForUpdate()->findOrFail($data['id_biometrie_import']);
 
         $dateSeance = Carbon::parse($data['date_seance']);
+        if (!$import->estRequete()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Toute correction manuelle doit etre enregistree dans un dossier de requete. Creez ou choisissez un dossier lie a cet import et a ce mois.']);
+        }
+        if ($import->exists && LigneVirementVacataire::where('id_personnel', $cours->id_personnel)
+            ->where(fn($q) => $q->where('id_biometrie_import', $import->id)
+                ->orWhereHas('virement', fn($v) => $v->where('id_import_parent', $import->id)))->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Cet enseignant a deja un ordre valide. Creez un nouveau dossier apres requete.']);
+        }
+        abort_unless($seance->plage?->type_plage === 'cours', 422, 'Choisissez une plage de cours.');
         if ($dateSeance->lt(Carbon::parse($import->date_debut)) || $dateSeance->gt(Carbon::parse($import->date_fin))) {
             return back()
                 ->withErrors(['date_seance' => 'La date de la seance doit etre comprise dans la periode de l\'import manuel.'])
@@ -642,35 +691,49 @@ class BiometrieHeureController extends Controller
                 ->withInput();
         }
 
+        (new PaieImportVacataire())->initialiserEnseignant($import, $cours->id_personnel);
+        $ancienneHeure = $import->heures_realisees()->where('id_seance_cours', $seance->id)->whereDate('date_seance', $dateSeance)->first();
         $plage = $seance->plage;
-        $plannedStart = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $plage->heure_debut);
-        $plannedEnd = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $plage->heure_fin);
-        $realStartInput = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $data['heure_debut_reelle']);
-        $realEndInput = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $data['heure_fin_reelle']);
-
-        $realStart = $realStartInput->greaterThan($plannedStart) ? $realStartInput : $plannedStart;
-        $realEnd = $realEndInput->lessThan($plannedEnd) ? $realEndInput : $plannedEnd;
-        $plannedDuration = round($plannedStart->diffInMinutes($plannedEnd) / 60, 2);
-        $duration = $realEnd->greaterThan($realStart)
-            ? min($plannedDuration, round($realStart->diffInMinutes($realEnd) / 60, 2))
-            : 0;
+        $plannedStart = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . ($ancienneHeure?->heure_debut_prevue ?? $plage->heure_debut));
+        $plannedEnd = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . ($ancienneHeure?->heure_fin_prevue ?? $plage->heure_fin));
+        $plannedDuration = $ancienneHeure?->duree_prevue ?? round($plannedStart->diffInMinutes($plannedEnd) / 60, 2);
+        if ($data['type_requete'] === 'absence_justifiee') {
+            if (!$ancienneHeure) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['date_seance' => 'Aucune seance consolidee a justifier a cette date.']);
+            }
+            // Une justification ne constitue pas une preuve d'heures travaillees.
+            $duration = $ancienneHeure->duree_realisee;
+            $heureDebut = $ancienneHeure->heure_debut_reelle;
+            $heureFin = $ancienneHeure->heure_fin_reelle;
+        } else {
+            $realStartInput = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $data['heure_debut_reelle']);
+            $realEndInput = Carbon::parse($dateSeance->format('Y-m-d') . ' ' . $data['heure_fin_reelle']);
+            $realStart = $realStartInput->greaterThan($plannedStart) ? $realStartInput : $plannedStart;
+            $realEnd = $realEndInput->lessThan($plannedEnd) ? $realEndInput : $plannedEnd;
+            $duration = $realEnd->greaterThan($realStart)
+                ? min($plannedDuration, round($realStart->diffInMinutes($realEnd) / 60, 2)) : 0;
+            if ($duration <= 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['heure_fin_reelle' => 'Les horaires attestes doivent couvrir une partie de la plage prevue.']);
+            }
+            $heureDebut = $realStart->format('H:i:s');
+            $heureFin = $realEnd->format('H:i:s');
+        }
 
         $taux = $cours->taux_horaire
             ?: TauxHoraire::where('statut', 'actif')->where('par_defaut', true)->first()
             ?: TauxHoraire::where('statut', 'actif')->orderByDesc('id')->first();
-        $montantTaux = (float) ($taux->montant ?? 0);
+        $montantTaux = (float) ($ancienneHeure?->montant_taux ?? $taux->montant ?? 0);
         $missing = round($plannedDuration - $duration, 2);
         $observation = $data['observation'] ?? null;
         if ($missing > 0) {
             $observation = trim(($observation ? $observation . ' ' : '') . 'Saisie manuelle partielle : ' . number_format($missing, 2, ',', ' ') . ' h non comptabilisee(s).');
         }
 
-        $heureRealisee = HeureRealiseeEnseignant::updateOrCreate(
-            [
-                'id_biometrie_import' => $import->id,
-                'id_seance_cours' => $seance->id,
-                'date_seance' => $dateSeance->toDateString(),
-            ],
+        $heureRealisee = $ancienneHeure ?? new HeureRealiseeEnseignant([
+            'id_biometrie_import' => $import->id, 'id_seance_cours' => $seance->id,
+            'date_seance' => $dateSeance->toDateString(),
+        ]);
+        $heureRealisee->fill(
             [
                 'id_cours_enseignant' => $cours->id,
                 'id_personnel' => $cours->id_personnel,
@@ -687,26 +750,33 @@ class BiometrieHeureController extends Controller
                 'id_plage_horaire' => $seance->id_plage_horaire,
                 'heure_debut_prevue' => $plannedStart->format('H:i:s'),
                 'heure_fin_prevue' => $plannedEnd->format('H:i:s'),
-                'heure_debut_reelle' => $realStart->format('H:i:s'),
-                'heure_fin_reelle' => $realEnd->format('H:i:s'),
+                'heure_debut_reelle' => $heureDebut,
+                'heure_fin_reelle' => $heureFin,
                 'duree_prevue' => $plannedDuration,
                 'duree_realisee' => $duration,
                 'montant_taux' => $montantTaux,
                 'montant_total' => round($duration * $montantTaux, 2),
                 'statut' => $duration > 0 ? 'realise' : 'non_realise',
                 'observation' => $observation,
+                'sanction_annulee' => $data['type_requete'] === 'absence_justifiee' || ($ancienneHeure?->sanction_annulee ?? false),
+                'type_requete' => $data['type_requete'],
+                'duree_avant_requete' => $ancienneHeure?->duree_avant_requete ?? $ancienneHeure?->duree_realisee ?? 0,
+                'montant_avant_requete' => $ancienneHeure?->montant_avant_requete ?? $ancienneHeure?->montant_total ?? 0,
+                'sanction_avant_requete' => $ancienneHeure?->sanction_avant_requete
+                    ?? (($ancienneHeure?->sanction_annulee ?? false) ? 0 : max($plannedDuration - ($ancienneHeure?->duree_realisee ?? 0), 0) * $montantTaux),
                 'id_user' => auth()->id() ?? 0,
             ]
         );
 
-        $import->update([
-            'total_consolidees' => $import->heures_realisees()->count(),
-            'total_lignes' => $import->heures_realisees()->count(),
-        ]);
+        $heureRealisee->save();
+        $compteurs = ['total_consolidees' => $import->heures_realisees()->count()];
+        if (in_array($import->type_import, ['manuel', 'requete'], true)) { $compteurs['total_lignes'] = $compteurs['total_consolidees']; }
+        $import->update($compteurs);
 
         return redirect()
             ->route('biometrie_heures.manual.create', ['id_biometrie_import' => $import->id])
             ->with('success', 'Heure realisee enregistree manuellement.');
+        });
     }
 
     public function store(Request $request)
@@ -816,6 +886,13 @@ class BiometrieHeureController extends Controller
 
     public function clearConsolidation(BiometrieImport $import)
     {
+        return DB::transaction(function () use ($import) {
+        $import = BiometrieImport::whereKey($import->id)->lockForUpdate()->firstOrFail();
+        if ($import->estRequete() && \App\Models\VirementVacataire::where('id_biometrie_import', $import->id)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'import' => 'Les heures d un dossier avec ordre valide ne peuvent plus etre videes. Creez un nouveau dossier pour une autre decision.',
+            ]);
+        }
         $deleted = HeureRealiseeEnseignant::where('id_biometrie_import', $import->id)->delete();
         $import->update([
             'statut' => $import->statut === 'manuel' ? 'manuel' : 'importe',
@@ -824,13 +901,40 @@ class BiometrieHeureController extends Controller
         ]);
 
         return back()->with('success', "{$deleted} consolidation(s) supprimee(s).");
+        });
     }
 
     public function destroy(BiometrieImport $import)
     {
-        $import->delete();
+        DB::transaction(function () use ($import) {
+            $source = BiometrieImport::whereKey($import->id)->lockForUpdate()->firstOrFail();
+            if ($source->estRequete() && \App\Models\VirementVacataire::where('id_biometrie_import', $source->id)->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'import' => 'Ce dossier de requete possede deja un ordre de virement valide et ne peut plus etre supprime.',
+                ]);
+            }
+            HeureRealiseeEnseignant::where('id_biometrie_import', $source->id)->delete();
+            BiometriePointage::where('id_biometrie_import', $source->id)->delete();
+            $source->delete();
+        });
 
-        return back()->with('success', 'Import biometrie supprime.');
+        return $import->estRequete()
+            ? redirect()->route('biometrie_heures.manual.create')->with('success', 'Dossier de requete supprime. L import initial est conserve.')
+            : redirect()->route('biometrie_heures.index')->with('success', 'Import biometrie supprime.');
+    }
+
+    public function nettoyerOrphelins(Request $request)
+    {
+        $request->validate(['confirmation' => 'accepted']);
+        [$pointages, $heures] = DB::transaction(function () {
+            return [
+                BiometriePointage::whereDoesntHave('import')->delete(),
+                HeureRealiseeEnseignant::whereDoesntHave('import')->delete(),
+            ];
+        });
+
+        return redirect()->route('biometrie_heures.index')
+            ->with('success', $pointages.' pointage(s) et '.$heures.' heure(s) consolidee(s) sans import supprime(s).');
     }
 
     public function storeMapping(Request $request)
@@ -1882,6 +1986,7 @@ class BiometrieHeureController extends Controller
     private function heuresQuery(Request $request)
     {
         return HeureRealiseeEnseignant::with(['personnel', 'cours.programme.matiere', 'seance.plage'])
+            ->whereHas('import', fn($q) => $q->pourEnseignants())
             ->when($request->id_biometrie_import, fn($q) => $q->where('id_biometrie_import', $request->id_biometrie_import))
             ->when($request->id_personnel, fn($q) => $q->where('id_personnel', $request->id_personnel))
             ->when($request->search_personnel, function ($q) use ($request) {

@@ -2,6 +2,7 @@
 @section('content')
 <div class="container">
     <h3 class="text-primary">{{ $title }}</h3>
+    @if($etat->nature === 'requete')<p><strong>Salaires vacataires apres requete</strong> - Import initial #{{ $etat->id_import_parent }}, mois {{ $etat->mois_requete->format('m/Y') }}</p>@endif
     <a class="btn btn-default" href="{{ route('virements_vacataires.historique') }}"><i class="fa fa-history"></i> Historique des ordres</a>
     <a class="btn btn-default" href="{{ route('virements_vacataires.index') }}"><i class="fa fa-arrow-left"></i> Etats de virement</a>
     <a class="btn btn-danger" href="{{ route('virements_vacataires.pdf', $etat) }}" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o"></i> Ordre de virement PDF</a>

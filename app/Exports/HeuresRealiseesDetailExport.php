@@ -48,9 +48,9 @@ class HeuresRealiseesDetailExport implements FromCollection, WithHeadings, WithT
                 max(($heure->duree_prevue ?? 0) - ($heure->duree_realisee ?? 0), 0),
                 $heure->montant_taux,
                 $heure->montant_total,
-                round(max($heure->duree_prevue - $heure->duree_realisee, 0) * $heure->montant_taux, 2),
+                $heure->sanction_annulee ? 0 : round(max($heure->duree_prevue - $heure->duree_realisee, 0) * $heure->montant_taux, 2),
                 $heure->statut,
-                $heure->observation,
+                trim(($heure->libelle_type_requete ? $heure->libelle_type_requete . ' : ' : '') . $heure->observation),
             ];
         });
     }

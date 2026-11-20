@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{banque, entite, BiometrieImport, HeureRealiseeEnseignant, LigneVirementVacataire, TauxImpot, VirementVacataire};
-use App\Services\PreparationVirementVacataire;
+use App\Models\{banque, entite, BiometrieImport, HeureRealiseeEnseignant, LigneVirementVacataire, VirementVacataire};
+use App\Services\PaieImportVacataire;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,7 @@ class VirementVacataireController extends Controller
     {
         return view('Admin.EmploiTemps.virements.index', [
             'title' => 'Etats de virement des enseignants',
-            'imports' => BiometrieImport::where(fn($q) => $q->whereNull('type_import')->orWhere('type_import', 'cours'))
+            'imports' => BiometrieImport::pourEnseignants()
                 ->whereHas('heures_realisees')->latest('id')->get(),
         ]);
     }
@@ -28,19 +28,24 @@ class VirementVacataireController extends Controller
             'date_fin' => 'nullable|date_format:Y-m-d'.($request->filled('date_debut') ? '|after_or_equal:date_debut' : ''),
             'id_entite' => 'nullable|integer|min:1', 'id_banque' => 'nullable|integer|min:1',
             'id_import' => 'nullable|integer|min:1', 'recherche' => 'nullable|string|max:255',
+            'nature' => 'nullable|in:initial,requete', 'mois_requete' => 'nullable|date_format:Y-m',
         ]);
-        $etats = VirementVacataire::query()
+        $query = VirementVacataire::query()
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_ordre', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_ordre', '<=', $v))
             ->when($request->id_entite, fn($q, $v) => $q->where('id_entite', $v))
             ->when($request->id_banque, fn($q, $v) => $q->where('id_banque', $v))
-            ->when($request->id_import, fn($q, $v) => $q->where('id_biometrie_import', $v))
+            ->when($request->id_import, fn($q, $v) => $q->where(fn($s) => $s->where('id_biometrie_import', $v)->orWhere('id_import_parent', $v)))
+            ->when($request->nature, fn($q, $v) => $q->where('nature', $v))
+            ->when($request->mois_requete, fn($q, $v) => $q->whereDate('mois_requete', $v.'-01'))
             ->when($request->recherche, fn($q, $v) => $q->where(fn($s) => $s->where('motif', 'like', '%'.$v.'%')
-                ->orWhereHas('lignes', fn($l) => $l->where('nom', 'like', '%'.$v.'%'))))
-            ->withSum('lignes', 'net_a_payer')->withCount('lignes')->latest('id')->paginate(25)->withQueryString();
+                ->orWhereHas('lignes', fn($l) => $l->where('nom', 'like', '%'.$v.'%'))));
+        $totaux = LigneVirementVacataire::whereIn('id_virement', (clone $query)->select('id'))
+            ->selectRaw('COALESCE(SUM(net_a_payer),0) as net, COALESCE(SUM(impot),0) as impot, COALESCE(SUM(frais_transfert),0) as frais')->first();
+        $etats = $query->withSum('lignes', 'net_a_payer')->withCount('lignes')->latest('id')->paginate(25)->withQueryString();
 
         return view('Admin.EmploiTemps.virements.historique', [
-            'title' => 'Historique des ordres de virement', 'etats' => $etats,
+            'title' => 'Historique des ordres de virement', 'etats' => $etats, 'totaux' => $totaux,
             'entites' => VirementVacataire::select('id_entite', 'entite_nom')->distinct()->orderBy('entite_nom')->get(),
             'banques' => VirementVacataire::select('id_banque', 'banque_nom')->distinct()->orderBy('banque_nom')->get(),
         ]);
@@ -100,6 +105,7 @@ class VirementVacataireController extends Controller
             // Serialise les validations d'une entite et empeche les paiements en double.
             $entite = entite::whereKey($data['id_entite'])->lockForUpdate()->firstOrFail();
             $source = BiometrieImport::whereKey($import->id)->lockForUpdate()->firstOrFail();
+            if ($source->estRequete()) { BiometrieImport::whereKey($source->id_import_parent)->lockForUpdate()->firstOrFail(); }
             $deja = LigneVirementVacataire::where('id_entite', $entite->id)
                 ->where('id_biometrie_import', $source->id)->pluck('id_personnel')->all();
             if (count(array_intersect($data['personnels'], $deja)) > 0) {
@@ -115,6 +121,9 @@ class VirementVacataireController extends Controller
                     $this->erreur('personnels', 'Un enseignant ne correspond pas a cette banque ou a cette entite.');
                 }
                 $ligne = $lignes[$id];
+                if ($ligne['reprise_a_verifier'] ?? false) {
+                    $this->erreur('personnels', 'Cette correction implique une diminution de droits dans une entite. Verification financiere requise avant un complement.');
+                }
                 if ($ligne['net_avant_frais'] <= 0) {
                     $this->erreur('personnels', 'Un enseignant selectionne ne dispose pas de net positif.');
                 }
@@ -136,18 +145,25 @@ class VirementVacataireController extends Controller
             }
             $doublonAutreImport = LigneVirementVacataire::whereIn('id_personnel', $data['personnels'])->where('id_entite', $entite->id)
                 ->where('id_biometrie_import', '!=', $source->id)
-                ->whereHas('virement', fn($q) => $q->whereDate('date_debut', '<=', $source->date_fin)->whereDate('date_fin', '>=', $source->date_debut))->exists();
+                ->whereHas('virement', function ($q) use ($source) {
+                    $q->whereDate('date_debut', '<=', $source->date_fin)->whereDate('date_fin', '>=', $source->date_debut);
+                    if ($source->estRequete()) {
+                        $q->where('id_biometrie_import', '!=', $source->id_import_parent)
+                            ->where(fn($s) => $s->whereNull('id_import_parent')->orWhere('id_import_parent', '!=', $source->id_import_parent));
+                    }
+                })->exists();
             if ($doublonAutreImport) {
                 $this->erreur('personnels', 'Un enseignant a deja un ordre valide pour cette entite sur un autre import de periode chevauchante.');
             }
             $banque = banque::findOrFail($data['id_banque']);
+            $meta = $source->estRequete() ? ['nature' => 'requete', 'id_import_parent' => $source->id_import_parent, 'mois_requete' => $source->mois_requete] : [];
             $etat = VirementVacataire::create(collect($data)->only([
                 'id_entite', 'id_banque', 'modele', 'agence', 'compte_debit', 'motif', 'date_ordre', 'lieu', 'signataire', 'fonction_signataire',
             ])->all() + [
                 'id_biometrie_import' => $source->id, 'entite_nom' => $entite->nom_entite,
                 'banque_nom' => $banque->nom_banque, 'date_debut' => $source->date_debut,
                 'date_fin' => $source->date_fin, 'id_user' => $request->user()?->id, 'valide_at' => now(),
-            ]);
+            ] + $meta);
             $etat->lignes()->createMany($selection->all());
 
             return $etat;
@@ -173,13 +189,13 @@ class VirementVacataireController extends Controller
 
     private function lignesImport(BiometrieImport $import)
     {
-        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        abort_unless($import->concerneEnseignants(), 404);
         $heures = HeureRealiseeEnseignant::where('id_biometrie_import', $import->id)
             ->with(['personnel.taux_impot', 'personnel.banque'])->orderBy('id')->get();
         abort_if($heures->isEmpty(), 422, 'Aucune heure consolidee pour cet import.');
         abort_if($heures->contains(fn($h) => !$h->personnel), 422, 'Un enseignant consolide est introuvable.');
 
-        return (new PreparationVirementVacataire())->lignes($heures, TauxImpot::where('par_defaut', true)->firstOrFail());
+        return (new PaieImportVacataire())->lignes($import, $heures);
     }
 
     private function filtrer($lignes, Request $request)

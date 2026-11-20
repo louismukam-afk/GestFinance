@@ -16,6 +16,14 @@
     @if($errors->any())
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
+    <div style="margin-bottom:15px">
+        <a href="{{ route('biometrie_heures.historique') }}" class="btn btn-default"><i class="fa fa-history"></i> Historique des consolidations</a>
+        <form method="POST" action="{{ route('biometrie_heures.nettoyer_orphelins') }}" style="display:inline" onsubmit="return confirm('Supprimer definitivement les pointages et heures consolidees sans import associe ? Les imports existants et les ordres archives seront conserves.');">
+            @csrf @method('DELETE')
+            <input type="hidden" name="confirmation" value="1">
+            <button class="btn btn-warning" @disabled($orphelins['pointages'] + $orphelins['heures'] === 0)><i class="fa fa-eraser"></i> Nettoyer les donnees sans import ({{ $orphelins['pointages'] }} pointages / {{ $orphelins['heures'] }} heures)</button>
+        </form>
+    </div>
 
     <style>
         .biometrie-anomalie {
@@ -98,7 +106,7 @@
                                     @csrf @method('DELETE')
                                     <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet import et toutes ses données ?')">Supprimer</button>
                                 </form>
-                                <a href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-info">Voir</a>
+                                <a href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-info"><i class="fa fa-eye"></i> Visualiser</a>
                             </td>
                         </tr>
                     @empty
@@ -109,6 +117,10 @@
         </div>
     </div>
 
+    @if($importSelectionne)
+    <h4>Import #{{ $importSelectionne->id }} - {{ $importSelectionne->libelle }}</h4>
+    @if($importSelectionne->estRequete())<p><strong>Consolidation revisee apres requete</strong> - Import initial #{{ $importSelectionne->id_import_parent }}. Les virements et impots portent uniquement sur le complement restant.</p>@endif
+    <a href="{{ route('biometrie_heures.index') }}" class="btn btn-default"><i class="fa fa-times"></i> Fermer les details</a>
     <div class="card mb-4">
         <div class="card-header"><strong>Associer un nom biometrie a un enseignant</strong></div>
         <div class="card-body">
@@ -149,12 +161,8 @@
         <div class="row">
             <div class="col-md-3">
                 <label>Import</label>
-                <select name="id_biometrie_import" class="form-control">
-                    <option value="">Tous</option>
-                    @foreach($imports as $import)
-                        <option value="{{ $import->id }}" {{ request('id_biometrie_import') == $import->id ? 'selected' : '' }}>{{ $import->libelle }}</option>
-                    @endforeach
-                </select>
+                <input type="hidden" name="id_biometrie_import" value="{{ $importSelectionne->id }}">
+                <input class="form-control" value="{{ $importSelectionne->libelle }}" readonly aria-label="Import selectionne">
             </div>
             <div class="col-md-3">
                 <label>Enseignant</label>
@@ -226,7 +234,12 @@
                         <td class="{{ $nonComptabilise > 0 ? 'biometrie-anomalie' : '' }}">{{ number_format($nonComptabilise, 2, ',', ' ') }} h</td>
                         <td>{{ number_format($heure->montant_taux, 0, ',', ' ') }}</td>
                         <td>{{ number_format($heure->montant_total, 0, ',', ' ') }}</td>
-                        <td>{{ number_format($nonComptabilise * $heure->montant_taux, 0, ',', ' ') }}</td>
+                        <td>
+                            {{ number_format($heure->sanction_annulee ? 0 : $nonComptabilise * $heure->montant_taux, 0, ',', ' ') }}
+                            @if($heure->sanction_annulee)
+                                <br>Sanction levee
+                            @endif
+                        </td>
                         <td><span class="badge badge-{{ $heure->statut === 'realise' ? 'success' : 'warning' }}">{{ $heure->statut }}</span></td>
                         <td class="{{ $isAnomalie ? 'biometrie-anomalie' : '' }}">{{ $heure->observation }}</td>
                     </tr>
@@ -337,6 +350,7 @@
             </table>
         </div>
     </div>
+    @endif
 </div>
 @endsection
 

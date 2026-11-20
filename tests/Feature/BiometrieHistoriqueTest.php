@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 class BiometrieHistoriqueTest extends TestCase
 {
-    public function test_history_uses_overlapping_periods_and_excludes_permanent_and_manual_imports(): void
+    public function test_history_uses_overlapping_periods_and_includes_manual_but_not_permanent_imports(): void
     {
         config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
         DB::purge('sqlite');
@@ -27,8 +27,8 @@ class BiometrieHistoriqueTest extends TestCase
         $view = (new BiometrieHeureController())->historique($request);
         $imports = $view->getData()['imports'];
 
-        $this->assertCount(1, $imports);
-        $this->assertSame($expected->id, $imports->first()->id);
+        $this->assertCount(2, $imports);
+        $this->assertContains($expected->id, $imports->pluck('id')->all());
         $this->assertEquals(0, $imports->first()->heures_realisees_count);
         $this->app['view']->share('errors', new \Illuminate\Support\ViewErrorBag());
         $html = $view->render();

@@ -3,6 +3,7 @@
 <div class="container">
     <h3 class="text-primary">{{ $title }}</h3>
     <p>{{ $import->libelle }} : {{ $import->date_debut->format('d/m/Y') }} au {{ $import->date_fin->format('d/m/Y') }}</p>
+    @if($import->estRequete())<p><strong>Salaires vacataires apres requete</strong> - Import initial #{{ $import->id_import_parent }}, mois {{ $import->mois_requete->format('m/Y') }}. Complement uniquement, apres deduction des droits deja couverts.</p>@endif
     <a class="btn btn-default" href="{{ route('virements_vacataires.index') }}"><i class="fa fa-arrow-left"></i> Etats de virement</a>
     @if($errors->any())<div class="alert alert-danger" style="margin-top:15px"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <form method="GET" class="row" style="margin-top:20px">
@@ -26,12 +27,12 @@
             <thead><tr><th><input type="checkbox" id="selectionTous" aria-label="Selectionner tous les beneficiaires eligibles"></th><th>Enseignant / banque</th><th>Numero de compte</th><th>Brut fiscal</th><th>Impot</th><th>Net apres impot</th><th>Frais de transfert</th><th>Net a virer</th></tr></thead>
             <tbody>@forelse($lignes as $ligne)
                 @php($id = $ligne['id_personnel'])
-                @php($bloque = $ligne['net_avant_frais'] <= 0)
+                @php($bloque = $ligne['net_avant_frais'] <= 0 || ($ligne['reprise_a_verifier'] ?? false))
                 <tr data-net="{{ $ligne['net_avant_frais'] }}">
                     <td><input type="checkbox" class="beneficiaire" name="personnels[]" value="{{ $id }}" aria-label="Selectionner {{ $ligne['nom'] }}" @disabled($bloque) @checked(!$bloque && in_array($id, old('personnels', [])))></td>
-                    <td>{{ $ligne['nom'] }}<br><small>{{ $ligne['banque_personnel'] ?: 'Sans banque' }}</small>@if($ligne['net_avant_frais'] <= 0)<br><strong>Net nul</strong>@endif</td>
+                    <td>{{ $ligne['nom'] }}<br><small>{{ $ligne['banque_personnel'] ?: 'Sans banque' }}</small>@if($ligne['reprise_a_verifier'] ?? false)<br><strong>Reprise de droits a verifier</strong>@elseif($ligne['net_avant_frais'] <= 0)<br><strong>Aucun complement positif</strong>@endif</td>
                     <td style="min-width:230px"><input class="form-control" name="comptes[{{ $id }}]" value="{{ old('comptes.'.$id, $ligne['compte']) }}" maxlength="255" aria-label="Compte de {{ $ligne['nom'] }}" @disabled($bloque)><label><input type="checkbox" name="sans_compte[{{ $id }}]" value="1" @checked(old('sans_compte.'.$id)) @disabled($bloque)> Sans compte confirme</label></td>
-                    <td>{{ number_format($ligne['brut_fiscal'], 2, ',', ' ') }}</td><td>{{ number_format($ligne['impot'], 2, ',', ' ') }}</td><td>{{ number_format($ligne['net_avant_frais'], 2, ',', ' ') }}</td>
+                    <td>{{ number_format($ligne['brut_fiscal'], 2, ',', ' ') }}@if($import->estRequete())<br><small>Revise : {{ number_format($ligne['droit_revise'], 2, ',', ' ') }}<br>Deja couvert : {{ number_format($ligne['deja_couvert'], 2, ',', ' ') }}</small>@endif</td><td>{{ number_format($ligne['impot'], 2, ',', ' ') }}</td><td>{{ number_format($ligne['net_avant_frais'], 2, ',', ' ') }}</td>
                     <td style="min-width:145px"><label><input type="checkbox" class="avec-frais" name="transfert[{{ $id }}]" value="1" @checked(old('transfert.'.$id)) @disabled($bloque)> Imputer</label><input type="number" class="form-control montant-frais" name="frais[{{ $id }}]" value="{{ old('frais.'.$id, 3500) }}" min="0" max="10000000" step="0.01" aria-label="Frais de transfert de {{ $ligne['nom'] }}" @disabled($bloque)></td>
                     <td class="net-virement" style="white-space:nowrap"></td>
                 </tr>
@@ -43,7 +44,7 @@
             <div class="col-sm-4 form-group"><label for="modele">Modele</label><select name="modele" id="modele" class="form-control"><option value="ish" @selected(old('modele', $modeleDefaut) === 'ish')>Institut Superieur Hintel</option><option value="cef" @selected(old('modele', $modeleDefaut) === 'cef')>Centre de Formation Hintel</option></select></div>
             <div class="col-sm-4 form-group"><label for="agence">Agence bancaire</label><input id="agence" name="agence" class="form-control" value="{{ old('agence', 'Etoudi') }}" maxlength="255" required></div>
             <div class="col-sm-4 form-group"><label for="compteDebit">Compte a debiter de l'entite</label><input id="compteDebit" name="compte_debit" class="form-control" value="{{ old('compte_debit') }}" maxlength="255" required></div>
-            <div class="col-sm-12 form-group"><label for="motif">Motif de l'ordre de virement</label><textarea id="motif" name="motif" rows="3" class="form-control" maxlength="3000" required>{{ old('motif') }}</textarea></div>
+            <div class="col-sm-12 form-group"><label for="motif">Motif de l'ordre de virement</label><textarea id="motif" name="motif" rows="3" class="form-control" maxlength="3000" required>{{ old('motif', $import->estRequete() ? $import->libelle.'. '.$import->motif_requete : '') }}</textarea></div>
             <div class="col-sm-4 form-group"><label for="dateOrdre">Date de l'ordre</label><input id="dateOrdre" name="date_ordre" type="date" class="form-control" value="{{ old('date_ordre', date('Y-m-d')) }}" required></div>
             <div class="col-sm-4 form-group"><label for="lieuOrdre">Lieu</label><input id="lieuOrdre" name="lieu" class="form-control" value="{{ old('lieu', 'Yaounde') }}" maxlength="255" required></div>
             <div class="col-sm-4 form-group"><label for="signataire">Signataire</label><input id="signataire" name="signataire" class="form-control" value="{{ old('signataire', 'SUWO KENGNE ARMELLE LINDA') }}" maxlength="255" required></div>

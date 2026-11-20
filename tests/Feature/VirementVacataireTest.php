@@ -31,6 +31,8 @@ class VirementVacataireTest extends TestCase
         foreach (['2026_11_19_000002_create_taux_impots_table.php', '2026_11_19_000003_add_id_taux_impot_to_personnels_table.php', '2026_11_19_000004_create_virements_vacataires_tables.php'] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
+        (require database_path('migrations/2026_11_20_000001_add_requetes_vacataires.php'))->up();
+        (require database_path('migrations/2026_11_20_000002_add_type_requete_to_heures.php'))->up();
         banque::create(['nom_banque' => 'CCA']); banque::create(['nom_banque' => 'CBC']);
         entite::create(['nom_entite' => 'Institut Superieur Hintel']); entite::create(['nom_entite' => 'Centre de Formation Hintel']);
         $this->personnel = personnel::create(['nom' => 'Enseignant test', 'niveau_etude' => '001 234', 'id_banque' => 1]);
@@ -232,6 +234,339 @@ class VirementVacataireTest extends TestCase
         return $p;
     }
 
+    private function preparerCoursManuel(): void
+    {
+        Schema::table('personnels', fn(Blueprint $t) => $t->string('type_personnel')->default('vacataire'));
+        Schema::create('programme_specialites', fn(Blueprint $t) => $t->id());
+        Schema::create('taux_horaires', function (Blueprint $t) {
+            $t->id(); $t->string('libelle'); $t->decimal('montant', 12, 2); $t->string('statut'); $t->boolean('par_defaut'); $t->timestamps();
+        });
+        Schema::create('plage_horaires', function (Blueprint $t) {
+            $t->id(); $t->string('libelle'); $t->string('type_plage'); $t->time('heure_debut'); $t->time('heure_fin');
+        });
+        Schema::table('cours_enseignants', function (Blueprint $t) {
+            foreach (['id_personnel','id_programme_specialite','id_taux_horaire','id_salle','id_cycle','id_filiere','id_niveau','id_specialite','id_annee_academique','id_entite'] as $c) { $t->integer($c)->nullable(); }
+            $t->string('statut'); $t->date('date_debut'); $t->date('date_fin'); $t->timestamps();
+        });
+        Schema::table('seance_cours', function (Blueprint $t) { $t->integer('id_cours_enseignant'); $t->integer('id_plage_horaire'); $t->integer('jour_semaine'); $t->timestamps(); });
+        DB::table('taux_horaires')->insert(['id'=>1,'libelle'=>'Cours','montant'=>3000,'statut'=>'actif','par_defaut'=>1]);
+        DB::table('plage_horaires')->insert(['id'=>1,'libelle'=>'Cours','type_plage'=>'cours','heure_debut'=>'08:00','heure_fin'=>'16:00']);
+        DB::table('cours_enseignants')->insert(['id'=>1,'id_personnel'=>$this->personnel->id,'id_programme_specialite'=>1,'id_taux_horaire'=>1,
+            'id_cycle'=>1,'id_filiere'=>1,'id_niveau'=>1,'id_specialite'=>1,'id_annee_academique'=>1,'id_entite'=>1,
+            'statut'=>'actif','date_debut'=>'2026-10-01','date_fin'=>'2026-10-31']);
+        DB::table('seance_cours')->insert(['id'=>1,'id_cours_enseignant'=>1,'id_plage_horaire'=>1,'jour_semaine'=>4]);
+    }
+
+    private function nouvelleRequete(): BiometrieImport
+    {
+        (new \App\Http\Controllers\Admin\RequeteVacataireController())->store(new Request([
+            'id_import_parent' => $this->import->id, 'mois_requete' => '2026-10', 'motif_requete' => 'Presence justifiee et heures rectifiees',
+        ]));
+        return BiometrieImport::where('type_import', 'requete')->latest('id')->firstOrFail();
+    }
+
+    private function saisirHeures(BiometrieImport $import, string $fin, string $decision = 'conserver'): void
+    {
+        (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualStore(new Request([
+            'id_biometrie_import'=>$import->id,'id_cours_enseignant'=>1,'id_seance_cours'=>1,'date_seance'=>'2026-10-01',
+            'heure_debut_reelle'=>'08:00','heure_fin_reelle'=>$fin,'observation'=>'Correction apres examen de la requete','decision_sanction'=>$decision,
+            'type_requete' => $decision === 'lever' ? 'absence_justifiee' : 'presence_manuelle',
+        ]));
+    }
+
+    public function test_manual_corrections_require_request_and_unpaid_teacher_can_reach_payment(): void
+    {
+        $this->preparerCoursManuel();
+        $controller = new \App\Http\Controllers\Admin\BiometrieHeureController();
+        $view = $controller->manualCreate(new Request(['id_biometrie_import'=>$this->import->id]));
+        $this->assertContains($this->import->id, $view->getData()['imports']->pluck('id')->all());
+        $this->assertStringContainsString('Reutiliser un import / dossier', $view->render());
+        try { $this->saisirHeures($this->import, '15:00'); $this->fail('Une correction doit passer par un dossier'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('import', $e->errors()); }
+        $parent = $this->import;
+        $this->import = $this->nouvelleRequete();
+        $this->saisirHeures($this->import, '15:00');
+        $this->assertEquals(7, $this->import->heures_realisees()->first()->duree_realisee);
+        $this->assertEquals(6, $parent->heures_realisees()->first()->duree_realisee);
+        $this->assertEquals(17010, $controller->impotsImport($this->import)->getData()['lignes']->first()['net']);
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $this->assertEquals(17010, VirementVacataire::first()->lignes->first()->net_a_payer);
+        $this->assertStringStartsWith('%PDF-', (new BulletinVacataireController())->pdf(new Request(), $this->import)->getContent());
+    }
+
+    public function test_after_request_pays_only_delta_preserves_initial_rate_and_freezes_original(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data(['transfert'=>[1=>1], 'frais'=>[1=>3500]])), $this->import);
+        $initial = VirementVacataire::first();
+        \App\Models\TauxImpot::query()->update(['taux'=>20]);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '16:00');
+        $form = (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualCreate(new Request(['id_biometrie_import'=>$requete->id]));
+        $this->assertStringContainsString('Nature de la requete', $form->render());
+        $this->assertEquals(6, $this->import->heures_realisees()->first()->duree_realisee);
+        $lignes = (new \App\Services\PaieImportVacataire())->lignes($requete);
+        $this->assertEquals(12000, $lignes->first()['brut_fiscal']);
+        $this->assertEquals(660, $lignes->first()['impot']);
+        $this->assertEquals(11340, $lignes->first()['net_avant_frais']);
+        $parent = $this->import;
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        $correctif = VirementVacataire::latest('id')->first();
+        $this->assertSame('requete', $correctif->nature);
+        $this->assertEquals($parent->id, $correctif->id_import_parent);
+        $this->assertEquals(11340, $correctif->lignes->first()->net_a_payer);
+        $this->assertEquals(7840, $initial->fresh()->lignes->first()->net_a_payer);
+        $this->assertStringStartsWith('%PDF-', $this->controller->pdf($correctif)->getContent());
+        $this->assertStringStartsWith('%PDF-', (new BulletinVacataireController())->pdf(new Request(), $requete)->getContent());
+        $history = $this->controller->historique(new Request(['nature'=>'requete','id_import'=>$parent->id,'id_entite'=>1,'id_banque'=>1,'mois_requete'=>'2026-10']))->getData();
+        $this->assertEquals(1, $history['etats']->total());
+        $this->assertEquals(11340, $history['totaux']->net);
+        try { $this->saisirHeures($parent, '16:00'); $this->fail('La paie initiale validee doit rester figee'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('import', $e->errors()); }
+    }
+
+    public function test_successive_requests_cannot_repay_the_same_supplement(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $parent = $this->import;
+        $premiere = $this->nouvelleRequete();
+        $this->saisirHeures($premiere, '15:00');
+        $this->import = $premiere;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $premiere);
+        $this->assertEquals(5670, VirementVacataire::latest('id')->first()->lignes->first()->net_a_payer);
+        $this->import = $parent;
+        $seconde = $this->nouvelleRequete();
+        $this->saisirHeures($seconde, '15:00');
+        $this->assertEquals(0, (new \App\Services\PaieImportVacataire())->lignes($seconde)->first()['net_avant_frais']);
+        $this->import = $seconde;
+        try { $this->controller->store(Request::create('/', 'POST', $this->data()), $seconde); $this->fail('Complement nul'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('personnels', $e->errors()); }
+        $this->saisirHeures($seconde, '16:00');
+        $this->assertEquals(5670, (new \App\Services\PaieImportVacataire())->lignes($seconde)->first()['net_avant_frais']);
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $seconde);
+        $this->assertEquals(22680, \App\Models\LigneVirementVacataire::sum('net_avant_frais'));
+    }
+
+    public function test_request_rejects_wrong_month_and_employee_without_initial_order(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        try {
+            (new \App\Http\Controllers\Admin\RequeteVacataireController())->store(new Request(['id_import_parent'=>$this->import->id,'mois_requete'=>'2026-11','motif_requete'=>'Test']));
+            $this->fail('Mois hors periode');
+        } catch (ValidationException $e) { $this->assertArrayHasKey('mois_requete', $e->errors()); }
+        $requete = $this->nouvelleRequete();
+        $hors = personnel::create(['nom'=>'Sans ordre initial','type_personnel'=>'vacataire']);
+        DB::table('cours_enseignants')->where('id',1)->update(['id_personnel'=>$hors->id]);
+        try { $this->saisirHeures($requete, '16:00'); $this->fail('Pas de droit initial'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('id_cours_enseignant', $e->errors()); }
+        $this->assertEquals(0, $requete->heures_realisees()->count());
+    }
+
+    public function test_waiving_sanction_refunds_only_sanction_without_inventing_worked_hours(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '14:00', 'lever');
+        $heure = $requete->heures_realisees()->first();
+        $this->assertEquals(6, $heure->duree_realisee);
+        $this->assertTrue($heure->sanction_annulee);
+        $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->first();
+        $this->assertEquals(6000, $ligne['brut_fiscal']);
+        $this->assertEquals(330, $ligne['impot']);
+        $this->assertEquals(5670, $ligne['net_avant_frais']);
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        $this->assertEquals(5670, VirementVacataire::latest('id')->first()->lignes->first()->net_a_payer);
+    }
+
+    public function test_zero_initial_entitlement_can_be_reviewed_without_initial_order_and_cannot_be_paid_twice(): void
+    {
+        $this->preparerCoursManuel();
+        $this->import->heures_realisees()->update(['duree_realisee' => 4, 'montant_total' => 12000]);
+        $parent = $this->import;
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '12:00', 'lever');
+        $this->assertEquals(4, $requete->heures_realisees()->first()->duree_realisee);
+        $this->assertEquals(4, $parent->heures_realisees()->first()->duree_realisee);
+        $this->assertFalse($parent->heures_realisees()->first()->sanction_annulee);
+        $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->first();
+        $this->assertEquals(12000, $ligne['brut_fiscal']);
+        $this->assertEquals(660, $ligne['impot']);
+        $this->assertEquals(11340, $ligne['net_avant_frais']);
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        $this->assertSame('requete', VirementVacataire::first()->nature);
+        $this->assertStringStartsWith('%PDF-', (new BulletinVacataireController())->pdf(new Request(), $requete)->getContent());
+        try { $this->saisirHeures($parent, '16:00'); $this->fail('La source du paiement correctif doit rester protegee'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('import', $e->errors()); }
+        \App\Models\TauxImpot::query()->update(['taux' => 20]);
+        $this->import = $parent;
+        $seconde = $this->nouvelleRequete();
+        $this->saisirHeures($seconde, '12:00', 'lever');
+        $this->assertEquals(0, (new \App\Services\PaieImportVacataire())->lignes($seconde)->first()['net_avant_frais']);
+        $this->import = $seconde;
+        try { $this->controller->store(Request::create('/', 'POST', $this->data()), $seconde); $this->fail('Complement deja couvert'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('personnels', $e->errors()); }
+        $this->assertSame(1, VirementVacataire::count());
+    }
+
+    public function test_unpaid_positive_entitlement_can_be_reviewed_and_paid_only_once(): void
+    {
+        $this->preparerCoursManuel();
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '14:00', 'lever');
+        $parent = $this->import;
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        $this->assertEquals(17010, VirementVacataire::first()->lignes->first()->net_a_payer);
+        $this->import = $parent;
+        try { $this->controller->store(Request::create('/', 'POST', $this->data()), $parent); $this->fail('Le paiement initial ne peut pas doubler la requete'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('personnels', $e->errors()); }
+    }
+
+    public function test_zero_worked_hours_can_be_kept_when_waiving_a_sanction(): void
+    {
+        $this->preparerCoursManuel();
+        $this->import->heures_realisees()->update(['duree_realisee' => 0, 'montant_total' => 0]);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '08:00', 'lever');
+        $heure = $requete->heures_realisees()->first();
+        $this->assertEquals(0, $heure->duree_realisee);
+        $this->assertTrue($heure->sanction_annulee);
+        $this->assertEquals(0, (new \App\Services\PaieImportVacataire())->lignes($requete)->first()['net_avant_frais']);
+    }
+
+    public function test_manual_form_context_matches_posted_import_after_validation_error(): void
+    {
+        $this->preparerCoursManuel();
+        $requete = $this->nouvelleRequete();
+        session()->flashInput(['id_biometrie_import' => $this->import->id, 'decision_sanction' => 'lever']);
+        $form = (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualCreate(new Request(['id_biometrie_import' => $requete->id]));
+        $this->assertEquals($this->import->id, $form->getData()['selectedImport']->id);
+        $this->assertStringNotContainsString('id="decisionSanction"', $form->render());
+    }
+
+    public function test_three_claim_scenarios_restore_penalty_and_only_pay_attested_hours(): void
+    {
+        $this->preparerCoursManuel();
+        $this->import->heures_realisees()->update([
+            'duree_prevue' => 2, 'duree_realisee' => 0, 'montant_total' => 0,
+            'heure_fin_prevue' => '10:00:00', 'heure_debut_reelle' => null, 'heure_fin_reelle' => null,
+        ]);
+        $travaillees = $this->import->heures_realisees()->first()->replicate();
+        $travaillees->fill(['id_seance_cours' => 2, 'duree_prevue' => 6, 'duree_realisee' => 6,
+            'montant_total' => 18000, 'heure_debut_prevue' => '10:00:00', 'heure_fin_prevue' => '16:00:00']);
+        $travaillees->save();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $requete = $this->nouvelleRequete();
+        $controller = new \App\Http\Controllers\Admin\BiometrieHeureController();
+        $base = ['id_biometrie_import' => $requete->id, 'id_cours_enseignant' => 1, 'id_seance_cours' => 1,
+            'date_seance' => '2026-10-01', 'observation' => 'Releve administratif verifie par la direction'];
+        // Une justification doit ignorer meme des horaires de travail envoyes par erreur.
+        $controller->manualStore(new Request($base + ['type_requete' => 'absence_justifiee', 'heure_debut_reelle' => '08:00', 'heure_fin_reelle' => '10:00']));
+        $heure = $requete->heures_realisees()->where('id_seance_cours', 1)->first();
+        $this->assertEquals(0, $heure->duree_realisee);
+        $this->assertNull($heure->heure_debut_reelle);
+        $this->assertEquals(6000, $heure->sanction_avant_requete);
+        $this->assertEquals(6000, (new \App\Services\PaieImportVacataire())->lignes($requete)->first()['brut_fiscal']);
+        foreach (['presence_manuelle', 'pointage_incomplet'] as $type) {
+            $controller->manualStore(new Request($base + ['type_requete' => $type, 'heure_debut_reelle' => '08:00', 'heure_fin_reelle' => '10:00']));
+            $heure = $heure->fresh();
+            $this->assertEquals(2, $heure->duree_realisee);
+            $this->assertSame($type, $heure->type_requete);
+            $this->assertEquals(0, $heure->duree_avant_requete);
+            $this->assertEquals(6000, $heure->montant_total);
+            $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->first();
+            $this->assertEquals(12000, $ligne['brut_fiscal']);
+            $this->assertEquals(11340, $ligne['net_avant_frais']);
+        }
+        $this->assertEquals(0, $this->import->heures_realisees()->where('id_seance_cours', 1)->first()->duree_realisee);
+    }
+
+    public function test_claim_reference_shows_source_hours_and_single_biometric_punch_without_copying(): void
+    {
+        $this->preparerCoursManuel();
+        $requete = $this->nouvelleRequete();
+        \App\Models\BiometriePointage::create(['id_biometrie_import' => $this->import->id,
+            'id_personnel' => $this->personnel->id, 'date_heure_pointage' => '2026-10-01 08:02:00']);
+        $request = new Request(['id_cours_enseignant' => 1, 'id_seance_cours' => 1, 'date_seance' => '2026-10-01']);
+        $json = (new \App\Http\Controllers\Admin\BiometrieHeureController())->referenceRequete($request, $requete)->getData(true);
+        $this->assertEquals(6, $json['duree_realisee']);
+        $this->assertEquals(6000, $json['sanction']);
+        $this->assertSame(['08:02'], $json['pointages']);
+        $this->assertSame(0, $requete->heures_realisees()->count());
+    }
+
+    public function test_claim_requires_attested_hours_and_justification_for_presence(): void
+    {
+        $this->preparerCoursManuel();
+        $requete = $this->nouvelleRequete();
+        $base = ['id_biometrie_import' => $requete->id, 'id_cours_enseignant' => 1, 'id_seance_cours' => 1,
+            'date_seance' => '2026-10-01', 'type_requete' => 'pointage_incomplet'];
+        try {
+            (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualStore(new Request($base));
+            $this->fail('Un pointage incomplet doit etre appuye par des horaires attestes et une justification');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('heure_debut_reelle', $e->errors());
+            $this->assertArrayHasKey('observation', $e->errors());
+        }
+        $this->assertSame(0, $requete->heures_realisees()->count());
+    }
+
+    public function test_zero_initial_amount_keeps_corrective_tax_rate_across_entities(): void
+    {
+        $this->preparerCoursManuel();
+        $this->import->heures_realisees()->update(['duree_realisee' => 4, 'montant_total' => 12000]);
+        $this->ajouterHeure($this->personnel->id, 2);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '12:00', 'lever');
+        $requete->heures_realisees()->update(['sanction_annulee' => true]);
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        \App\Models\TauxImpot::query()->update(['taux' => 20]);
+        $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->firstWhere('id_entite', 2);
+        $this->assertEquals(660, $ligne['impot']);
+        $this->controller->store(Request::create('/', 'POST', $this->data(['id_entite' => 2])), $requete);
+        $this->assertEquals(22680, \App\Models\LigneVirementVacataire::sum('net_a_payer'));
+    }
+
+    public function test_request_cannot_bypass_duplicate_payment_check_on_an_unrelated_import(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $autre = $this->import->replicate();
+        $autre->save();
+        $heure = $this->import->heures_realisees()->first()->replicate();
+        $heure->id_biometrie_import = $autre->id;
+        $heure->save();
+        $this->import = $autre;
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '16:00');
+        $this->import = $requete;
+        try { $this->controller->store(Request::create('/', 'POST', $this->data()), $requete); $this->fail('Un autre import deja paye ne doit pas etre contourne'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('personnels', $e->errors()); }
+        $this->assertSame(1, VirementVacataire::count());
+    }
+
+    public function test_reduction_in_rights_cannot_create_a_supplementary_payment(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '13:00');
+        $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->first();
+        $this->assertLessThan(0, $ligne['net_avant_frais']);
+        $this->assertTrue($ligne['reprise_a_verifier']);
+        $this->import = $requete;
+        try { $this->controller->store(Request::create('/', 'POST', $this->data()), $requete); $this->fail('Diminution de droits'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('personnels', $e->errors()); }
+        $this->assertEquals(1, VirementVacataire::count());
+    }
+
     private function ajouterHeure(int $personnel, int $entite): void
     {
         $h = HeureRealiseeEnseignant::first()->replicate();
@@ -280,6 +615,53 @@ class VirementVacataireTest extends TestCase
             } catch (ValidationException $exception) { $this->assertArrayHasKey('personnels', $exception->errors()); }
         }
         $this->assertEquals(0, VirementVacataire::count());
+    }
+
+    public function test_unpaid_request_can_be_deleted_without_touching_initial_import_or_other_requests(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $parent = $this->import;
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '16:00');
+        $autre = $this->nouvelleRequete();
+        $controller = new \App\Http\Controllers\Admin\BiometrieHeureController();
+        $html = $controller->manualCreate(new Request(['id_biometrie_import' => $requete->id]))->render();
+        $this->assertStringContainsString('Supprimer le dossier', $html);
+        $this->assertStringContainsString(route('biometrie_heures.destroy', $requete), $html);
+        $response = $controller->destroy($requete);
+        $this->assertSame(route('biometrie_heures.manual.create'), $response->getTargetUrl());
+        $this->assertNull(BiometrieImport::find($requete->id));
+        $this->assertSame(0, HeureRealiseeEnseignant::where('id_biometrie_import', $requete->id)->count());
+        $this->assertNotNull($parent->fresh());
+        $this->assertNotNull($autre->fresh());
+        $this->assertEquals(6, $parent->heures_realisees()->first()->duree_realisee);
+        $this->assertSame(1, VirementVacataire::count());
+    }
+
+    public function test_request_with_validated_order_cannot_be_deleted(): void
+    {
+        $this->preparerCoursManuel();
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '16:00');
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        try {
+            (new \App\Http\Controllers\Admin\BiometrieHeureController())->destroy($requete);
+            $this->fail('Un dossier avec ordre valide doit etre conserve.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('import', $exception->errors());
+        }
+        try {
+            (new \App\Http\Controllers\Admin\BiometrieHeureController())->clearConsolidation($requete);
+            $this->fail('Les heures servant au paiement valide doivent etre conservees.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('import', $exception->errors());
+        }
+        $this->assertNotNull($requete->fresh());
+        $this->assertSame(1, $requete->heures_realisees()->count());
+        $this->assertSame(2, VirementVacataire::count());
     }
 
     public function test_several_orders_exhaust_an_entity_without_repeating_teacher(): void

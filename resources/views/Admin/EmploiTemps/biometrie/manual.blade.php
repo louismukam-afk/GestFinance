@@ -17,8 +17,30 @@
     @endif
     @if($imports->isEmpty())
         <div class="alert alert-info">
-            Aucun import manuel n'existe encore. Choisis <strong>Nouvel import manuel</strong>, renseigne la periode, puis enregistre une premiere heure realisee.
+            Aucun import enseignant disponible.
         </div>
+    @endif
+    <h4>Nouvelle requete sur les heures et sanctions</h4>
+    <form method="POST" action="{{ route('biometrie_heures.requetes.store') }}" style="margin-bottom:25px">
+        @csrf
+        <div class="row">
+            <div class="col-sm-6 form-group"><label for="parentRequete">Import initial consolide</label><select id="parentRequete" name="id_import_parent" class="form-control" required><option value="">Choisir</option>@foreach($parentsRequetes as $parent)<option value="{{ $parent->id }}" @selected(old('id_import_parent', $selectedImport?->id_import_parent ?: $selectedImport?->id) == $parent->id)>#{{ $parent->id }} - {{ $parent->libelle }}</option>@endforeach</select></div>
+            <div class="col-sm-3 form-group"><label for="moisRequete">Mois concerne</label><input id="moisRequete" type="month" name="mois_requete" class="form-control" value="{{ old('mois_requete', $selectedImport?->mois_requete?->format('Y-m')) }}" required></div>
+            <div class="col-sm-12 form-group"><label for="motifRequete">Motif et decision sur la requete</label><textarea id="motifRequete" name="motif_requete" rows="2" maxlength="3000" class="form-control" required>{{ old('motif_requete') }}</textarea></div>
+        </div>
+        <button class="btn btn-primary" @disabled($parentsRequetes->isEmpty())><i class="fa fa-plus"></i> Creer le dossier apres requete</button>
+    </form>
+    @if($selectedImport)
+        <h4>#{{ $selectedImport->id }} - {{ $selectedImport->libelle }}</h4>
+        @if($selectedImport->estRequete())<p>Apres requete : import initial #{{ $selectedImport->id_import_parent }}, mois {{ $selectedImport->mois_requete->format('m/Y') }}. {{ $selectedImport->motif_requete }}</p>@endif
+        @if($selectedImport->total_consolidees > 0)
+        <div style="margin-bottom:15px;display:flex;flex-wrap:wrap;gap:6px">
+            <a class="btn btn-default" href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $selectedImport->id]) }}"><i class="fa fa-table"></i> Consolidation des heures</a>
+            <a class="btn btn-default" href="{{ route('biometrie_heures.impots', $selectedImport) }}"><i class="fa fa-percent"></i> Impots</a>
+            <a class="btn btn-default" href="{{ route('virements_vacataires.create', $selectedImport) }}"><i class="fa fa-exchange"></i> Etat de virement</a>
+            <a class="btn btn-default" href="{{ route('bulletins_vacataires.show', $selectedImport) }}"><i class="fa fa-file-text-o"></i> Bulletins</a>
+        </div>
+        @endif
     @endif
     @if($cours->isEmpty())
         <div class="alert alert-warning">
@@ -34,30 +56,27 @@
         @csrf
 
         <fieldset class="border p-3 mb-4">
-            <legend class="w-auto px-2">Import manuel</legend>
+            <legend class="w-auto px-2">Dossier de requete</legend>
             <div class="row">
                 <div class="col-md-4">
-                    <label>Reutiliser un import manuel</label>
+                    <label>Reutiliser un import / dossier</label>
                     <select name="id_biometrie_import" id="id_biometrie_import" class="form-control">
-                        <option value="">-- Nouvel import manuel --</option>
+                        <option value="">-- Choisir un dossier --</option>
                         @foreach($imports as $import)
-                            <option value="{{ $import->id }}" data-debut="{{ optional($import->date_debut)->format('Y-m-d') }}" data-fin="{{ optional($import->date_fin)->format('Y-m-d') }}" {{ (old('id_biometrie_import') ?: request('id_biometrie_import')) == $import->id ? 'selected' : '' }}>
+                            <option value="{{ $import->id }}" data-debut="{{ optional($import->date_debut)->format('Y-m-d') }}" data-fin="{{ optional($import->date_fin)->format('Y-m-d') }}" @selected($selectedImport?->id == $import->id)>
                                 {{ $import->libelle }} ({{ optional($import->date_debut)->format('d/m/Y') }} - {{ optional($import->date_fin)->format('d/m/Y') }})
                             </option>
                         @endforeach
                     </select>
-                </div>
-                <div class="col-md-4">
-                    <label>Libelle nouvel import</label>
-                    <input type="text" name="libelle" class="form-control" value="{{ old('libelle') }}" placeholder="Saisie manuelle mai 2026">
+                    <button type="button" class="btn btn-default btn-sm" id="chargerImport"><i class="fa fa-refresh"></i> Charger cet import</button>
                 </div>
                 <div class="col-md-2">
-                    <label>Date debut import</label>
-                    <input type="date" name="date_debut_import" id="date_debut_import" class="form-control" value="{{ old('date_debut_import') }}">
+                    <label>Date debut</label>
+                    <input type="date" id="date_debut_import" class="form-control" readonly>
                 </div>
                 <div class="col-md-2">
-                    <label>Date fin import</label>
-                    <input type="date" name="date_fin_import" id="date_fin_import" class="form-control" value="{{ old('date_fin_import') }}">
+                    <label>Date fin</label>
+                    <input type="date" id="date_fin_import" class="form-control" readonly>
                 </div>
             </div>
         </fieldset>
@@ -88,38 +107,46 @@
 
         <fieldset class="border p-3 mb-4">
             <legend class="w-auto px-2">Heures realisees</legend>
+            @if($selectedImport?->estRequete())
+                <div class="form-group">
+                    <label for="typeRequete">Nature de la requete</label>
+                    <select id="typeRequete" name="type_requete" class="form-control" required>
+                        <option value="absence_justifiee" @selected(old('type_requete') === 'absence_justifiee')>Absence justifiee - restitution de sanction uniquement</option>
+                        <option value="presence_manuelle" @selected(old('type_requete') === 'presence_manuelle')>Presence attestee par releve administratif - appareil hors service</option>
+                        <option value="pointage_incomplet" @selected(old('type_requete') === 'pointage_incomplet')>Pointage incomplet - entree ou sortie manquante</option>
+                    </select>
+                </div>
+            @endif
             <div class="row">
                 <div class="col-md-3">
                     <label>Date seance</label>
                     <input type="date" name="date_seance" class="form-control" value="{{ old('date_seance') }}" required>
                 </div>
                 <div class="col-md-2">
-                    <label>Debut realise</label>
+                    <label>Debut atteste</label>
                     <input type="time" name="heure_debut_reelle" id="heure_debut_reelle" class="form-control" value="{{ old('heure_debut_reelle') }}" required>
                 </div>
                 <div class="col-md-2">
-                    <label>Fin realisee</label>
+                    <label>Fin attestee</label>
                     <input type="time" name="heure_fin_reelle" id="heure_fin_reelle" class="form-control" value="{{ old('heure_fin_reelle') }}" required>
                 </div>
                 <div class="col-md-2">
-                    <label>Duree calculee</label>
+                    <label>Duree reconnue</label>
                     <input type="text" id="duree_calculee" class="form-control" value="0 h" readonly>
                 </div>
-                <div class="col-md-3">
-                    <label>Observation</label>
-                    <input type="text" name="observation" class="form-control" value="{{ old('observation') }}">
+                <div class="col-md-12 form-group">
+                    <label for="justificationRequete">Justification / reference du releve administratif</label>
+                    <textarea id="justificationRequete" name="observation" rows="3" maxlength="1000" class="form-control" required>{{ old('observation') }}</textarea>
                 </div>
             </div>
-            <small class="text-muted d-block mt-2">
-                La duree est plafonnee a la plage prevue du cours : une saisie qui deborde l'horaire programme ne comptera pas plus que le volume prevu.
-            </small>
+            <div id="referenceSeance" class="alert alert-info" role="status" hidden></div>
         </fieldset>
 
-        <button class="btn btn-success">Enregistrer l'heure realisee</button>
+        <button id="enregistrerRequete" class="btn btn-success" @disabled(!$selectedImport?->estRequete())><i class="fa fa-check"></i> Valider la correction dans le dossier</button>
     </form>
 
     <div class="card mt-4">
-        <div class="card-header"><strong>Imports manuels existants</strong></div>
+        <div class="card-header"><strong>Imports et dossiers disponibles</strong></div>
         <div class="card-body table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -139,6 +166,18 @@
                             <td>
                                 <a href="{{ route('biometrie_heures.manual.create', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-primary">Utiliser</a>
                                 <a href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-info">Voir decompte</a>
+                                @if($import->total_consolidees > 0)<a href="{{ route('virements_vacataires.create', $import) }}" class="btn btn-xs btn-default">Virement</a>@endif
+                                @if($import->estRequete())
+                                    @if($requetesAvecOrdre->contains($import->id))
+                                        <button type="button" class="btn btn-xs btn-danger" disabled title="Un ordre de virement est deja valide pour ce dossier"><i class="fa fa-trash"></i> Supprimer le dossier</button>
+                                    @else
+                                        <form method="POST" action="{{ route('biometrie_heures.destroy', $import) }}" style="display:inline" onsubmit="return confirm('Supprimer ce dossier de requete et ses heures corrigees ? L import initial et les autres dossiers seront conserves.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-xs btn-danger"><i class="fa fa-trash"></i> Supprimer le dossier</button>
+                                        </form>
+                                    @endif
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -150,7 +189,7 @@
     </div>
 
     <div class="card mt-4">
-        <div class="card-header"><strong>Heures manuelles saisies</strong></div>
+        <div class="card-header"><strong>Seances du dossier et decisions</strong></div>
         <div class="card-body table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -163,6 +202,10 @@
                         <th>Heures realisees</th>
                         <th>Duree</th>
                         <th>Montant</th>
+                        <th>Requete</th>
+                        <th>Heures avant / apres</th>
+                        <th>Sanction avant / apres</th>
+                        <th>Justification</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -176,9 +219,13 @@
                             <td>{{ substr($heure->heure_debut_reelle, 0, 5) }} - {{ substr($heure->heure_fin_reelle, 0, 5) }}</td>
                             <td>{{ number_format($heure->duree_realisee, 2, ',', ' ') }} h</td>
                             <td>{{ number_format($heure->montant_total, 0, ',', ' ') }}</td>
+                            <td>{{ $heure->libelle_type_requete ?? '-' }}</td>
+                            <td>{{ $heure->duree_avant_requete === null ? '-' : number_format($heure->duree_avant_requete, 2, ',', ' ') }} / {{ number_format($heure->duree_realisee, 2, ',', ' ') }} h</td>
+                            <td>{{ $heure->sanction_avant_requete === null ? '-' : number_format($heure->sanction_avant_requete, 0, ',', ' ') }} / {{ number_format($heure->sanction_annulee ? 0 : max($heure->duree_prevue - $heure->duree_realisee, 0) * $heure->montant_taux, 0, ',', ' ') }} FCFA</td>
+                            <td>{{ $heure->observation }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="text-center text-muted">Aucune heure manuelle saisie.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted">Aucune seance dans ce dossier.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -204,6 +251,49 @@ const seanceSelect = document.getElementById('id_seance_cours');
 const debutInput = document.getElementById('heure_debut_reelle');
 const finInput = document.getElementById('heure_fin_reelle');
 const dureeInput = document.getElementById('duree_calculee');
+const typeRequete = document.getElementById('typeRequete');
+const referenceUrl = @json($selectedImport?->estRequete() ? route('biometrie_heures.requetes.reference', $selectedImport) : null);
+let reference = null;
+let referenceRequest = null;
+
+function absenceJustifiee() {
+    return typeRequete?.value === 'absence_justifiee';
+}
+
+function refreshDecision() {
+    debutInput.disabled = finInput.disabled = absenceJustifiee();
+    debutInput.required = finInput.required = !absenceJustifiee();
+    calculerDuree();
+}
+
+async function chargerReference() {
+    referenceRequest?.abort();
+    reference = null;
+    const target = document.getElementById('referenceSeance');
+    target.hidden = true;
+    calculerDuree();
+    const date = document.querySelector('[name="date_seance"]').value;
+    if (!referenceUrl || !coursSelect.value || !seanceSelect.value || !date) return;
+    referenceRequest = new AbortController();
+    const params = new URLSearchParams({ id_cours_enseignant: coursSelect.value, id_seance_cours: seanceSelect.value, date_seance: date });
+    try {
+        const response = await fetch(referenceUrl + '?' + params, { headers: { Accept: 'application/json' }, signal: referenceRequest.signal });
+        const data = await response.json();
+        target.hidden = false;
+        if (!response.ok) {
+            target.textContent = data.message || 'Reference de la seance indisponible.';
+            return;
+        }
+        reference = data;
+        const montant = value => Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+        target.textContent = `Reference : ${data.duree_prevue} h prevues ; ${data.duree_realisee} h comptabilisees ; sanction ${montant(data.sanction)} FCFA ; montant realise ${montant(data.montant_realise)} FCFA. Pointages de l'import initial : ${data.pointages.join(', ') || 'aucun'}. ${data.observation || ''}`;
+        calculerDuree();
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+        target.hidden = false;
+        target.textContent = 'Reference de la seance indisponible.';
+    }
+}
 
 function minutes(value) {
     if (!value || !value.includes(':')) return null;
@@ -235,9 +325,14 @@ function refreshSeances() {
         seanceSelect.appendChild(option);
     });
     calculerDuree();
+    chargerReference();
 }
 
 function calculerDuree() {
+    if (absenceJustifiee()) {
+        dureeInput.value = reference ? Number(reference.duree_realisee).toFixed(2).replace('.', ',') + ' h' : '-';
+        return;
+    }
     const seance = selectedSeance();
     const realStart = minutes(debutInput.value);
     const realEnd = minutes(finInput.value);
@@ -257,6 +352,9 @@ document.getElementById('id_biometrie_import').addEventListener('change', functi
     const option = this.selectedOptions[0];
     document.getElementById('date_debut_import').value = option?.dataset.debut || '';
     document.getElementById('date_fin_import').value = option?.dataset.fin || '';
+    const dossierCharge = this.value === @json((string) $selectedImport?->id) && @json((bool) $selectedImport?->estRequete());
+    document.getElementById('enregistrerRequete').disabled = !dossierCharge;
+    if (typeRequete) typeRequete.disabled = !dossierCharge;
 });
 document.getElementById('cours_search').addEventListener('input', function () {
     const needle = this.value.toLowerCase();
@@ -266,10 +364,17 @@ document.getElementById('cours_search').addEventListener('input', function () {
     });
 });
 coursSelect.addEventListener('change', refreshSeances);
-seanceSelect.addEventListener('change', calculerDuree);
+seanceSelect.addEventListener('change', chargerReference);
+document.querySelector('[name="date_seance"]').addEventListener('change', chargerReference);
+typeRequete?.addEventListener('change', refreshDecision);
 debutInput.addEventListener('input', calculerDuree);
 finInput.addEventListener('input', calculerDuree);
 document.getElementById('id_biometrie_import').dispatchEvent(new Event('change'));
+document.getElementById('chargerImport').addEventListener('click', function () {
+    const id = document.getElementById('id_biometrie_import').value;
+    window.location.href = @json(route('biometrie_heures.manual.create')) + (id ? '?id_biometrie_import=' + encodeURIComponent(id) : '');
+});
 refreshSeances();
+refreshDecision();
 </script>
 @endsection

@@ -25,6 +25,7 @@ tr { page-break-inside:avoid; }
     <table class="entete"><tr><td>REPUBLIQUE DU CAMEROUN<br>PAIX - TRAVAIL - PATRIE<br><strong>{{ $etat->entite_nom }}</strong><br>DIRECTION<br>TEL : 697 54 73 38</td><td class="logo"><img src="{{ public_path('images/virements/ish.jpeg') }}"></td><td>REPUBLIC OF CAMEROON<br>PEACE - WORK - FATHERLAND<br><strong>HINTEL HIGHER INSTITUTE</strong><br>DIRECTION<br>TEL : 695 32 01 31</td></tr></table>
 @endif
 <h1>{{ $etat->modele === 'cef' ? 'ORDRE DE VIREMENT' : 'ORDRE DE VIREMENT DES SALAIRES' }}</h1>
+@if($etat->nature === 'requete')<p><strong>ETAT DES SALAIRES VACATAIRES APRES REQUETE</strong><br>Import initial #{{ $etat->id_import_parent }} - mois {{ $etat->mois_requete->format('m/Y') }} - complement de remuneration.</p>@endif
 <p>{{ $etat->entite_nom }} autorise {{ $etat->banque_nom }}, agence de {{ $etat->agence }}, a effectuer les depots a partir de son compte <strong>{{ $etat->compte_debit }}</strong> au profit des enseignants dont les noms figurent sur la liste ci-dessous.</p>
 <p style="white-space:pre-wrap">{{ $etat->motif }}</p>
 <p class="reference">Reference : OV-{{ $etat->id }} / Import #{{ $etat->id_biometrie_import }}. Periode : {{ $etat->date_debut->format('d/m/Y') }} au {{ $etat->date_fin->format('d/m/Y') }}. Montants en FCFA, apres impot et deduction des frais de transfert.</p>

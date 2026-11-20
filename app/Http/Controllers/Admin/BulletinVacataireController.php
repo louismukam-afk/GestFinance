@@ -14,7 +14,7 @@ class BulletinVacataireController extends Controller
     {
         return view('Admin.EmploiTemps.bulletins_vacataires.index', [
             'title' => 'Bulletins de paie vacataires',
-            'imports' => BiometrieImport::where(fn($q) => $q->whereNull('type_import')->orWhere('type_import', 'cours'))
+            'imports' => BiometrieImport::pourEnseignants()
                 ->where(fn($q) => $q->whereHas('heures_realisees')->orWhereIn('id', LigneVirementVacataire::select('id_biometrie_import')))
                 ->latest('id')->paginate(25),
         ]);
@@ -44,7 +44,7 @@ class BulletinVacataireController extends Controller
 
     private function bulletins(BiometrieImport $import)
     {
-        abort_unless($import->type_import === null || $import->type_import === 'cours', 404);
+        abort_unless($import->concerneEnseignants(), 404);
         $bulletins = (new BulletinsVacataires())->pourImport($import);
         abort_if($bulletins->isEmpty(), 422, 'Aucune heure consolidee ni virement archive pour cet import.');
 

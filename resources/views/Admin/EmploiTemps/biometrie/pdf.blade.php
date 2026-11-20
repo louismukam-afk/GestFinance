@@ -86,9 +86,19 @@
                     <td class="right {{ $nonComptabilise > 0 ? 'anomalie' : '' }}">{{ number_format($nonComptabilise, 2, ',', ' ') }} h</td>
                     <td class="right">{{ number_format($heure->montant_taux, 0, ',', ' ') }}</td>
                     <td class="right">{{ number_format($heure->montant_total, 0, ',', ' ') }}</td>
-                    <td class="right">{{ number_format($nonComptabilise * $heure->montant_taux, 0, ',', ' ') }}</td>
+                    <td class="right">
+                        {{ number_format($heure->sanction_annulee ? 0 : $nonComptabilise * $heure->montant_taux, 0, ',', ' ') }}
+                        @if($heure->sanction_annulee)
+                            <br>Sanction levee
+                        @endif
+                    </td>
                     <td>{{ $heure->statut }}</td>
-                    <td class="{{ $isAnomalie ? 'anomalie' : '' }}">{{ $heure->observation }}</td>
+                    <td class="{{ $isAnomalie ? 'anomalie' : '' }}">
+                        @if($heure->libelle_type_requete)
+                            <strong>{{ $heure->libelle_type_requete }}</strong><br>
+                        @endif
+                        {{ $heure->observation }}
+                    </td>
                 </tr>
             @empty
                 <tr><td colspan="14" style="text-align:center">Aucune heure consolidee.</td></tr>

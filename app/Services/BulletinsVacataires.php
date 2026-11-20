@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\{BiometrieImport, entite, HeureRealiseeEnseignant, LigneVirementVacataire, TauxImpot};
+use App\Models\{BiometrieImport, entite, HeureRealiseeEnseignant, LigneVirementVacataire};
 use Illuminate\Support\Collection;
 
 class BulletinsVacataires
@@ -17,7 +17,7 @@ class BulletinsVacataires
         $personnelsARecalculer = $heures->filter(fn($h) => !$clesArchivees->has($h->id_entite.'|'.$h->id_personnel))->pluck('id_personnel')->unique();
         $source = $heures->whereIn('id_personnel', $personnelsARecalculer);
         abort_if($source->contains(fn($h) => !$h->personnel), 422, 'Un enseignant consolide est introuvable.');
-        $provisoires = $source->isEmpty() ? collect() : (new PreparationVirementVacataire())->lignes($source, TauxImpot::where('par_defaut', true)->firstOrFail());
+        $provisoires = $source->isEmpty() ? collect() : (new PaieImportVacataire())->lignes($import, $source);
         $nomsEntites = entite::pluck('nom_entite', 'id');
         $lignes = $archives->map(fn($l) => [
             'id_personnel' => $l->id_personnel, 'nom' => $l->nom, 'id_entite' => $l->id_entite,
@@ -28,6 +28,7 @@ class BulletinsVacataires
             'frais_transfert' => (float) $l->frais_transfert, 'net_a_payer' => (float) $l->net_a_payer,
         ]);
         foreach ($provisoires as $ligne) {
+            if ($import->estRequete() && ($ligne['net_avant_frais'] <= 0 || ($ligne['reprise_a_verifier'] ?? false))) { continue; }
             if ($clesArchivees->has($ligne['id_entite'].'|'.$ligne['id_personnel'])) { continue; }
             $lignes->push($ligne + [
                 'entite_nom' => $nomsEntites[$ligne['id_entite']] ?? 'Entite #'.$ligne['id_entite'],

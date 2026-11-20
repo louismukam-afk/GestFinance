@@ -11,6 +11,17 @@ class HeureRealiseeEnseignant extends Model
 
     protected $table = 'heures_realisees_enseignants';
 
+    public const TYPES_REQUETE = [
+        'absence_justifiee' => 'Absence justifiee',
+        'presence_manuelle' => 'Presence attestee par releve administratif',
+        'pointage_incomplet' => 'Pointage incomplet',
+    ];
+
+    public function getLibelleTypeRequeteAttribute(): ?string
+    {
+        return self::TYPES_REQUETE[$this->type_requete] ?? null;
+    }
+
     protected $fillable = [
         'id_biometrie_import',
         'id_cours_enseignant',
@@ -38,11 +49,20 @@ class HeureRealiseeEnseignant extends Model
         'montant_total',
         'statut',
         'observation',
+        'sanction_annulee',
+        'type_requete',
+        'duree_avant_requete',
+        'montant_avant_requete',
+        'sanction_avant_requete',
         'id_user',
     ];
 
     protected $casts = [
         'date_seance' => 'date',
+        'sanction_annulee' => 'boolean',
+        'duree_avant_requete' => 'float',
+        'montant_avant_requete' => 'float',
+        'sanction_avant_requete' => 'float',
         'duree_prevue' => 'float',
         'duree_realisee' => 'float',
         'montant_taux' => 'float',

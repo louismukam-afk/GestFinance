@@ -16,6 +16,7 @@
 </head>
 <body>
     <h1>Consolidation des impots - Import #{{ $import->id }}</h1>
+    @if($import->estRequete())<p><strong>ETAT COMPLEMENTAIRE APRES REQUETE</strong> - Import initial #{{ $import->id_import_parent }}, mois {{ $import->mois_requete->format('m/Y') }}. Les montants sont les differences avec les ordres deja valides, hors frais de transfert.</p>@endif
     <p><strong>{{ $import->libelle }}</strong><br>Periode : {{ $import->date_debut->format('d/m/Y') }} au {{ $import->date_fin->format('d/m/Y') }}. Montants en FCFA.</p>
     <p>Le brut fiscal correspond au montant net de consolidation apres les sanctions. L'impot est calcule sur cette base ; le net a payer est le brut fiscal moins l'impot.</p>
     @foreach($lignes->chunk(25) as $pageLignes)

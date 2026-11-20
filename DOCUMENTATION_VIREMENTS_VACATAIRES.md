@@ -105,3 +105,111 @@ Les nouveaux ordres archivent egalement les heures et sanctions dans leur
 champ JSON `details`. Les anciens ordres sans ces informations affichent
 un tiret et une mention explicite plutot que des heures recalculees.
 Ce changement ne necessite aucune nouvelle migration.
+
+## Selection et nettoyage des pointages
+
+La page de decompte masque les tableaux de detail et de totaux tant qu'aucun
+import existant n'est selectionne par Visualiser. Les identites biometriques,
+les pointages non associes et les exports de la selection restent limites
+a cet import. Un identifiant supprime ou appartenant aux permanents est refuse.
+
+Le bouton Nettoyer les donnees sans import demande confirmation et appelle
+la route DELETE `biometrie_heures.nettoyer_orphelins`, soumise aux permissions
+habituelles. Il supprime uniquement les pointages bruts et les heures
+consolidees dont l'import n'existe plus, y compris les references nulles.
+Il ne supprime ni les imports existants, ni les correspondances manuelles,
+ni les archives de virement. Aucune suppression n'est automatique a l'ouverture.
+
+La suppression future d'un import retire ses pointages et heures dans la
+meme transaction, puis revient a la liste. Les exports excluent egalement
+les consolidations orphelines. Aucune migration supplementaire n'est requise.
+
+## Saisie manuelle et requetes apres paiement
+
+La saisie manuelle propose tous les imports enseignants (biometriques,
+manuels et dossiers de requete), et non plus seulement les imports manuels.
+Charger cet import affiche les cours de sa periode, y compris les anciens
+cours. Les imports des permanents sans cours restent exclus.
+
+Toute correction manuelle passe desormais par un dossier de requete.
+L'import initial reste consultable mais n'est plus modifiable par ce formulaire.
+Apres validation pour un enseignant, le dossier est protege : une nouvelle
+requete est necessaire pour une nouvelle decision. Le formulaire Nouvelle
+requete sur les heures et sanctions demande l'import initial consolide,
+le mois et le motif/decision.
+La route POST `biometrie_heures.requetes.store` suit les permissions RH
+habituelles. Chaque dossier conserve ces references et sa propre consolidation.
+
+La premiere correction d'un enseignant recopie ses heures du mois, toutes
+entites confondues, depuis le dernier dossier deja valide ou l'import initial.
+Les heures source et les ordres archives ne sont pas modifies. La decision
+de lever une sanction supplementaire est distincte des heures travaillees :
+elle ne transforme pas une absence en heures realisees. La retenue liee aux
+heures non travaillees reste applicable, sauf correction effective des heures.
+
+Le dossier produit une consolidation revisee, puis un etat fiscal, un ordre
+de virement et un bulletin complementaires. Pour chaque enseignant/entite,
+le complement est le droit revise moins le montant de l'ordre initial pour
+ce mois et les complements deja valides. Le taux d'impot est celui archive
+dans l'ordre initial. Pour un enseignant sans ordre initial, la requete
+est aussi autorisee, que son montant initial soit nul ou positif : le montant
+deja couvert est zero. Le taux de sa fiche (ou le taux par defaut) est applique
+avant le premier ordre correctif, puis le taux archive dans cet ordre est
+conserve pour les autres entites et dossiers du mois. Le premier ordre apres
+requete couvre alors la totalite du droit revise non encore paye, pas seulement
+la difference avec un montant initial qui n'avait jamais ete verse.
+Les anciens frais de transfert ne sont pas rembourses
+automatiquement. De nouveaux frais restent soumis aux controles ordinaires.
+Les enseignants doivent avoir des heures consolidees dans l'import et le
+mois choisis. Les doublons sur un autre import de periode chevauchante sont
+refuses ; seuls l'import parent et ses dossiers de requete partagent ce suivi.
+Un second dossier identique ne cree donc pas un nouveau montant a payer.
+Un solde negatif bloque le paiement de cet enseignant pour examen, y compris
+si une autre entite presente un complement positif. Aucune reprise ni ecriture
+comptable automatique n'est generee.
+
+L'historique filtre les ordres initiaux/apres requete, le mois, la banque et
+l'entite. Le filtre d'import retrouve aussi les correctifs de cet import.
+Les totaux net, impot et frais couvrent toute la selection, pas seulement la
+page affichee. Il s'agit du suivi des etats par banque et entite, sans
+decaissement dans la comptabilite budgetaire ni execution de transfert bancaire.
+
+Deploiement : executer la migration
+`2026_11_20_000001_add_requetes_vacataires.php` et
+`2026_11_20_000002_add_type_requete_to_heures.php`, puis vider les caches Laravel.
+Elle ajoute les references des dossiers, la nature des ordres et la decision
+de sanction. Les anciens ordres conservent la nature initiale par defaut.
+Les tests de requete utilisent exclusivement SQLite en memoire.
+
+Apres une erreur de saisie, le contexte recharge correspond a l'import
+effectivement envoye et non a un ancien identifiant dans l'URL. Changer le
+selecteur desactive une decision de sanction appartenant a un autre dossier.
+Le formulaire distingue trois decisions :
+- Absence justifiee : les heures existantes sont conservees au serveur,
+  meme si des horaires sont envoyes par erreur. Seule la sanction est levee.
+- Presence attestee par releve administratif : horaires et justification
+  obligatoires, heures plafonnees a la plage historique de la seance.
+- Pointage incomplet : meme reconnaissance d'horaires attestes, avec
+  conservation de la nature particuliere de la requete pour l'audit.
+
+Une presence reconnue retire la sanction correspondant aux heures reconnues
+et ajoute leur remuneration. Exemple, avant impot : 2 h a 3 000 FCFA/h
+donnent 6 000 FCFA de restitution seule, ou 12 000 FCFA si les 2 h sont reconnues
+comme travaillees. Les sanctions restant justifiees sur les autres heures
+continuent de s'appliquer. Le plafond mensuel a zero du salaire initial reste
+pris en compte : le paiement est le droit revise moins les ordres valides,
+et non une addition aveugle des sanctions theoriques.
+
+La route GET `biometrie_heures.requetes.reference` affiche sans ecriture les
+heures de reference et les pointages de l'import initial pour le jour choisi.
+Les decisions conservent leur nature, le motif, l'utilisateur et les heures,
+montants et sanctions avant/apres. Les ordres archivent ces informations dans
+leurs details JSON, repris sur le bulletin meme si la source change ensuite.
+
+Dans la liste Imports et dossiers disponibles de la saisie manuelle, le
+bouton Supprimer le dossier demande confirmation et ne concerne que les
+requetes. La suppression retire le dossier et ses propres heures, sans
+toucher l'import initial ni les autres dossiers. Des qu'un ordre de virement
+est valide pour ce dossier, le bouton est desactive et le serveur refuse
+egalement sa suppression, meme par appel direct a la route de suppression.
+Le vidage de ses heures consolidees est egalement refuse apres validation.
