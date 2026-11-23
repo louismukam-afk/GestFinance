@@ -553,9 +553,14 @@ class BiometrieHeureController extends Controller
 
     public function manualCreate(Request $request)
     {
-        $request->validate(['id_biometrie_import' => 'nullable|integer|min:1']);
+        $request->validate(['id_biometrie_import' => 'nullable|integer|min:1', 'modifier_correction' => 'nullable|integer|min:1']);
         $selectedImportId = session()->getOldInput('id_biometrie_import', $request->input('id_biometrie_import'));
         $selectedImport = $selectedImportId ? BiometrieImport::pourEnseignants()->findOrFail($selectedImportId) : null;
+        $correction = null;
+        if ($request->filled('modifier_correction')) {
+            abort_unless($selectedImport?->estRequete(), 404);
+            $correction = $selectedImport->heures_realisees()->whereNotNull('type_requete')->findOrFail($request->modifier_correction);
+        }
         $cours = CoursEnseignant::with([
             'personnel',
             'programme.matiere',
@@ -605,6 +610,7 @@ class BiometrieHeureController extends Controller
             'title' => 'Saisie manuelle des heures realisees',
             'imports' => BiometrieImport::pourEnseignants()->latest()->get(),
             'selectedImport' => $selectedImport,
+            'correction' => $correction,
             'requetesAvecOrdre' => \App\Models\VirementVacataire::pluck('id_biometrie_import'),
             'parentsRequetes' => BiometrieImport::pourEnseignants()->where(fn($q) => $q->whereNull('type_import')->orWhere('type_import', '!=', 'requete'))
                 ->whereHas('heures_realisees')->latest()->get(),
@@ -645,6 +651,7 @@ class BiometrieHeureController extends Controller
     {
         $data = $request->validate([
             'id_biometrie_import' => 'required|integer|exists:biometrie_imports,id',
+            'id_heure_correction' => 'nullable|integer|exists:heures_realisees_enseignants,id',
             'type_requete' => 'required|in:absence_justifiee,presence_manuelle,pointage_incomplet',
             'id_cours_enseignant' => 'required|integer|exists:cours_enseignants,id',
             'id_seance_cours' => 'required|integer|exists:seance_cours,id',
@@ -666,6 +673,14 @@ class BiometrieHeureController extends Controller
         $dateSeance = Carbon::parse($data['date_seance']);
         if (!$import->estRequete()) {
             throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Toute correction manuelle doit etre enregistree dans un dossier de requete. Creez ou choisissez un dossier lie a cet import et a ce mois.']);
+        }
+        if (!empty($data['id_heure_correction'])) {
+            $correction = $import->heures_realisees()->whereNotNull('type_requete')->findOrFail($data['id_heure_correction']);
+            if ((int) $correction->id_cours_enseignant !== (int) $data['id_cours_enseignant']
+                || (int) $correction->id_seance_cours !== (int) $data['id_seance_cours']
+                || $correction->date_seance->toDateString() !== $dateSeance->toDateString()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['date_seance' => 'La modification doit concerner la seance initialement choisie.']);
+            }
         }
         if ($import->exists && LigneVirementVacataire::where('id_personnel', $cours->id_personnel)
             ->where(fn($q) => $q->where('id_biometrie_import', $import->id)

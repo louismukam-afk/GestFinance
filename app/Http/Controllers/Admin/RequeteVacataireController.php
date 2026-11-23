@@ -6,10 +6,40 @@ use App\Http\Controllers\Controller;
 use App\Models\BiometrieImport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class RequeteVacataireController extends Controller
 {
+    public function index(Request $request)
+    {
+        $request->validate(['id_import_parent' => 'nullable|integer|min:1']);
+        $parents = BiometrieImport::pourEnseignants()->where(fn ($q) => $q->whereNull('type_import')->orWhere('type_import', '!=', 'requete'))
+            ->whereHas('heures_realisees')->orderByDesc('id')->get();
+        $requetes = BiometrieImport::where('type_import', 'requete')
+            ->when($request->filled('id_import_parent'), fn ($q) => $q->where('id_import_parent', $request->id_import_parent))
+            ->with(['heures_realisees' => fn ($q) => $q->whereNotNull('type_requete')->with(['personnel', 'cours.programme.matiere', 'seance.plage'])])
+            ->orderByDesc('id')->get();
+        $ordres = \App\Models\VirementVacataire::whereIn('id_biometrie_import', $requetes->pluck('id'))->with('lignes')->get()->groupBy('id_biometrie_import');
+
+        return view('Admin.EmploiTemps.biometrie.requetes', compact('parents', 'requetes', 'ordres'));
+    }
+
+    public function update(Request $request, BiometrieImport $requete)
+    {
+        $data = $request->validate(['motif_requete' => 'required|string|max:3000']);
+        DB::transaction(function () use ($requete, $data) {
+            $dossier = BiometrieImport::whereKey($requete->id)->lockForUpdate()->firstOrFail();
+            abort_unless($dossier->estRequete(), 404);
+            if (\App\Models\VirementVacataire::where('id_biometrie_import', $dossier->id)->exists()) {
+                throw ValidationException::withMessages(['motif_requete' => 'Ce dossier possede un ordre valide ; son motif ne peut plus etre modifie.']);
+            }
+            $dossier->update($data);
+        });
+        return redirect()->route('biometrie_heures.requetes.index', ['id_import_parent' => $requete->id_import_parent])
+            ->with('success', 'Motif de la requete modifie.');
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate(['id_import_parent' => 'required|integer|exists:biometrie_imports,id',

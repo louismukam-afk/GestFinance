@@ -6,6 +6,7 @@
         <h3 class="text-primary">{{ $title }}</h3>
         <div>
             <a href="{{ route('biometrie_heures.index') }}" class="btn btn-secondary">Retour</a>
+            <a href="{{ route('biometrie_heures.requetes.index', ['id_import_parent' => $selectedImport?->id_import_parent ?: $selectedImport?->id]) }}" class="btn btn-info">Suivi des requetes</a>
         </div>
     </div>
 
@@ -54,6 +55,7 @@
 
     <form method="POST" action="{{ route('biometrie_heures.manual.store') }}" class="card p-3">
         @csrf
+        @if($correction)<input type="hidden" name="id_heure_correction" value="{{ $correction->id }}"><div class="alert alert-info">Modification de la correction #{{ $correction->id }}. Le cours, la seance et la date doivent rester identiques.</div>@endif
 
         <fieldset class="border p-3 mb-4">
             <legend class="w-auto px-2">Dossier de requete</legend>
@@ -90,7 +92,7 @@
                     <select name="id_cours_enseignant" id="id_cours_enseignant" class="form-control" required>
                         <option value="">-- Choisir le cours --</option>
                         @foreach($cours as $item)
-                            <option value="{{ $item->id }}" {{ old('id_cours_enseignant') == $item->id ? 'selected' : '' }}>
+                            <option value="{{ $item->id }}" {{ old('id_cours_enseignant', $correction?->id_cours_enseignant) == $item->id ? 'selected' : '' }}>
                                 {{ $item->personnel->nom ?? '-' }} | {{ $item->programme->matiere->nom_matiere ?? '-' }} | {{ $item->programme->specialite->nom_specialite ?? '-' }} | {{ optional($item->date_debut)->format('d/m/Y') }} - {{ optional($item->date_fin)->format('d/m/Y') }}
                             </option>
                         @endforeach
@@ -111,9 +113,9 @@
                 <div class="form-group">
                     <label for="typeRequete">Nature de la requete</label>
                     <select id="typeRequete" name="type_requete" class="form-control" required>
-                        <option value="absence_justifiee" @selected(old('type_requete') === 'absence_justifiee')>Absence justifiee - restitution de sanction uniquement</option>
-                        <option value="presence_manuelle" @selected(old('type_requete') === 'presence_manuelle')>Presence attestee par releve administratif - appareil hors service</option>
-                        <option value="pointage_incomplet" @selected(old('type_requete') === 'pointage_incomplet')>Pointage incomplet - entree ou sortie manquante</option>
+                        <option value="absence_justifiee" @selected(old('type_requete', $correction?->type_requete) === 'absence_justifiee')>Absence justifiee - restitution de sanction uniquement</option>
+                        <option value="presence_manuelle" @selected(old('type_requete', $correction?->type_requete) === 'presence_manuelle')>Presence attestee par releve administratif - appareil hors service</option>
+                        <option value="pointage_incomplet" @selected(old('type_requete', $correction?->type_requete) === 'pointage_incomplet')>Pointage incomplet - entree ou sortie manquante</option>
                     </select>
                     <small id="explicationAbsence" class="form-text text-muted">Une absence justifiee conserve les heures deja comptabilisees et leve uniquement la sanction de la seance. Le complement depend de la sanction effectivement retenue sur le mois et des droits deja couverts ; il est calcule avant impot et frais eventuels.</small>
                 </div>
@@ -121,15 +123,15 @@
             <div class="row">
                 <div class="col-md-3">
                     <label>Date seance</label>
-                    <input type="date" name="date_seance" class="form-control" value="{{ old('date_seance') }}" required>
+                    <input type="date" name="date_seance" class="form-control" value="{{ old('date_seance', $correction?->date_seance?->format('Y-m-d')) }}" required>
                 </div>
                 <div class="col-md-2">
                     <label>Debut atteste</label>
-                    <input type="time" name="heure_debut_reelle" id="heure_debut_reelle" class="form-control" value="{{ old('heure_debut_reelle') }}" required>
+                    <input type="time" name="heure_debut_reelle" id="heure_debut_reelle" class="form-control" value="{{ old('heure_debut_reelle', $correction?->heure_debut_reelle ? substr($correction->heure_debut_reelle, 0, 5) : '') }}" required>
                 </div>
                 <div class="col-md-2">
                     <label>Fin attestee</label>
-                    <input type="time" name="heure_fin_reelle" id="heure_fin_reelle" class="form-control" value="{{ old('heure_fin_reelle') }}" required>
+                    <input type="time" name="heure_fin_reelle" id="heure_fin_reelle" class="form-control" value="{{ old('heure_fin_reelle', $correction?->heure_fin_reelle ? substr($correction->heure_fin_reelle, 0, 5) : '') }}" required>
                 </div>
                 <div class="col-md-2">
                     <label>Duree reconnue</label>
@@ -137,7 +139,7 @@
                 </div>
                 <div class="col-md-12 form-group">
                     <label for="justificationRequete">Justification / reference du releve administratif</label>
-                    <textarea id="justificationRequete" name="observation" rows="3" maxlength="1000" class="form-control" required>{{ old('observation') }}</textarea>
+                    <textarea id="justificationRequete" name="observation" rows="3" maxlength="1000" class="form-control" required>{{ old('observation', $correction?->observation) }}</textarea>
                 </div>
             </div>
             <div id="referenceSeance" class="alert alert-info" role="status" hidden></div>
@@ -311,7 +313,7 @@ function selectedSeance() {
 }
 
 function refreshSeances() {
-    const oldValue = "{{ old('id_seance_cours') }}";
+    const oldValue = @json(old('id_seance_cours', $correction?->id_seance_cours));
     seanceSelect.innerHTML = '<option value="">-- Choisir la seance --</option>';
     const data = coursData[coursSelect.value];
     if (!data) {

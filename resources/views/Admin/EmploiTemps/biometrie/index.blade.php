@@ -18,6 +18,7 @@
     @endif
     <div style="margin-bottom:15px">
         <a href="{{ route('biometrie_heures.historique') }}" class="btn btn-default"><i class="fa fa-history"></i> Historique des consolidations</a>
+        <a href="{{ route('biometrie_heures.requetes.index') }}" class="btn btn-info">Suivi des requetes</a>
         <form method="POST" action="{{ route('biometrie_heures.nettoyer_orphelins') }}" style="display:inline" onsubmit="return confirm('Supprimer definitivement les pointages et heures consolidees sans import associe ? Les imports existants et les ordres archives seront conserves.');">
             @csrf @method('DELETE')
             <input type="hidden" name="confirmation" value="1">
@@ -107,6 +108,7 @@
                                     <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet import et toutes ses données ?')">Supprimer</button>
                                 </form>
                                 <a href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-info"><i class="fa fa-eye"></i> Visualiser</a>
+                                @if(!$import->estRequete())<a href="{{ route('biometrie_heures.requetes.index', ['id_import_parent' => $import->id]) }}" class="btn btn-xs btn-default">Requetes</a>@endif
                             </td>
                         </tr>
                     @empty

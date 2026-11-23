@@ -212,6 +212,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualCreate'])->name('biometrie_heures.manual.create');
     Route::post('emploi-du-temps/decompte-heures/saisie-manuelle', [BiometrieHeureController::class, 'manualStore'])->name('biometrie_heures.manual.store');
     Route::post('emploi-du-temps/decompte-heures/requetes', [\App\Http\Controllers\Admin\RequeteVacataireController::class, 'store'])->name('biometrie_heures.requetes.store');
+    Route::get('emploi-du-temps/decompte-heures/requetes', [\App\Http\Controllers\Admin\RequeteVacataireController::class, 'index'])->name('biometrie_heures.requetes.index');
+    Route::put('emploi-du-temps/decompte-heures/requetes/{requete}', [\App\Http\Controllers\Admin\RequeteVacataireController::class, 'update'])->name('biometrie_heures.requetes.update');
     Route::get('emploi-du-temps/decompte-heures/{import}/reference-requete', [BiometrieHeureController::class, 'referenceRequete'])->name('biometrie_heures.requetes.reference');
     Route::post('emploi-du-temps/decompte-heures/import', [BiometrieHeureController::class, 'store'])->name('biometrie_heures.store');
     Route::post('emploi-du-temps/decompte-heures/{import}/consolider', [BiometrieHeureController::class, 'consolider'])->name('biometrie_heures.consolider');

@@ -577,6 +577,41 @@ class VirementVacataireTest extends TestCase
         $this->assertSame(2, VirementVacataire::count());
     }
 
+    public function test_request_tracking_filters_imports_and_edits_correction_and_motif(): void
+    {
+        $this->preparerCoursManuel();
+        $parent = $this->import;
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '14:00', 'lever');
+        $correction = $requete->heures_realisees()->whereNotNull('type_requete')->firstOrFail();
+        $controller = new \App\Http\Controllers\Admin\RequeteVacataireController();
+        $request = new Request(['id_import_parent' => $parent->id]);
+        $this->app->instance('request', $request);
+        $data = $controller->index($request)->getData();
+        $this->assertCount(1, $data['requetes']);
+        $this->assertSame($requete->id, $data['requetes']->first()->id);
+        $this->assertStringContainsString('Modifier', $controller->index($request)->render());
+        $controller->update(new Request(['motif_requete' => 'Certificat medical verifie']), $requete);
+        $this->assertSame('Certificat medical verifie', $requete->fresh()->motif_requete);
+        $view = (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualCreate(new Request([
+            'id_biometrie_import' => $requete->id, 'modifier_correction' => $correction->id,
+        ]));
+        $this->assertSame($correction->id, $view->getData()['correction']->id);
+        $this->assertStringContainsString('id_heure_correction', $view->render());
+        (new \App\Http\Controllers\Admin\BiometrieHeureController())->manualStore(new Request([
+            'id_biometrie_import' => $requete->id, 'id_heure_correction' => $correction->id,
+            'id_cours_enseignant' => 1, 'id_seance_cours' => 1, 'date_seance' => '2026-10-01',
+            'type_requete' => 'absence_justifiee', 'observation' => 'Certificat medical confirme',
+        ]));
+        $this->assertStringContainsString('Certificat medical confirme', $correction->fresh()->observation);
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        try { $controller->update(new Request(['motif_requete' => 'Changement interdit']), $requete); $this->fail('Dossier deja valide'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('motif_requete', $e->errors()); }
+        try { $this->saisirHeures($requete, '14:00', 'lever'); $this->fail('Correction deja payee'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('import', $e->errors()); }
+    }
+
     public function test_claim_reference_shows_source_hours_and_single_biometric_punch_without_copying(): void
     {
         $this->preparerCoursManuel();
