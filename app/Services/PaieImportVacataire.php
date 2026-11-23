@@ -28,7 +28,7 @@ class PaieImportVacataire
                 $personnel = $items->first()->id_personnel;
                 $detail = $tauxArchives->where('id_personnel', $personnel)
                     ->flatMap(fn($l) => $l->details ?? [])->firstWhere('mois', $import->mois_requete->format('Y-m'));
-                if (!$detail && $sources->has($personnel)) {
+                if (!$detail && ($sources->has($personnel) || $items->contains(fn($h) => $h->type_requete === 'presence_manuelle'))) {
                     $detail = ['taux' => ($items->first()->personnel->taux_impot ?? $defaut)->taux];
                 }
                 if (!$detail || !isset($detail['taux'])) {
@@ -45,7 +45,8 @@ class PaieImportVacataire
             $originale = $initiales->where('id_entite', $ligne['id_entite'])->where('id_personnel', $ligne['id_personnel'])->first();
             $mois = $import->mois_requete->format('Y-m');
             $base = collect($originale?->details ?? [])->firstWhere('mois', $mois);
-            if (!$base && !$originale && $sources->get($ligne['id_personnel'], collect())->contains('id_entite', $ligne['id_entite'])) {
+            if (!$base && !$originale && ($sources->get($ligne['id_personnel'], collect())->contains('id_entite', $ligne['id_entite'])
+                || $heures->where('id_personnel', $ligne['id_personnel'])->where('id_entite', $ligne['id_entite'])->contains(fn($h) => $h->type_requete === 'presence_manuelle'))) {
                 $base = ['brut_fiscal' => 0, 'impot' => 0];
             }
             if (!$base) { return null; }
@@ -75,19 +76,19 @@ class PaieImportVacataire
         return $resultat->map(fn($l) => $l + ['reprise_a_verifier' => $reprises->contains($l['id_personnel'])]);
     }
 
-    public function initialiserEnseignant(BiometrieImport $requete, int $personnel): void
+    public function initialiserEnseignant(BiometrieImport $requete, int $personnel, bool $autoriserSansConsolidation = false): void
     {
         if (!$requete->estRequete() || $requete->heures_realisees()->where('id_personnel', $personnel)->exists()) { return; }
         $details = LigneVirementVacataire::where('id_biometrie_import', $requete->id_import_parent)->where('id_personnel', $personnel)
             ->get()->flatMap(fn($l) => $l->details ?? []);
         if (!$details->contains('mois', $requete->mois_requete->format('Y-m'))) {
             $initiales = $this->heuresInitiales($requete)->where('id_personnel', $personnel);
-            if ($initiales->isEmpty()) {
+            if ($initiales->isEmpty() && !$autoriserSansConsolidation && $this->heuresReference($requete, $personnel)->isEmpty()) {
                 throw ValidationException::withMessages(['id_cours_enseignant' => 'Cet enseignant ne possede aucune heure consolidee dans l import initial pour ce mois.']);
             }
         }
         $heures = $this->heuresReference($requete, $personnel);
-        if ($heures->isEmpty()) {
+        if ($heures->isEmpty() && !$autoriserSansConsolidation) {
             throw ValidationException::withMessages(['import' => 'Les heures source du mois ne sont plus disponibles.']);
         }
         foreach ($heures as $heure) {

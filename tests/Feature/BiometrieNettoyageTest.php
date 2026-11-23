@@ -127,6 +127,7 @@ class BiometrieNettoyageTest extends TestCase
 
     public function test_deleting_an_import_removes_its_hours_without_touching_other_import(): void
     {
+        Schema::create('virements_vacataires', function (Blueprint $t) { $t->id(); $t->integer('id_biometrie_import'); });
         $supprime = $this->import();
         $conserve = $this->import('Conserver');
         $this->heure($supprime->id);

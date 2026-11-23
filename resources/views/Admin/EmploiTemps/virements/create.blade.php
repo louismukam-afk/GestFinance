@@ -3,6 +3,7 @@
 <div class="container">
     <h3 class="text-primary">{{ $title }}</h3>
     <p>{{ $import->libelle }} : {{ $import->date_debut->format('d/m/Y') }} au {{ $import->date_fin->format('d/m/Y') }}</p>
+    @if(!$import->estRequete())<p>Les heures, les sanctions et l'impôt de cet ordre sont calculés séparément pour l'import sélectionné.</p>@endif
     @if($import->estRequete())<p><strong>Salaires vacataires apres requete</strong> - Import initial #{{ $import->id_import_parent }}, mois {{ $import->mois_requete->format('m/Y') }}. Complement uniquement, apres deduction des droits deja couverts. Le brut du complement est affiche avant impot ; le net a virer tient aussi compte des frais eventuellement saisis.</p>@endif
     <a class="btn btn-default" href="{{ route('virements_vacataires.index') }}"><i class="fa fa-arrow-left"></i> Etats de virement</a>
     @if($errors->any())<div class="alert alert-danger" style="margin-top:15px"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif

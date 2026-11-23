@@ -25,7 +25,7 @@
     <form method="POST" action="{{ route('biometrie_heures.requetes.store') }}" style="margin-bottom:25px">
         @csrf
         <div class="row">
-            <div class="col-sm-6 form-group"><label for="parentRequete">Import initial consolide</label><select id="parentRequete" name="id_import_parent" class="form-control" required><option value="">Choisir</option>@foreach($parentsRequetes as $parent)<option value="{{ $parent->id }}" @selected(old('id_import_parent', $selectedImport?->id_import_parent ?: $selectedImport?->id) == $parent->id)>#{{ $parent->id }} - {{ $parent->libelle }}</option>@endforeach</select></div>
+            <div class="col-sm-6 form-group"><label for="parentRequete">Import initial</label><select id="parentRequete" name="id_import_parent" class="form-control" required><option value="">Choisir</option>@foreach($parentsRequetes as $parent)<option value="{{ $parent->id }}" @selected(old('id_import_parent', $selectedImport?->id_import_parent ?: $selectedImport?->id) == $parent->id)>#{{ $parent->id }} - {{ $parent->libelle }}</option>@endforeach</select></div>
             <div class="col-sm-3 form-group"><label for="moisRequete">Mois concerne</label><input id="moisRequete" type="month" name="mois_requete" class="form-control" value="{{ old('mois_requete', $selectedImport?->mois_requete?->format('Y-m')) }}" required></div>
             <div class="col-sm-12 form-group"><label for="motifRequete">Motif et decision sur la requete</label><textarea id="motifRequete" name="motif_requete" rows="2" maxlength="3000" class="form-control" required>{{ old('motif_requete') }}</textarea></div>
         </div>
@@ -110,6 +110,13 @@
         <fieldset class="border p-3 mb-4">
             <legend class="w-auto px-2">Heures realisees</legend>
             @if($selectedImport?->estRequete())
+                <div class="form-group">
+                    <label>Pointages associés à l'enseignant dans l'import initial pour ce mois</label><br>
+                    <label><input type="radio" name="presence_import" value="present" @checked(old('presence_import') === 'present') required> Présent dans l'import</label>
+                    &nbsp;&nbsp;
+                    <label><input type="radio" name="presence_import" value="absent" @checked(old('presence_import') === 'absent') required> Non présent dans l'import</label>
+                    <small class="form-text text-muted">Le système vérifie les pointages associés au personnel sur le mois. En cas d'absence de pointages, une séance consolidée existante reste prise en compte.</small>
+                </div>
                 <div class="form-group">
                     <label for="typeRequete">Nature de la requete</label>
                     <select id="typeRequete" name="type_requete" class="form-control" required>
@@ -280,7 +287,7 @@ async function chargerReference() {
     const date = document.querySelector('[name="date_seance"]').value;
     if (!referenceUrl || !coursSelect.value || !seanceSelect.value || !date) return;
     referenceRequest = new AbortController();
-    const params = new URLSearchParams({ id_cours_enseignant: coursSelect.value, id_seance_cours: seanceSelect.value, date_seance: date });
+    const params = new URLSearchParams({ id_cours_enseignant: coursSelect.value, id_seance_cours: seanceSelect.value, date_seance: date, presence_import: document.querySelector('[name="presence_import"]:checked')?.value || '' });
     try {
         const response = await fetch(referenceUrl + '?' + params, { headers: { Accept: 'application/json' }, signal: referenceRequest.signal });
         const data = await response.json();
@@ -289,9 +296,17 @@ async function chargerReference() {
             target.textContent = data.message || 'Reference de la seance indisponible.';
             return;
         }
-        reference = data;
+        const historique = data.historique_initial;
         const montant = value => Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-        target.textContent = `Reference : ${data.duree_prevue} h prevues ; ${data.duree_realisee} h comptabilisees ; sanction ${montant(data.sanction)} FCFA ; montant realise ${montant(data.montant_realise)} FCFA. Pointages de l'import initial : ${data.pointages.join(', ') || 'aucun'}. ${data.observation || ''}`;
+        const autres = historique.autres_sanctions.map(s => `${s.date}, ${s.matiere} (${s.debut}-${s.fin}) : ${montant(s.montant)} FCFA`).join(' ; ') || 'aucune';
+        const archive = historique.ordre_initial ? (historique.sanction_archivee === null ? 'ordre initial existant, détail de sanction indisponible' : `sanction totale archivée : ${montant(historique.sanction_archivee)} FCFA`) : 'aucun ordre initial archivé pour ce mois';
+        const verification = `Consolidation initiale : ${historique.seance_trouvee ? 'séance trouvée, sanction calculée ' + montant(historique.sanction_seance) + ' FCFA' : 'aucune ligne pour cette séance'}. Sanctions calculées du mois : ${montant(historique.sanction_mois_calculee)} FCFA ; plafond calculé sur la rémunération : ${montant(historique.sanction_mois_plafonnee)} FCFA ; ${archive}. Autres séances sanctionnées : ${autres}. Les sanctions sont globales et ne sont pas automatiquement attribuées à cette séance. `;
+        if (data.sans_consolidation) {
+            target.textContent = verification + data.message;
+            return;
+        }
+        reference = data;
+        target.textContent = verification + `Référence actuelle : ${data.duree_prevue} h prévues ; ${data.duree_realisee} h comptabilisées ; sanction ${montant(data.sanction)} FCFA ; montant réalisé ${montant(data.montant_realise)} FCFA. Pointages de l'import initial : ${data.pointages.join(', ') || 'aucun'}. ${data.observation || ''}`;
         calculerDuree();
     } catch (error) {
         if (error.name === 'AbortError') return;
@@ -372,6 +387,7 @@ coursSelect.addEventListener('change', refreshSeances);
 seanceSelect.addEventListener('change', chargerReference);
 document.querySelector('[name="date_seance"]').addEventListener('change', chargerReference);
 typeRequete?.addEventListener('change', refreshDecision);
+document.querySelectorAll('[name="presence_import"]').forEach(input => input.addEventListener('change', chargerReference));
 debutInput.addEventListener('input', calculerDuree);
 finInput.addEventListener('input', calculerDuree);
 document.getElementById('id_biometrie_import').dispatchEvent(new Event('change'));

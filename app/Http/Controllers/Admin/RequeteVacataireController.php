@@ -15,7 +15,7 @@ class RequeteVacataireController extends Controller
     {
         $request->validate(['id_import_parent' => 'nullable|integer|min:1']);
         $parents = BiometrieImport::pourEnseignants()->where(fn ($q) => $q->whereNull('type_import')->orWhere('type_import', '!=', 'requete'))
-            ->whereHas('heures_realisees')->orderByDesc('id')->get();
+            ->orderByDesc('id')->get();
         $requetes = BiometrieImport::where('type_import', 'requete')
             ->when($request->filled('id_import_parent'), fn ($q) => $q->where('id_import_parent', $request->id_import_parent))
             ->with(['heures_realisees' => fn ($q) => $q->whereNotNull('type_requete')->with(['personnel', 'cours.programme.matiere', 'seance.plage'])])
@@ -51,9 +51,6 @@ class RequeteVacataireController extends Controller
         if ($fin->lt($parent->date_debut) || $debut->gt($parent->date_fin)) {
             throw ValidationException::withMessages(['mois_requete' => 'Ce mois ne fait pas partie de la periode de l import initial.']);
         }
-        abort_unless($parent->heures_realisees()->whereBetween('date_seance', [
-            $debut->toDateString(), $fin->toDateString(),
-        ])->exists(), 422, 'Aucune heure consolidee pour ce mois dans l import initial.');
         $requete = BiometrieImport::create([
             'type_import' => 'requete', 'statut' => 'manuel', 'id_import_parent' => $parent->id,
             'mois_requete' => $debut, 'motif_requete' => $data['motif_requete'],

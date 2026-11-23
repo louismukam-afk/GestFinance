@@ -147,7 +147,8 @@ class VirementVacataireController extends Controller
                     'frais_transfert' => $frais, 'net_a_payer' => $netVirement,
                 ]);
             }
-            $doublonAutreImport = LigneVirementVacataire::whereIn('id_personnel', $data['personnels'])->where('id_entite', $entite->id)
+            \App\Models\personnel::whereIn('id', $data['personnels'])->orderBy('id')->lockForUpdate()->get();
+            $ordresChevauchants = LigneVirementVacataire::whereIn('id_personnel', $data['personnels'])
                 ->where('id_biometrie_import', '!=', $source->id)
                 ->whereHas('virement', function ($q) use ($source) {
                     $q->whereDate('date_debut', '<=', $source->date_fin)->whereDate('date_fin', '>=', $source->date_debut);
@@ -155,9 +156,22 @@ class VirementVacataireController extends Controller
                         $q->where('id_biometrie_import', '!=', $source->id_import_parent)
                             ->where(fn($s) => $s->whereNull('id_import_parent')->orWhere('id_import_parent', '!=', $source->id_import_parent));
                     }
-                })->exists();
-            if ($doublonAutreImport) {
-                $this->erreur('personnels', 'Un enseignant a deja un ordre valide pour cette entite sur un autre import de periode chevauchante.');
+                })->lockForUpdate()->get();
+            foreach ($ordresChevauchants as $ancienOrdre) {
+                $precedentes = HeureRealiseeEnseignant::where('id_biometrie_import', $ancienOrdre->id_biometrie_import)
+                    ->where('id_personnel', $ancienOrdre->id_personnel)->where('id_entite', $ancienOrdre->id_entite)->lockForUpdate()->get();
+                $courantes = HeureRealiseeEnseignant::where('id_biometrie_import', $source->id)
+                    ->where('id_personnel', $ancienOrdre->id_personnel)->where('id_entite', $entite->id)->get();
+                if ($precedentes->isEmpty() || $courantes->isEmpty()) {
+                    $this->erreur('personnels', 'Impossible de verifier les seances d un ordre anterieur sur la meme periode.');
+                }
+                foreach ($courantes as $courante) {
+                    if ($precedentes->contains(fn($h) => $h->date_seance->isSameDay($courante->date_seance)
+                        && ($h->id_seance_cours == $courante->id_seance_cours
+                            || ($h->heure_debut_prevue < $courante->heure_fin_prevue && $h->heure_fin_prevue > $courante->heure_debut_prevue)))) {
+                        $this->erreur('personnels', 'Une seance de cet enseignant figure deja dans un ordre valide pour un autre import.');
+                    }
+                }
             }
             $banque = banque::findOrFail($data['id_banque']);
             $meta = $source->estRequete() ? ['nature' => 'requete', 'id_import_parent' => $source->id_import_parent, 'mois_requete' => $source->mois_requete] : [];

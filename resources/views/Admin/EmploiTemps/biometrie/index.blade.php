@@ -39,6 +39,7 @@
     <div class="card mb-4">
         <div class="card-header"><strong>Importer un fichier biometrie</strong></div>
         <div class="card-body">
+            <p>Chaque import est indépendant. Lors de la consolidation, les séances déjà consolidées dans un autre import sont ignorées ; les chevauchements de plages sont signalés. Vérifiez les périodes et les résultats avant de préparer un ordre séparé.</p>
             <form method="POST" action="{{ route('biometrie_heures.store') }}" enctype="multipart/form-data">
                 @csrf
                 <div class="row">
