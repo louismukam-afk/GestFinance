@@ -3,7 +3,7 @@
 <div class="container">
     <h3 class="text-primary">{{ $title }}</h3>
     <p>{{ $import->libelle }} : {{ $import->date_debut->format('d/m/Y') }} au {{ $import->date_fin->format('d/m/Y') }}</p>
-    @if($import->estRequete())<p><strong>Salaires vacataires apres requete</strong> - Import initial #{{ $import->id_import_parent }}, mois {{ $import->mois_requete->format('m/Y') }}. Complement uniquement, apres deduction des droits deja couverts.</p>@endif
+    @if($import->estRequete())<p><strong>Salaires vacataires apres requete</strong> - Import initial #{{ $import->id_import_parent }}, mois {{ $import->mois_requete->format('m/Y') }}. Complement uniquement, apres deduction des droits deja couverts. Le brut du complement est affiche avant impot ; le net a virer tient aussi compte des frais eventuellement saisis.</p>@endif
     <a class="btn btn-default" href="{{ route('virements_vacataires.index') }}"><i class="fa fa-arrow-left"></i> Etats de virement</a>
     @if($errors->any())<div class="alert alert-danger" style="margin-top:15px"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <form method="GET" class="row" style="margin-top:20px">
@@ -22,6 +22,7 @@
         @csrf
         <input type="hidden" name="id_entite" value="{{ request('id_entite') }}"><input type="hidden" name="id_banque" value="{{ request('id_banque') }}"><input type="hidden" name="inclure_autres" value="{{ request()->boolean('inclure_autres') ? 1 : 0 }}"><input type="hidden" name="inclure_banque" value="{{ request()->boolean('inclure_banque', true) ? 1 : 0 }}"><input type="hidden" name="inclure_sans_banque" value="{{ request()->boolean('inclure_sans_banque') ? 1 : 0 }}"><input type="hidden" name="empreinte" value="{{ $empreinte }}">
         <h4>Beneficiaires</h4>
+        <p>Le net a virer est arrondi au franc superieur pour chaque beneficiaire. Le total est la somme des montants arrondis.</p>
         <p><strong>Cette entite / cet import :</strong> {{ $suivi['total'] }} enseignant(s) avec un net positif ; {{ $suivi['valides'] }} deja inclus dans un ordre valide ; {{ $suivi['restants'] }} restant(s).</p>
         <div class="table-responsive"><table class="table table-bordered table-striped" style="min-width:1080px">
             <thead><tr><th><input type="checkbox" id="selectionTous" aria-label="Selectionner tous les beneficiaires eligibles"></th><th>Enseignant / banque</th><th>Numero de compte</th><th>Brut fiscal</th><th>Impot</th><th>Net apres impot</th><th>Frais de transfert</th><th>Net a virer</th></tr></thead>
@@ -59,19 +60,20 @@
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('virementForm');
     if (!form) return;
-    var format = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var format = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    var formatFrais = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function calculer() {
         var count = 0, fraisTotal = 0, netTotal = 0;
         form.querySelectorAll('tr[data-net]').forEach(function (row) {
             var fraisInput = row.querySelector('.montant-frais');
             var frais = row.querySelector('.avec-frais').checked ? Number(fraisInput.value || 0) : 0;
-            var net = Math.round((Number(row.dataset.net) - frais) * 100) / 100;
+            var net = Math.ceil(Math.round((Number(row.dataset.net) - frais) * 100) / 100);
             row.querySelector('.net-virement').textContent = format.format(net);
             row.querySelector('.net-virement').classList.toggle('text-danger', net <= 0);
             if (row.querySelector('.beneficiaire').checked) { count++; fraisTotal += frais; netTotal += net; }
         });
         document.getElementById('nombreSelection').textContent = count;
-        document.getElementById('totalFrais').textContent = format.format(fraisTotal);
+        document.getElementById('totalFrais').textContent = formatFrais.format(fraisTotal);
         document.getElementById('totalNet').textContent = format.format(netTotal);
         document.getElementById('validerEtat').disabled = count === 0;
     }

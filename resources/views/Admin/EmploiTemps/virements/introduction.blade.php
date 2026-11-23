@@ -1,0 +1,1 @@
+<p>Par la présente, {{ $etat->entite_nom }} autorise {{ $etat->banque_nom }}, agence de {{ $etat->agence }}, à procéder, à partir du compte bancaire <strong>{{ $etat->compte_debit }}</strong>, aux virements des montants indiqués dans le tableau ci-dessous, au profit des bénéficiaires mentionnés, sur leurs comptes bancaires respectifs.</p>

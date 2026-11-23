@@ -26,13 +26,14 @@ tr { page-break-inside:avoid; }
 @endif
 <h1>{{ $etat->modele === 'cef' ? 'ORDRE DE VIREMENT' : 'ORDRE DE VIREMENT DES SALAIRES' }}</h1>
 @if($etat->nature === 'requete')<p><strong>ETAT DES SALAIRES VACATAIRES APRES REQUETE</strong><br>Import initial #{{ $etat->id_import_parent }} - mois {{ $etat->mois_requete->format('m/Y') }} - complement de remuneration.</p>@endif
-<p>{{ $etat->entite_nom }} autorise {{ $etat->banque_nom }}, agence de {{ $etat->agence }}, a effectuer les depots a partir de son compte <strong>{{ $etat->compte_debit }}</strong> au profit des enseignants dont les noms figurent sur la liste ci-dessous.</p>
+@include('Admin.EmploiTemps.virements.introduction', ['etat' => $etat])
 <p style="white-space:pre-wrap">{{ $etat->motif }}</p>
 <p class="reference">Reference : OV-{{ $etat->id }} / Import #{{ $etat->id_biometrie_import }}. Periode : {{ $etat->date_debut->format('d/m/Y') }} au {{ $etat->date_fin->format('d/m/Y') }}. Montants en FCFA, apres impot et deduction des frais de transfert.</p>
+@if($arrondiArchive ?? false)<p class="reference"><strong>Attention :</strong> les montants de cet ordre archive comportent des centimes. Les montants ci-dessous sont arrondis au franc superieur ; les valeurs archivees restent inchangees.</p>@endif
 @foreach($etat->lignes->chunk(22) as $pageLignes)
 <table class="liste"><thead><tr><th style="width:5%">N&deg;</th><th style="width:31%">N&deg; COMPTE</th><th style="width:42%">NOMS ET PRENOMS</th><th style="width:22%">MONTANT</th></tr></thead><tbody>
-@foreach($pageLignes as $ligne)<tr><td style="text-align:center">{{ $loop->parent->index * 22 + $loop->iteration }}</td><td>{{ $ligne->compte ?: 'Sans compte confirme' }}</td><td>{{ $ligne->nom }}</td><td class="montant">{{ number_format($ligne->net_a_payer, 2, ',', ' ') }}</td></tr>@endforeach
-</tbody>@if($loop->last)<tfoot><tr><th colspan="3">TOTAL</th><th class="montant">{{ number_format($total, 2, ',', ' ') }}</th></tr></tfoot>@endif</table>
+@foreach($pageLignes as $ligne)<tr><td style="text-align:center">{{ $loop->parent->index * 22 + $loop->iteration }}</td><td>{{ $ligne->compte ?: 'Sans compte confirme' }}</td><td>{{ $ligne->nom }}</td><td class="montant">{{ number_format(ceil((float) $ligne->net_a_payer), 0, ',', ' ') }}</td></tr>@endforeach
+</tbody>@if($loop->last)<tfoot><tr><th colspan="3">TOTAL</th><th class="montant">{{ number_format($total, 0, ',', ' ') }}</th></tr></tfoot>@endif</table>
 @endforeach
 <p><strong>Soit un total de : {{ $totalLettres }}.</strong></p>
 <div class="signature"><p>Fait a {{ $etat->lieu }}, le {{ $etat->date_ordre->format('d/m/Y') }}</p><p>{{ $etat->fonction_signataire }}</p><p style="margin-top:65px"><strong>{{ $etat->signataire }}</strong></p></div>

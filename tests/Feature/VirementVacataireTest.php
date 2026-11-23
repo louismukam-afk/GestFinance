@@ -84,6 +84,23 @@ class VirementVacataireTest extends TestCase
         }
     }
 
+    public function test_order_introduction_uses_archived_entity_bank_and_debit_account(): void
+    {
+        $this->controller->store(Request::create('/', 'POST', $this->data([
+            'id_banque' => 2, 'inclure_autres' => 1, 'compte_debit' => 'COMPTE-987', 'motif' => 'Paiement des cours',
+        ])), $this->import);
+        $etat = VirementVacataire::firstOrFail()->load('lignes');
+        $html = view('Admin.EmploiTemps.virements.pdf', [
+            'etat' => $etat, 'total' => $etat->lignes->sum('net_a_payer'), 'totalLettres' => 'test',
+        ])->render();
+        foreach ([$this->controller->show($etat)->render(), $html] as $document) {
+            $this->assertStringContainsString('Par la présente, Institut Superieur Hintel autorise CBC', $document);
+            $this->assertStringContainsString('<strong>COMPTE-987</strong>', $document);
+        }
+        $this->assertLessThan(strpos($html, 'Paiement des cours'), strpos($html, 'Par la présente'));
+        $this->assertLessThan(strpos($html, '<table class="liste">'), strpos($html, 'Paiement des cours'));
+    }
+
     public function test_filters_prevent_wrong_bank_or_entity_and_allow_explicit_other_bank(): void
     {
         $wrong = $this->controller->create(new Request(['id_entite' => 1, 'id_banque' => 2]), $this->import)->getData();
@@ -129,7 +146,9 @@ class VirementVacataireTest extends TestCase
     {
         $data = $this->data(['id_banque' => 2, 'inclure_autres' => 1, 'transfert' => [1 => 1], 'frais' => [1 => 1500.25]]);
         $this->controller->store(Request::create('/', 'POST', $data), $this->import);
-        $this->assertEquals(9839.75, VirementVacataire::first()->lignes->first()->net_a_payer);
+        $ligne = VirementVacataire::first()->lignes->first();
+        $this->assertEquals(9840, $ligne->net_a_payer);
+        $this->assertEquals(0.25, $ligne->details[0]['ajustement_arrondi_virement']);
         $this->assertEquals(2, VirementVacataire::first()->id_banque);
         $autre = $this->import->replicate();
         $autre->save();
@@ -142,6 +161,29 @@ class VirementVacataireTest extends TestCase
             $this->fail('Une periode chevauchante doit etre bloquee.');
         } catch (ValidationException $exception) { $this->assertArrayHasKey('personnels', $exception->errors()); }
         $this->assertEquals(1, VirementVacataire::count());
+    }
+
+    public function test_pdf_rounds_each_archived_amount_up_and_sums_the_rounded_lines(): void
+    {
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $this->import);
+        $etat = VirementVacataire::firstOrFail();
+        $ligne = $etat->lignes()->firstOrFail();
+        $ligne->update(['net_a_payer' => 1000.01]);
+        $seconde = $ligne->replicate();
+        $seconde->id_personnel = 999;
+        $seconde->net_a_payer = 2000.01;
+        $seconde->save();
+        $response = $this->controller->pdf($etat);
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $etat->load('lignes');
+        $total = $etat->lignes->sum(fn ($item) => ceil((float) $item->net_a_payer));
+        $html = view('Admin.EmploiTemps.virements.pdf', ['etat' => $etat, 'total' => $total,
+            'totalLettres' => (new \App\Services\MontantEnLettres())->francs($total), 'arrondiArchive' => true])->render();
+        $this->assertStringContainsString('1 001</td>', $html);
+        $this->assertStringContainsString('2 001</td>', $html);
+        $this->assertStringContainsString('3 002</th>', $html);
+        $this->assertStringContainsString('valeurs archivees restent inchangees', $html);
+        $this->assertEquals(1000.01, $ligne->fresh()->net_a_payer);
     }
 
     public function test_guest_cannot_access_orders(): void
@@ -485,6 +527,54 @@ class VirementVacataireTest extends TestCase
             $this->assertEquals(11340, $ligne['net_avant_frais']);
         }
         $this->assertEquals(0, $this->import->heures_realisees()->where('id_seance_cours', 1)->first()->duree_realisee);
+    }
+
+    public function test_justified_absence_reimburses_only_the_unpaid_sanction_once(): void
+    {
+        $this->preparerCoursManuel();
+        $this->import->heures_realisees()->update([
+            'duree_prevue' => 2, 'duree_realisee' => 0, 'montant_total' => 0,
+            'heure_fin_prevue' => '10:00:00', 'heure_debut_reelle' => null, 'heure_fin_reelle' => null,
+        ]);
+        $autresHeures = $this->import->heures_realisees()->first()->replicate();
+        $autresHeures->fill(['id_seance_cours' => 2, 'duree_prevue' => 6, 'duree_realisee' => 6,
+            'montant_total' => 18000, 'heure_debut_prevue' => '10:00:00', 'heure_fin_prevue' => '16:00:00']);
+        $autresHeures->save();
+
+        $parent = $this->import;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $parent);
+        $ordreInitial = VirementVacataire::firstOrFail();
+        $this->assertEquals(12000, $ordreInitial->lignes->first()->brut_fiscal);
+
+        $requete = $this->nouvelleRequete();
+        $this->saisirHeures($requete, '10:00', 'lever');
+        $absence = $requete->heures_realisees()->where('id_seance_cours', 1)->firstOrFail();
+        $this->assertEquals(0, $absence->duree_realisee);
+        $this->assertEquals(0, $absence->montant_total);
+        $this->assertEquals(6000, $absence->sanction_avant_requete);
+        $this->assertTrue($absence->sanction_annulee);
+        $ligne = (new \App\Services\PaieImportVacataire())->lignes($requete)->first();
+        $this->assertEquals(6000, $ligne['brut_fiscal']);
+        $this->assertEquals(330, $ligne['impot']);
+        $this->assertEquals(5670, $ligne['net_avant_frais']);
+
+        $this->import = $requete;
+        $this->controller->store(Request::create('/', 'POST', $this->data()), $requete);
+        $this->assertEquals(5670, VirementVacataire::latest('id')->firstOrFail()->lignes->first()->net_a_payer);
+        $this->assertEquals(12000, $ordreInitial->fresh()->lignes->first()->brut_fiscal);
+
+        $this->import = $parent;
+        $seconde = $this->nouvelleRequete();
+        $this->saisirHeures($seconde, '10:00', 'lever');
+        $this->assertEquals(0, (new \App\Services\PaieImportVacataire())->lignes($seconde)->first()['net_avant_frais']);
+        $this->import = $seconde;
+        try {
+            $this->controller->store(Request::create('/', 'POST', $this->data()), $seconde);
+            $this->fail('La meme sanction ne doit pas etre restituee deux fois.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('personnels', $e->errors());
+        }
+        $this->assertSame(2, VirementVacataire::count());
     }
 
     public function test_claim_reference_shows_source_hours_and_single_biometric_punch_without_copying(): void

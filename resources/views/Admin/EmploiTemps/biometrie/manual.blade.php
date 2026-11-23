@@ -115,6 +115,7 @@
                         <option value="presence_manuelle" @selected(old('type_requete') === 'presence_manuelle')>Presence attestee par releve administratif - appareil hors service</option>
                         <option value="pointage_incomplet" @selected(old('type_requete') === 'pointage_incomplet')>Pointage incomplet - entree ou sortie manquante</option>
                     </select>
+                    <small id="explicationAbsence" class="form-text text-muted">Une absence justifiee conserve les heures deja comptabilisees et leve uniquement la sanction de la seance. Le complement depend de la sanction effectivement retenue sur le mois et des droits deja couverts ; il est calcule avant impot et frais eventuels.</small>
                 </div>
             @endif
             <div class="row">
@@ -263,6 +264,8 @@ function absenceJustifiee() {
 function refreshDecision() {
     debutInput.disabled = finInput.disabled = absenceJustifiee();
     debutInput.required = finInput.required = !absenceJustifiee();
+    const explication = document.getElementById('explicationAbsence');
+    if (explication) explication.hidden = !absenceJustifiee();
     calculerDuree();
 }
 

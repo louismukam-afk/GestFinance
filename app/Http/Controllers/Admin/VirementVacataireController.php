@@ -137,10 +137,14 @@ class VirementVacataireController extends Controller
                 if ($frais >= $ligne['net_avant_frais']) {
                     $this->erreur('frais.'.$id, 'Les frais de '.$ligne['nom'].' doivent etre inferieurs au net a payer.');
                 }
+                // Les ordres bancaires sont etablis en francs entiers, arrondis au franc superieur.
+                $netExact = round($ligne['net_avant_frais'] - $frais, 2);
+                $netVirement = ceil($netExact);
+                $ligne['details'][0]['ajustement_arrondi_virement'] = round($netVirement - $netExact, 2);
                 $selection->push(collect($ligne)->only(['id_personnel', 'nom', 'banque_personnel', 'brut_fiscal', 'impot', 'net_avant_frais', 'details'])->all() + [
                     'id_biometrie_import' => $source->id, 'id_entite' => $entite->id,
                     'compte' => $compte ?: null, 'sans_compte_confirme' => $compte === '' && $sansCompte,
-                    'frais_transfert' => $frais, 'net_a_payer' => round($ligne['net_avant_frais'] - $frais, 2),
+                    'frais_transfert' => $frais, 'net_a_payer' => $netVirement,
                 ]);
             }
             $doublonAutreImport = LigneVirementVacataire::whereIn('id_personnel', $data['personnels'])->where('id_entite', $entite->id)
@@ -179,10 +183,12 @@ class VirementVacataireController extends Controller
 
     public function pdf(VirementVacataire $virement)
     {
-        $total = (float) $virement->lignes()->sum('net_a_payer');
+        $virement->load('lignes');
+        $total = $virement->lignes->sum(fn ($ligne) => ceil((float) $ligne->net_a_payer));
+        $arrondiArchive = $virement->lignes->contains(fn ($ligne) => (float) $ligne->net_a_payer != ceil((float) $ligne->net_a_payer));
 
         return Pdf::loadView('Admin.EmploiTemps.virements.pdf', [
-            'etat' => $virement->load('lignes'), 'total' => $total,
+            'etat' => $virement, 'total' => $total, 'arrondiArchive' => $arrondiArchive,
             'totalLettres' => (new \App\Services\MontantEnLettres())->francs($total),
         ])->setPaper('a4')->stream('ordre_virement_'.$virement->id.'.pdf');
     }

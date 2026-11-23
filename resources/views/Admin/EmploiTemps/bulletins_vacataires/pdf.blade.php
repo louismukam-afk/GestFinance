@@ -38,6 +38,7 @@ th { background:#eee; } tr { page-break-inside:avoid; }
         @if($import->estRequete())<p>Complement de droits : montant revise moins les ordres anterieurs. Les heures revisees figurent dans la consolidation du dossier.</p>
         @elseif($ligne['valide'] && collect($ligne['details'])->contains(fn($d) => !isset($d['heures_prevues'])))<p>Detail des heures non archive dans cet ancien ordre.</p>@endif
         <p class="montant">Brut fiscal : {{ number_format($ligne['brut_fiscal'], 2, ',', ' ') }} | Impot : {{ number_format($ligne['impot'], 2, ',', ' ') }} | Frais : {{ number_format($ligne['frais_transfert'], 2, ',', ' ') }} | <strong>Net : {{ number_format($ligne['net_a_payer'], 2, ',', ' ') }} FCFA</strong></p>
+        @if(collect($ligne['details'] ?? [])->sum('ajustement_arrondi_virement') > 0)<p>Dont ajustement d'arrondi au franc superieur : {{ number_format(collect($ligne['details'])->sum('ajustement_arrondi_virement'), 2, ',', ' ') }} FCFA.</p>@endif
     @endforeach
     <div class="bloc"><table><tr><th>Brut fiscal apres sanctions</th><th>Impot</th><th>Net apres impot</th><th>Frais de transfert</th><th>Net a payer</th></tr><tr>@foreach(['brut_fiscal','impot','net_avant_frais','frais_transfert','net_a_payer'] as $champ)<td class="montant">{{ number_format($bulletin[$champ], 2, ',', ' ') }}</td>@endforeach</tr></table>
     <p class="total">NET A PAYER : {{ number_format($bulletin['net_a_payer'], 2, ',', ' ') }} FCFA</p>
