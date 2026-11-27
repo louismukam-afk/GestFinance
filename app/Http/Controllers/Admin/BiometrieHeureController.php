@@ -991,21 +991,6 @@ class BiometrieHeureController extends Controller
                                 'matiere' => $programme?->matiere?->nom_matiere ?? '-', 'specialite' => $programme?->specialite?->nom_specialite ?? '-'];
 
                             $precedentes = $anterieures->get($coursEnseignant->id_personnel.'|'.$date->toDateString(), collect());
-                            $estMemeSeance = function ($h) use ($seance, $dedupeSubject) {
-                                $programme = $h->cours?->programme;
-                                $sujet = $programme?->type_matiere === 'transversale'
-                                    ? 'transversale-matiere-'.($programme->id_matiere ?? $h->id_programme_specialite)
-                                    : 'programme-'.$h->id_programme_specialite;
-                                return $h->id_seance_cours == $seance->id || ($h->id_plage_horaire == $seance->id_plage_horaire && $sujet === $dedupeSubject);
-                            };
-                            $deja = $precedentes->contains($estMemeSeance);
-                            if ($deja) {
-                                $ignorees++;
-                                $rapport['ignorees'][] = $description + ['raison' => 'Séance déjà consolidée dans un autre import.'];
-                                $date->addDay();
-                                continue;
-                            }
-
                             if (isset($processedSeances[$dedupeKey])) {
                                 $date->addDay();
                                 continue;
@@ -1014,8 +999,9 @@ class BiometrieHeureController extends Controller
 
                             $plannedStart = Carbon::parse($date->format('Y-m-d').' '.$seance->plage->heure_debut);
                             $plannedEnd = Carbon::parse($date->format('Y-m-d').' '.$seance->plage->heure_fin);
-                            $segmentsLibres = $this->segmentsNonConsolides($plannedStart, $plannedEnd,
-                                $precedentes->reject($estMemeSeance));
+                            // Toute heure déjà enregistrée occupe cette portion, même si elle
+                            // porte le même identifiant de séance : l'emploi du temps a pu être modifié.
+                            $segmentsLibres = $this->segmentsNonConsolides($plannedStart, $plannedEnd, $precedentes);
                             if (!$segmentsLibres) {
                                 $ignorees++;
                                 $rapport['ignorees'][] = $description + ['raison' => 'La plage est déjà entièrement couverte par des heures consolidées dans un autre import.'];
@@ -2274,6 +2260,8 @@ class BiometrieHeureController extends Controller
                 optional($heure->date_seance)->format('Y-m-d'),
                 $heure->id_plage_horaire,
                 $heure->id_programme_specialite,
+                $heure->heure_debut_prevue,
+                $heure->heure_fin_prevue,
             ]))
             ->values();
     }
