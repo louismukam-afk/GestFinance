@@ -965,8 +965,7 @@ class BiometrieHeureController extends Controller
         $processedSeances = [];
 
         $ignorees = 0;
-        $conflits = [];
-        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees, &$conflits, &$rapport) {
+        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees, &$rapport) {
             foreach ($cours as $coursEnseignant) {
                 $periodeStart = max(Carbon::parse($coursEnseignant->date_debut)->startOfDay(), $start);
                 $periodeEnd = min(Carbon::parse($coursEnseignant->date_fin)->endOfDay(), $end);
@@ -1000,23 +999,6 @@ class BiometrieHeureController extends Controller
                                 return $h->id_seance_cours == $seance->id || ($h->id_plage_horaire == $seance->id_plage_horaire && $sujet === $dedupeSubject);
                             };
                             $deja = $precedentes->contains($estMemeSeance);
-                            $debutPlage = Carbon::parse($seance->plage->heure_debut)->format('H:i:s');
-                            $finPlage = Carbon::parse($seance->plage->heure_fin)->format('H:i:s');
-                            $chevauchements = $precedentes->filter(fn($h) => !$estMemeSeance($h) && Carbon::parse($h->heure_debut_prevue)->format('H:i:s') < $finPlage
-                                && Carbon::parse($h->heure_fin_prevue)->format('H:i:s') > $debutPlage);
-                            if ($chevauchements->isNotEmpty()) {
-                                foreach ($chevauchements as $ancienne) {
-                                    $conflits[] = sprintf('%s - %s : la nouvelle plage %s-%s (%s, %s) chevauche la plage déjà consolidée %s-%s (%s, %s), import #%s (%s).',
-                                        $coursEnseignant->personnel?->nom ?? 'Enseignant #'.$coursEnseignant->id_personnel, $date->format('d/m/Y'),
-                                        substr($debutPlage, 0, 5), substr($finPlage, 0, 5), $programme?->matiere?->nom_matiere ?? 'matière non renseignée',
-                                        $programme?->specialite?->nom_specialite ?? 'spécialité non renseignée', substr($ancienne->heure_debut_prevue, 0, 5),
-                                        substr($ancienne->heure_fin_prevue, 0, 5), $ancienne->cours?->programme?->matiere?->nom_matiere ?? 'matière non renseignée',
-                                        $ancienne->cours?->programme?->specialite?->nom_specialite ?? 'spécialité non renseignée',
-                                        $ancienne->id_biometrie_import, $ancienne->import?->libelle ?: 'sans libellé');
-                                }
-                                $date->addDay();
-                                continue;
-                            }
                             if ($deja) {
                                 $ignorees++;
                                 $rapport['ignorees'][] = $description + ['raison' => 'Séance déjà consolidée dans un autre import.'];
@@ -1028,20 +1010,39 @@ class BiometrieHeureController extends Controller
                                 $date->addDay();
                                 continue;
                             }
-
                             $processedSeances[$dedupeKey] = true;
-                            $count += $this->consoliderSeance($import, $coursEnseignant, $seance, $date, $defaultTaux);
-                            $rapport['traitees'][] = $description;
+
+                            $plannedStart = Carbon::parse($date->format('Y-m-d').' '.$seance->plage->heure_debut);
+                            $plannedEnd = Carbon::parse($date->format('Y-m-d').' '.$seance->plage->heure_fin);
+                            $segmentsLibres = $this->segmentsNonConsolides($plannedStart, $plannedEnd,
+                                $precedentes->reject($estMemeSeance));
+                            if (!$segmentsLibres) {
+                                $ignorees++;
+                                $rapport['ignorees'][] = $description + ['raison' => 'La plage est déjà entièrement couverte par des heures consolidées dans un autre import.'];
+                                $date->addDay();
+                                continue;
+                            }
+
+                            $dureePrevueComplete = $this->plannedDuration($plannedStart, $plannedEnd, $seance->plage);
+                            $dureeMuraleComplete = max($plannedStart->diffInMinutes($plannedEnd), 1);
+                            foreach ($segmentsLibres as [$segmentStart, $segmentEnd]) {
+                                $descriptionSegment = $description;
+                                $descriptionSegment['plage'] = $segmentStart->format('H:i').' - '.$segmentEnd->format('H:i');
+                                if ($segmentStart->greaterThan($plannedStart) || $segmentEnd->lessThan($plannedEnd)) {
+                                    $descriptionSegment['matiere'] .= ' (portion non consolidée)';
+                                }
+                                $dureeSegment = round($dureePrevueComplete * $segmentStart->diffInMinutes($segmentEnd) / $dureeMuraleComplete, 2);
+                                $count += $this->consoliderSeance($import, $coursEnseignant, $seance, $date, $defaultTaux,
+                                    $segmentStart, $segmentEnd, $dureeSegment);
+                                $rapport['traitees'][] = $descriptionSegment;
+                            }
+
                         }
                         $date->addDay();
                     }
                 }
             }
         });
-
-        if ($conflits) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['import' => array_values(array_unique($conflits))]);
-        }
 
         $import->update([
             'statut' => 'consolide',
@@ -1636,16 +1637,17 @@ class BiometrieHeureController extends Controller
         }
     }
 
-    private function consoliderSeance(BiometrieImport $import, CoursEnseignant $cours, $seance, Carbon $date, ?TauxHoraire $defaultTaux): int
+    private function consoliderSeance(BiometrieImport $import, CoursEnseignant $cours, $seance, Carbon $date, ?TauxHoraire $defaultTaux,
+        ?Carbon $plannedStartOverride = null, ?Carbon $plannedEndOverride = null, ?float $plannedDurationOverride = null): int
     {
         $plage = $seance->plage;
         if (!$plage || $plage->type_plage !== 'cours') {
             return 0;
         }
 
-        $plannedStart = Carbon::parse($date->format('Y-m-d') . ' ' . $plage->heure_debut);
-        $plannedEnd = Carbon::parse($date->format('Y-m-d') . ' ' . $plage->heure_fin);
-        $plannedDuration = $this->plannedDuration($plannedStart, $plannedEnd, $plage);
+        $plannedStart = $plannedStartOverride ?: Carbon::parse($date->format('Y-m-d') . ' ' . $plage->heure_debut);
+        $plannedEnd = $plannedEndOverride ?: Carbon::parse($date->format('Y-m-d') . ' ' . $plage->heure_fin);
+        $plannedDuration = $plannedDurationOverride ?? $this->plannedDuration($plannedStart, $plannedEnd, $plage);
         $pointages = $this->dailyPointagesForCours($import, $cours, $date);
         $matchingInterval = $this->intervalForPlage($pointages, $plannedStart, $plannedEnd, $date);
 
@@ -1661,12 +1663,17 @@ class BiometrieHeureController extends Controller
             $realEnd = $exit->lessThan($plannedEnd) ? $exit : $plannedEnd;
 
             if ($realEnd->greaterThan($realStart)) {
-                $duration = min($plannedDuration, round($realStart->diffInMinutes($realEnd) / 60, 2));
+                $arriveDansLaTolerance = $entry->greaterThan($plannedStart)
+                    && $plannedStart->diffInSeconds($entry) <= 300
+                    && !$exit->lessThan($plannedEnd);
+                $duration = $arriveDansLaTolerance
+                    ? $plannedDuration
+                    : min($plannedDuration, round($realStart->diffInMinutes($realEnd) / 60, 2));
                 $statut = $duration > 0 ? 'realise' : 'non_realise';
                 $missing = round($plannedDuration - $duration, 2);
                 $observation = $missing > 0
                     ? 'Pointage partiel : ' . number_format($missing, 2, ',', ' ') . ' h non comptabilisee(s).'
-                    : null;
+                    : ($arriveDansLaTolerance ? 'Début crédité intégralement : arrivée dans la tolérance de 5 minutes et sortie couvrant toute la plage.' : null);
             }
         } elseif ($pointages->count() === 1) {
             $only = Carbon::parse($pointages->first()->date_heure_pointage);
@@ -1685,6 +1692,7 @@ class BiometrieHeureController extends Controller
                 'id_biometrie_import' => $import->id,
                 'id_seance_cours' => $seance->id,
                 'date_seance' => $date->toDateString(),
+                'heure_debut_prevue' => $plannedStart->format('H:i:s'),
             ],
             [
                 'id_cours_enseignant' => $cours->id,
@@ -1854,6 +1862,36 @@ class BiometrieHeureController extends Controller
         return round($plannedStart->diffInMinutes($plannedEnd) / 60, 2);
     }
 
+    /** @return array<int, array{0: Carbon, 1: Carbon}> */
+    private function segmentsNonConsolides(Carbon $debut, Carbon $fin, $heuresExistantes): array
+    {
+        $chevauchements = $heuresExistantes
+            ->filter(fn($heure) => Carbon::parse($heure->heure_debut_prevue)->format('H:i:s') < $fin->format('H:i:s')
+                && Carbon::parse($heure->heure_fin_prevue)->format('H:i:s') > $debut->format('H:i:s'))
+            ->map(fn($heure) => [
+                Carbon::parse($debut->format('Y-m-d').' '.$heure->heure_debut_prevue)->max($debut->copy()),
+                Carbon::parse($debut->format('Y-m-d').' '.$heure->heure_fin_prevue)->min($fin->copy()),
+            ])
+            ->sortBy(fn($intervalle) => $intervalle[0]->getTimestamp())
+            ->values();
+
+        $segments = [];
+        $curseur = $debut->copy();
+        foreach ($chevauchements as [$debutOccupe, $finOccupe]) {
+            if ($debutOccupe->greaterThan($curseur)) {
+                $segments[] = [$curseur->copy(), $debutOccupe->copy()];
+            }
+            if ($finOccupe->greaterThan($curseur)) {
+                $curseur = $finOccupe->copy();
+            }
+        }
+        if ($curseur->lessThan($fin)) {
+            $segments[] = [$curseur, $fin->copy()];
+        }
+
+        return $segments;
+    }
+
     private function intervalForPlage($pointages, Carbon $plannedStart, Carbon $plannedEnd, Carbon $date): ?array
     {
         $times = $pointages
@@ -1885,6 +1923,24 @@ class BiometrieHeureController extends Controller
 
         if ($entry && $exit) {
             return [$entry, $exit];
+        }
+
+        // Une entrée pendant la pause peut annoncer la présence au cours suivant.
+        // La dernière entrée précédant la plage est retenue, même si elle a eu lieu
+        // jusqu'à 90 minutes avant le début prévu (ex. pointage à 12:10 pour 12:45).
+        $entreeAvantPlage = $times
+            ->filter(fn($time) => $time->greaterThanOrEqualTo($plannedStart->copy()->subMinutes(90))
+                && $time->lessThanOrEqualTo($plannedStart->copy()->addMinutes(5)))
+            ->last();
+        if ($entreeAvantPlage) {
+            $sortieApresPlage = $times
+                ->filter(fn($time) => $time->greaterThan($entreeAvantPlage)
+                    && $time->greaterThanOrEqualTo($plannedEnd)
+                    && $time->lessThanOrEqualTo($plannedEnd->copy()->addMinutes(30)))
+                ->first();
+            if ($sortieApresPlage) {
+                return [$entreeAvantPlage, $sortieApresPlage];
+            }
         }
 
         $presenceIntervals = $this->presenceIntervals($times, $date);
