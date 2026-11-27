@@ -845,19 +845,25 @@ class BiometrieHeureController extends Controller
 
     public function store(Request $request)
     {
+        $path = null;
+        $fichierDeplace = false;
+        try {
         $data = $request->validate([
             'libelle' => 'nullable|string|max:255',
             'date_debut' => 'required|date',
             'date_fin' => 'required|date|after_or_equal:date_debut',
             'fichier' => 'required|file|max:20480',
+            'import_complementaire' => 'nullable|boolean',
         ]);
 
         $file = $request->file('fichier');
-        $fileName = time() . '_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $file->getClientOriginalName());
+        $fileName = time() . '_' . \Illuminate\Support\Str::uuid() . '_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $file->getClientOriginalName());
         $path = 'uploads/biometrie/' . $fileName;
         File::ensureDirectoryExists(public_path('uploads/biometrie'));
         $file->move(public_path('uploads/biometrie'), $fileName);
+        $fichierDeplace = true;
 
+        return DB::transaction(function () use ($data, $path, $request) {
         $import = BiometrieImport::create([
             'libelle' => $data['libelle'] ?: 'Import biometrie du ' . now()->format('d/m/Y H:i'),
             'date_debut' => $data['date_debut'],
@@ -870,24 +876,58 @@ class BiometrieHeureController extends Controller
 
         [$created, $unmatched, $ignored] = $this->importBiometriePointages($import, public_path($path));
 
+        $apercu = (new \App\Services\ApercuImportBiometrie())->analyser($import);
+        $ecartes = 0;
+        if ($request->boolean('import_complementaire')) {
+            // Conserver tous les pointages des journées avec une nouvelle plage ou un conflit :
+            // un même pointage peut servir de frontière à deux séances successives.
+            $joursUtiles = collect($apercu['lignes'])->whereIn('etat', ['a_traiter', 'conflit'])
+                ->mapWithKeys(fn($ligne) => [$ligne['id_personnel'].'|'.$ligne['date_iso'] => true]);
+            $import->pointages()->whereNotNull('id_personnel')->chunkById(500, function ($pointages) use ($joursUtiles, &$ecartes) {
+                $aEcarter = $pointages->filter(fn($p) => !$joursUtiles->has($p->id_personnel.'|'.$p->date_heure_pointage->toDateString()))->pluck('id');
+                if ($aEcarter->isNotEmpty()) { $ecartes += BiometriePointage::whereIn('id', $aEcarter)->delete(); }
+            });
+        }
+        $apercu['mode_complementaire'] = $request->boolean('import_complementaire');
+        $apercu['ecartes'] = $ecartes;
+        $apercu['pointages_lus'] = $created;
+        $apercu['hors_personnel'] = $ignored;
+        $apercu['date_analyse'] = now()->format('d/m/Y H:i');
+        session()->put('rapports_chargement.'.$import->id, $apercu);
+        $created -= $ecartes;
+
         $import->update([
             'total_lignes' => $created,
             'total_non_associees' => $unmatched,
         ]);
 
         return redirect()->route('biometrie_heures.index')
-            ->with('success', "{$created} pointage(s) importe(s). {$unmatched} en attente de correspondance. {$ignored} hors personnel avec cours planifie ignore(s).");
+            ->with('success', "{$created} pointage(s) conservé(s). {$unmatched} en attente de correspondance. {$ecartes} déjà traités ou sans nouvelle plage écartés ; {$ignored} hors personnel avec cours planifié ignorés.");
+        });
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            session()->put('rapport_echec_chargement', ['date' => now()->format('d/m/Y H:i'), 'erreurs' => collect($e->errors())->flatten()->all()]);
+            if ($fichierDeplace) { File::delete(public_path($path)); }
+            throw $e;
+        } catch (\Throwable $e) {
+            session()->put('rapport_echec_chargement', ['date' => now()->format('d/m/Y H:i'), 'erreurs' => ['Erreur technique pendant le chargement. Consulter les journaux du serveur.']]);
+            if ($fichierDeplace) { File::delete(public_path($path)); }
+            throw $e;
+        }
     }
 
     public function consolider(BiometrieImport $import)
     {
-        return DB::transaction(function () use ($import) {
+        $rapport = ['import_id' => $import->id, 'libelle' => $import->libelle, 'date_debut' => $import->date_debut->format('d/m/Y'),
+            'date_fin' => $import->date_fin->format('d/m/Y'), 'date_tentative' => now()->format('d/m/Y H:i:s'),
+            'statut' => 'echec', 'traitees' => [], 'ignorees' => [], 'erreurs' => []];
+        try {
+        $response = DB::transaction(function () use ($import, &$rapport) {
         $import = BiometrieImport::whereKey($import->id)->lockForUpdate()->firstOrFail();
         if (\App\Models\VirementVacataire::where('id_biometrie_import', $import->id)->exists()) {
             throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Cet import possede un ordre valide : sa consolidation ne peut plus etre recalculee.']);
         }
         if ($import->statut === 'manuel') {
-            return back()->withErrors(['import' => 'Cet import est manuel : utilise la saisie manuelle pour ajouter ou modifier les heures.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Cet import est manuel : utilise la saisie manuelle pour ajouter ou modifier les heures.']);
         }
 
         $this->reassocierPointages($import);
@@ -897,7 +937,7 @@ class BiometrieHeureController extends Controller
         $defaultTaux = TauxHoraire::where('statut', 'actif')->where('par_defaut', true)->first()
             ?: TauxHoraire::where('statut', 'actif')->orderByDesc('id')->first();
 
-        $cours = CoursEnseignant::with(['personnel', 'programme', 'seances.plage', 'taux_horaire'])
+        $cours = CoursEnseignant::with(['personnel', 'programme.matiere', 'programme.specialite', 'seances.plage', 'taux_horaire'])
             ->where('statut', 'actif')
             ->whereIn('id_personnel', $this->personnelsCoursPourImport($import))
             ->whereIn('id_personnel', $import->pointages()->whereNotNull('id_personnel')->select('id_personnel'))
@@ -926,7 +966,7 @@ class BiometrieHeureController extends Controller
 
         $ignorees = 0;
         $conflits = [];
-        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees, &$conflits) {
+        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees, &$conflits, &$rapport) {
             foreach ($cours as $coursEnseignant) {
                 $periodeStart = max(Carbon::parse($coursEnseignant->date_debut)->startOfDay(), $start);
                 $periodeEnd = min(Carbon::parse($coursEnseignant->date_fin)->endOfDay(), $end);
@@ -947,6 +987,9 @@ class BiometrieHeureController extends Controller
                                 $seance->id_plage_horaire,
                                 $dedupeSubject,
                             ]);
+                            $description = ['enseignant' => $coursEnseignant->personnel?->nom ?? 'Enseignant #'.$coursEnseignant->id_personnel,
+                                'date' => $date->format('d/m/Y'), 'plage' => substr($seance->plage->heure_debut, 0, 5).' - '.substr($seance->plage->heure_fin, 0, 5),
+                                'matiere' => $programme?->matiere?->nom_matiere ?? '-', 'specialite' => $programme?->specialite?->nom_specialite ?? '-'];
 
                             $precedentes = $anterieures->get($coursEnseignant->id_personnel.'|'.$date->toDateString(), collect());
                             $estMemeSeance = function ($h) use ($seance, $dedupeSubject) {
@@ -976,6 +1019,7 @@ class BiometrieHeureController extends Controller
                             }
                             if ($deja) {
                                 $ignorees++;
+                                $rapport['ignorees'][] = $description + ['raison' => 'Séance déjà consolidée dans un autre import.'];
                                 $date->addDay();
                                 continue;
                             }
@@ -987,6 +1031,7 @@ class BiometrieHeureController extends Controller
 
                             $processedSeances[$dedupeKey] = true;
                             $count += $this->consoliderSeance($import, $coursEnseignant, $seance, $date, $defaultTaux);
+                            $rapport['traitees'][] = $description;
                         }
                         $date->addDay();
                     }
@@ -1005,6 +1050,47 @@ class BiometrieHeureController extends Controller
 
         return back()->with('success', "{$count} plage(s) consolidee(s), {$ignorees} deja presente(s) dans un autre import et ignoree(s).");
         });
+        $rapport['statut'] = 'reussite';
+        session()->put('rapports_consolidation.'.$import->id, $rapport);
+        return $response;
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $rapport['erreurs'] = collect($e->errors())->flatten()->values()->all();
+            session()->put('rapports_consolidation.'.$import->id, $rapport);
+            throw $e;
+        } catch (\Throwable $e) {
+            $rapport['erreurs'] = ['Erreur technique pendant la consolidation. Consulter les journaux du serveur.'];
+            session()->put('rapports_consolidation.'.$import->id, $rapport);
+            throw $e;
+        }
+    }
+
+    public function rapportConsolidation(BiometrieImport $import)
+    {
+        abort_unless($import->concerneEnseignants(), 404);
+        $rapport = session()->get('rapports_consolidation.'.$import->id);
+        abort_unless($rapport && (int) $rapport['import_id'] === (int) $import->id, 404, 'Aucun rapport de tentative disponible dans cette session.');
+        return Pdf::loadView('Admin.EmploiTemps.biometrie.rapport_consolidation_pdf', compact('rapport'))
+            ->setPaper('a4', 'landscape')->download('rapport_consolidation_import_'.$import->id.'.pdf');
+    }
+
+    public function rapportChargement(BiometrieImport $import)
+    {
+        abort_unless($import->concerneEnseignants() && !$import->estRequete() && $import->statut !== 'manuel', 404);
+        $apercu = session()->get('rapports_chargement.'.$import->id);
+        if (!$apercu) {
+            $apercu = (new \App\Services\ApercuImportBiometrie())->analyser($import);
+            $apercu['date_analyse'] = now()->format('d/m/Y H:i');
+        }
+        return Pdf::loadView('Admin.EmploiTemps.biometrie.rapport_chargement_pdf', compact('import', 'apercu'))
+            ->setPaper('a4', 'landscape')->download('rapport_chargement_import_'.$import->id.'.pdf');
+    }
+
+    public function rapportEchecChargement()
+    {
+        $rapport = session()->get('rapport_echec_chargement');
+        abort_unless($rapport, 404, 'Aucun échec de chargement disponible dans cette session.');
+        return Pdf::loadView('Admin.EmploiTemps.biometrie.rapport_echec_chargement_pdf', compact('rapport'))
+            ->setPaper('a4')->download('rapport_echec_import_biometrique.pdf');
     }
 
     public function clearConsolidation(BiometrieImport $import)

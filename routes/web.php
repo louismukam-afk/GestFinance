@@ -155,6 +155,9 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('emploi-du-temps/taux-impots', \App\Http\Controllers\Admin\TauxImpotController::class)
         ->only(['index', 'create', 'store', 'edit', 'update'])->parameters(['taux-impots' => 'taux_impot'])->names('taux_impots');
     Route::get('emploi-du-temps/decompte-heures/imports/{import}/rapport', [BiometrieHeureController::class, 'rapportImport'])->name('biometrie_heures.rapport_import');
+    Route::get('emploi-du-temps/decompte-heures/imports/{import}/rapport-consolidation', [BiometrieHeureController::class, 'rapportConsolidation'])->name('biometrie_heures.rapport_consolidation');
+    Route::get('emploi-du-temps/decompte-heures/imports/{import}/rapport-chargement', [BiometrieHeureController::class, 'rapportChargement'])->name('biometrie_heures.rapport_chargement');
+    Route::get('emploi-du-temps/decompte-heures/rapport-echec-chargement', [BiometrieHeureController::class, 'rapportEchecChargement'])->name('biometrie_heures.rapport_echec_chargement');
     Route::get('emploi-du-temps/biometrie-permanents', [BiometrieHeureController::class, 'permanentIndex'])->name('biometrie_permanents.index');
     Route::get('emploi-du-temps/biometrie-permanents/pdf', [BiometrieHeureController::class, 'permanentExportPdf'])->name('biometrie_permanents.pdf');
     Route::get('emploi-du-temps/biometrie-permanents/saisie-manuelle', [BiometrieHeureController::class, 'permanentManualCreate'])->name('biometrie_permanents.manual.create');

@@ -212,6 +212,11 @@ class VirementVacataireTest extends TestCase
         $controller->consolider($second);
         $this->assertEquals([2], $second->heures_realisees()->pluck('id_seance_cours')->all());
         $this->assertEquals(2, $second->heures_realisees()->first()->duree_realisee);
+        $rapport = session()->get('rapports_consolidation.'.$second->id);
+        $this->assertSame('reussite', $rapport['statut']);
+        $this->assertCount(1, $rapport['traitees']);
+        $this->assertCount(1, $rapport['ignorees']);
+        $this->assertStringStartsWith('%PDF-', $controller->rapportConsolidation($second)->getContent());
         $controller->consolider($second);
         $this->assertSame(1, $second->heures_realisees()->count());
         $this->assertSame(1, $this->import->heures_realisees()->count());
@@ -246,6 +251,12 @@ class VirementVacataireTest extends TestCase
             $this->assertStringContainsString('import #'.$this->import->id, $message);
         }
         $this->assertEquals([2], $second->heures_realisees()->pluck('id_seance_cours')->all());
+        $rapport = session()->get('rapports_consolidation.'.$second->id);
+        $this->assertSame('echec', $rapport['statut']);
+        $this->assertStringContainsString('Autre enseignant', implode(' ', $rapport['erreurs']));
+        $html = view('Admin.EmploiTemps.biometrie.rapport_consolidation_pdf', compact('rapport'))->render();
+        $this->assertStringContainsString('aucune des séances traitées', $html);
+        $this->assertStringStartsWith('%PDF-', $controller->rapportConsolidation($second)->getContent());
     }
 
     public function test_class_schedule_prevents_overlapping_teachers_only_on_actual_scheduled_days(): void
@@ -276,6 +287,31 @@ class VirementVacataireTest extends TestCase
         $autreClasse = clone $programme; $autreClasse->id_specialite = 2;
         $verifier->invoke($controller, $data, $autreClasse);
         $this->assertTrue(true);
+    }
+
+    public function test_complementary_file_import_reports_and_keeps_new_session_days(): void
+    {
+        $this->preparerCoursManuel();
+        Schema::table('personnels', fn(Blueprint $t) => $t->string('nom_biometrie')->nullable());
+        Schema::table('plage_horaires', fn(Blueprint $t) => $t->string('statut')->default('actif'));
+        (require database_path('migrations/2026_05_09_000020_create_biometrie_personnel_mappings_table.php'))->up();
+        $this->personnel->update(['nom_biometrie' => 'Enseignant test']);
+        $this->import->update(['date_fin' => '2026-10-02']);
+        DB::table('plage_horaires')->insert(['id'=>2,'libelle'=>'Vendredi','type_plage'=>'cours','heure_debut'=>'12:45','heure_fin'=>'14:45','statut'=>'actif']);
+        DB::table('seance_cours')->insert(['id'=>2,'id_cours_enseignant'=>1,'id_plage_horaire'=>2,'jour_semaine'=>5]);
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('reimport.csv', "Department,Name,No,Date/Time\nCompany,Enseignant test,,01/10/2026 08:00:00\nCompany,Enseignant test,,01/10/2026 16:00:00\nCompany,Enseignant test,,02/10/2026 12:45:00\nCompany,Enseignant test,,02/10/2026 14:45:00\nCompany,Inconnu,,02/10/2026 12:00:00\n");
+        $request = new Request(['date_debut'=>'2026-10-01','date_fin'=>'2026-10-02','import_complementaire'=>'1'], [], [], [], ['fichier'=>$file]);
+        $controller = new \App\Http\Controllers\Admin\BiometrieHeureController();
+        $controller->store($request);
+        $second = BiometrieImport::latest('id')->firstOrFail();
+        try {
+            $this->assertSame(3, $second->pointages()->count());
+            $this->assertSame(1, $second->pointages()->whereNull('id_personnel')->count());
+            $rapport = session()->get('rapports_chargement.'.$second->id);
+            $this->assertEquals(2, $rapport['ecartes']);
+            $this->assertEqualsCanonicalizing(['deja_consolidee', 'a_traiter'], collect($rapport['lignes'])->pluck('etat')->all());
+            $this->assertStringStartsWith('%PDF-', $controller->rapportChargement($second)->getContent());
+        } finally { \Illuminate\Support\Facades\File::delete(public_path($second->fichier)); }
     }
 
     public function test_custom_fee_for_other_bank_and_overlapping_import_protection(): void

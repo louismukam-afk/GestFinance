@@ -16,6 +16,7 @@
     <div style="margin-bottom:15px">
         <a href="{{ route('biometrie_heures.historique') }}" class="btn btn-default"><i class="fa fa-history"></i> Historique des consolidations</a>
         <a href="{{ route('biometrie_heures.requetes.index') }}" class="btn btn-info">Suivi des requetes</a>
+        @if(session()->has('rapport_echec_chargement'))<a href="{{ route('biometrie_heures.rapport_echec_chargement') }}" class="btn btn-danger">Rapport du dernier échec d'import PDF</a>@endif
         <form method="POST" action="{{ route('biometrie_heures.nettoyer_orphelins') }}" style="display:inline" onsubmit="return confirm('Supprimer definitivement les pointages et heures consolidees sans import associe ? Les imports existants et les ordres archives seront conserves.');">
             @csrf @method('DELETE')
             <input type="hidden" name="confirmation" value="1">
@@ -40,6 +41,7 @@
             <form method="POST" action="{{ route('biometrie_heures.store') }}" enctype="multipart/form-data">
                 @csrf
                 <div class="row">
+                    <div class="col-md-12"><label><input type="checkbox" name="import_complementaire" value="1" @checked(old('import_complementaire'))> Import complémentaire : conserver les journées avec de nouvelles plages ou des conflits à examiner</label><small class="form-text text-muted">Les pointages d'une journée utile sont conservés ensemble, car une entrée ou sortie peut servir à plusieurs plages. Les identités non associées restent à vérifier.</small></div>
                     <div class="col-md-3">
                         <label>Libelle</label>
                         <input type="text" name="libelle" class="form-control" placeholder="Controle acces avril 2026">
@@ -106,6 +108,8 @@
                                     <button class="btn btn-xs btn-danger" onclick="return confirm('Supprimer cet import et toutes ses données ?')">Supprimer</button>
                                 </form>
                                 <a href="{{ route('biometrie_heures.index', ['id_biometrie_import' => $import->id]) }}" class="btn btn-xs btn-info"><i class="fa fa-eye"></i> Visualiser</a>
+                                @if(!$import->estRequete() && $import->statut !== 'manuel')<a href="{{ route('biometrie_heures.rapport_chargement', $import) }}" class="btn btn-xs btn-default">Rapport import PDF</a>@endif
+                                @if(session()->has('rapports_consolidation.'.$import->id))<a href="{{ route('biometrie_heures.rapport_consolidation', $import) }}" class="btn btn-xs btn-danger">Rapport de tentative PDF</a>@endif
                                 @if(!$import->estRequete())<a href="{{ route('biometrie_heures.requetes.index', ['id_import_parent' => $import->id]) }}" class="btn btn-xs btn-default">Requetes</a>@endif
                             </td>
                         </tr>

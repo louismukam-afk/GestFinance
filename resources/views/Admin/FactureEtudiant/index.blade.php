@@ -133,7 +133,7 @@
                             @if((int)$f->type_facture !== 2)
                             <a href="#edit_facture"
                                class="btn btn-xs btn-warning"
-                               data-toggle="modal" data-backdrop="false"
+                               data-backdrop="false"
                                data-id="{{ $f->id }}"
                                data-type="{{ $f->type_facture }}"
                                data-entite="{{ $f->id_entite }}"
