@@ -13,9 +13,6 @@
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
-    @if($errors->any())
-        <div class="alert alert-danger">{{ $errors->first() }}</div>
-    @endif
     <div style="margin-bottom:15px">
         <a href="{{ route('biometrie_heures.historique') }}" class="btn btn-default"><i class="fa fa-history"></i> Historique des consolidations</a>
         <a href="{{ route('biometrie_heures.requetes.index') }}" class="btn btn-info">Suivi des requetes</a>

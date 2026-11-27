@@ -226,9 +226,56 @@ class VirementVacataireTest extends TestCase
         $this->assertSame(0, $troisieme->heures_realisees()->count());
         DB::table('plage_horaires')->insert(['id' => 3, 'libelle' => 'Chevauchement', 'type_plage' => 'cours', 'heure_debut' => '09:00', 'heure_fin' => '11:00', 'statut' => 'actif']);
         DB::table('seance_cours')->insert(['id' => 3, 'id_cours_enseignant' => 1, 'id_plage_horaire' => 3, 'jour_semaine' => 4]);
+        $autre = personnel::create(['nom' => 'Autre enseignant', 'nom_biometrie' => 'Autre enseignant', 'type_personnel' => 'vacataire']);
+        $autreCours = (array) DB::table('cours_enseignants')->where('id', 1)->first();
+        $autreCours['id'] = 2; $autreCours['id_personnel'] = $autre->id;
+        DB::table('cours_enseignants')->insert($autreCours);
+        DB::table('seance_cours')->insert(['id' => 4, 'id_cours_enseignant' => 2, 'id_plage_horaire' => 3, 'jour_semaine' => 4]);
+        $ancienne = $this->import->heures_realisees()->first()->replicate();
+        $ancienne->id_personnel = $autre->id; $ancienne->id_cours_enseignant = 2; $ancienne->id_seance_cours = 10;
+        $ancienne->save();
+        \App\Models\BiometriePointage::create(['id_biometrie_import' => $second->id, 'nom_biometrie' => 'Autre enseignant', 'date_heure_pointage' => '2026-10-01 09:00:00']);
         try { $controller->consolider($second); $this->fail('La plage chevauche une seance consolidee'); }
-        catch (ValidationException $e) { $this->assertArrayHasKey('import', $e->errors()); }
+        catch (ValidationException $e) {
+            $this->assertArrayHasKey('import', $e->errors());
+            $message = implode(' ', $e->errors()['import']);
+            $this->assertStringContainsString('Enseignant test', $message);
+            $this->assertStringContainsString('Autre enseignant', $message);
+            $this->assertStringContainsString('09:00-11:00', $message);
+            $this->assertStringContainsString('08:00-16:00', $message);
+            $this->assertStringContainsString('import #'.$this->import->id, $message);
+        }
         $this->assertEquals([2], $second->heures_realisees()->pluck('id_seance_cours')->all());
+    }
+
+    public function test_class_schedule_prevents_overlapping_teachers_only_on_actual_scheduled_days(): void
+    {
+        $this->preparerCoursManuel();
+        DB::table('plage_horaires')->insert([
+            ['id' => 2, 'libelle' => 'Partielle', 'type_plage' => 'cours', 'heure_debut' => '15:00', 'heure_fin' => '17:00'],
+            ['id' => 3, 'libelle' => 'Apres', 'type_plage' => 'cours', 'heure_debut' => '16:00', 'heure_fin' => '18:00'],
+        ]);
+        $programme = new \App\Models\ProgrammeSpecialite(['id_specialite' => 1, 'id_cycle' => 1, 'id_filiere' => 1,
+            'id_niveau' => 1, 'id_annee_academique' => 1, 'id_entite' => 1]);
+        $verifier = new \ReflectionMethod(\App\Http\Controllers\Admin\CoursEnseignantController::class, 'assertNoClassConflict');
+        $controller = new \App\Http\Controllers\Admin\CoursEnseignantController();
+        $data = ['statut' => 'actif', 'date_debut' => '2026-10-01', 'date_fin' => '2026-10-15',
+            'seances' => [['jour_semaine' => 4, 'id_plage_horaire' => 2]]];
+        try { $verifier->invoke($controller, $data, $programme); $this->fail('La classe est deja occupee'); }
+        catch (ValidationException $e) {
+            $this->assertStringContainsString('Enseignant test', $e->errors()['seances'][0]);
+            $this->assertStringContainsString('08:00', $e->errors()['seances'][0]);
+        }
+        $data['seances'][0]['id_plage_horaire'] = 3;
+        $verifier->invoke($controller, $data, $programme); // Les plages adjacentes ne se chevauchent pas.
+        $data['seances'][0]['id_plage_horaire'] = 2;
+        $data['date_debut'] = '2026-10-02'; $data['date_fin'] = '2026-10-07';
+        $verifier->invoke($controller, $data, $programme); // Il n'y a pas de jeudi dans la periode commune.
+        $data['date_debut'] = '2026-10-01'; $data['date_fin'] = '2026-10-15';
+        $verifier->invoke($controller, $data, $programme, 1); // Modification du meme cours.
+        $autreClasse = clone $programme; $autreClasse->id_specialite = 2;
+        $verifier->invoke($controller, $data, $autreClasse);
+        $this->assertTrue(true);
     }
 
     public function test_custom_fee_for_other_bank_and_overlapping_import_protection(): void

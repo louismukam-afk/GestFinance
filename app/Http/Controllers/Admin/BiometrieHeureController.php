@@ -908,7 +908,7 @@ class BiometrieHeureController extends Controller
         // Serialise les consolidations concurrentes pour un meme enseignant.
         personnel::whereIn('id', $cours->pluck('id_personnel')->unique())->orderBy('id')->lockForUpdate()->get();
         HeureRealiseeEnseignant::where('id_biometrie_import', $import->id)->delete();
-        $anterieures = HeureRealiseeEnseignant::with('cours.programme')
+        $anterieures = HeureRealiseeEnseignant::with(['cours.programme.matiere', 'cours.programme.specialite', 'import'])
             ->where('id_biometrie_import', '!=', $import->id)
             ->where(fn($q) => $q->whereHas('import', fn($s) => $s->whereNull('type_import')->orWhereIn('type_import', ['cours', 'manuel']))
                 ->orWhereExists(fn($s) => $s->selectRaw('1')->from('lignes_virement_vacataires as lv')
@@ -925,7 +925,8 @@ class BiometrieHeureController extends Controller
         $processedSeances = [];
 
         $ignorees = 0;
-        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees) {
+        $conflits = [];
+        DB::transaction(function () use ($cours, $import, $start, $end, $defaultTaux, $anterieures, &$count, &$processedSeances, &$ignorees, &$conflits) {
             foreach ($cours as $coursEnseignant) {
                 $periodeStart = max(Carbon::parse($coursEnseignant->date_debut)->startOfDay(), $start);
                 $periodeEnd = min(Carbon::parse($coursEnseignant->date_fin)->endOfDay(), $end);
@@ -948,24 +949,35 @@ class BiometrieHeureController extends Controller
                             ]);
 
                             $precedentes = $anterieures->get($coursEnseignant->id_personnel.'|'.$date->toDateString(), collect());
-                            $deja = $precedentes->contains(function ($h) use ($seance, $dedupeSubject) {
+                            $estMemeSeance = function ($h) use ($seance, $dedupeSubject) {
                                 $programme = $h->cours?->programme;
                                 $sujet = $programme?->type_matiere === 'transversale'
                                     ? 'transversale-matiere-'.($programme->id_matiere ?? $h->id_programme_specialite)
                                     : 'programme-'.$h->id_programme_specialite;
                                 return $h->id_seance_cours == $seance->id || ($h->id_plage_horaire == $seance->id_plage_horaire && $sujet === $dedupeSubject);
-                            });
+                            };
+                            $deja = $precedentes->contains($estMemeSeance);
+                            $debutPlage = Carbon::parse($seance->plage->heure_debut)->format('H:i:s');
+                            $finPlage = Carbon::parse($seance->plage->heure_fin)->format('H:i:s');
+                            $chevauchements = $precedentes->filter(fn($h) => !$estMemeSeance($h) && Carbon::parse($h->heure_debut_prevue)->format('H:i:s') < $finPlage
+                                && Carbon::parse($h->heure_fin_prevue)->format('H:i:s') > $debutPlage);
+                            if ($chevauchements->isNotEmpty()) {
+                                foreach ($chevauchements as $ancienne) {
+                                    $conflits[] = sprintf('%s - %s : la nouvelle plage %s-%s (%s, %s) chevauche la plage déjà consolidée %s-%s (%s, %s), import #%s (%s).',
+                                        $coursEnseignant->personnel?->nom ?? 'Enseignant #'.$coursEnseignant->id_personnel, $date->format('d/m/Y'),
+                                        substr($debutPlage, 0, 5), substr($finPlage, 0, 5), $programme?->matiere?->nom_matiere ?? 'matière non renseignée',
+                                        $programme?->specialite?->nom_specialite ?? 'spécialité non renseignée', substr($ancienne->heure_debut_prevue, 0, 5),
+                                        substr($ancienne->heure_fin_prevue, 0, 5), $ancienne->cours?->programme?->matiere?->nom_matiere ?? 'matière non renseignée',
+                                        $ancienne->cours?->programme?->specialite?->nom_specialite ?? 'spécialité non renseignée',
+                                        $ancienne->id_biometrie_import, $ancienne->import?->libelle ?: 'sans libellé');
+                                }
+                                $date->addDay();
+                                continue;
+                            }
                             if ($deja) {
                                 $ignorees++;
                                 $date->addDay();
                                 continue;
-                            }
-                            $debutPlage = Carbon::parse($seance->plage->heure_debut)->format('H:i:s');
-                            $finPlage = Carbon::parse($seance->plage->heure_fin)->format('H:i:s');
-                            $chevauche = $precedentes->contains(fn($h) => Carbon::parse($h->heure_debut_prevue)->format('H:i:s') < $finPlage
-                                && Carbon::parse($h->heure_fin_prevue)->format('H:i:s') > $debutPlage);
-                            if ($chevauche) {
-                                throw \Illuminate\Validation\ValidationException::withMessages(['import' => 'Une nouvelle seance chevauche une plage deja consolidee pour cet enseignant le '.$date->format('d/m/Y').'. Verifiez les emplois du temps avant de continuer.']);
                             }
 
                             if (isset($processedSeances[$dedupeKey])) {
@@ -981,6 +993,10 @@ class BiometrieHeureController extends Controller
                 }
             }
         });
+
+        if ($conflits) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['import' => array_values(array_unique($conflits))]);
+        }
 
         $import->update([
             'statut' => 'consolide',

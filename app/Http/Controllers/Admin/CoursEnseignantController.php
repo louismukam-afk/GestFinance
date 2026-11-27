@@ -150,9 +150,10 @@ class CoursEnseignantController extends Controller
     {
         $data = $this->validatedData($request);
         $programme = ProgrammeSpecialite::with('matiere')->findOrFail($data['id_programme_specialite']);
-        $this->assertNoTeacherConflict($data, $programme);
-
         DB::transaction(function () use ($data, $programme) {
+            specialite::whereKey($programme->id_specialite)->lockForUpdate()->firstOrFail();
+            $this->assertNoTeacherConflict($data, $programme);
+            $this->assertNoClassConflict($data, $programme);
             $cours = CoursEnseignant::create([
                 'id_personnel' => $data['id_personnel'],
                 'id_programme_specialite' => $programme->id,
@@ -199,9 +200,10 @@ class CoursEnseignantController extends Controller
     {
         $data = $this->validatedData($request);
         $programme = ProgrammeSpecialite::with('matiere')->findOrFail($data['id_programme_specialite']);
-        $this->assertNoTeacherConflict($data, $programme, $cours_enseignant->id);
-
         DB::transaction(function () use ($data, $programme, $cours_enseignant) {
+            specialite::whereKey($programme->id_specialite)->lockForUpdate()->firstOrFail();
+            $this->assertNoTeacherConflict($data, $programme, $cours_enseignant->id);
+            $this->assertNoClassConflict($data, $programme, $cours_enseignant->id);
             $cours_enseignant->update([
                 'id_personnel' => $data['id_personnel'],
                 'id_programme_specialite' => $programme->id,
@@ -646,6 +648,46 @@ class CoursEnseignantController extends Controller
                 ]);
             }
         }
+    }
+
+    private function assertNoClassConflict(array $data, ProgrammeSpecialite $programme, ?int $exceptId = null): void
+    {
+        if ($data['statut'] !== 'actif') { return; }
+        $existants = CoursEnseignant::with(['personnel', 'seances.plage'])
+            ->where('statut', 'actif')
+            ->when($exceptId, fn($q) => $q->where('id', '<>', $exceptId))
+            ->whereDate('date_debut', '<=', $data['date_fin'])->whereDate('date_fin', '>=', $data['date_debut']);
+        foreach (['id_specialite', 'id_cycle', 'id_filiere', 'id_niveau', 'id_annee_academique', 'id_entite'] as $champ) {
+            $existants->where($champ, $programme->$champ);
+        }
+        $existants = $existants->get();
+        $plages = PlageHoraire::whereIn('id', collect($data['seances'])->pluck('id_plage_horaire'))->get()->keyBy('id');
+        $erreurs = [];
+        foreach ($data['seances'] as $seance) {
+            $plage = $plages->get($seance['id_plage_horaire']);
+            if (!$plage) { continue; }
+            foreach ($existants as $cours) {
+                $debut = Carbon::parse($data['date_debut'])->startOfDay()->max($cours->date_debut->copy()->startOfDay());
+                $fin = Carbon::parse($data['date_fin'])->startOfDay()->min($cours->date_fin->copy()->startOfDay());
+                $premierJour = $debut->copy()->addDays(((int) $seance['jour_semaine'] - $debut->dayOfWeekIso + 7) % 7);
+                if ($premierJour->gt($fin)) { continue; }
+                foreach ($cours->seances as $existante) {
+                    $autre = $existante->plage;
+                    if (!$autre || (int) $existante->jour_semaine !== (int) $seance['jour_semaine']) { continue; }
+                    $debutNouveau = Carbon::parse($plage->heure_debut)->format('H:i:s');
+                    $finNouveau = Carbon::parse($plage->heure_fin)->format('H:i:s');
+                    $debutAncien = Carbon::parse($autre->heure_debut)->format('H:i:s');
+                    $finAncien = Carbon::parse($autre->heure_fin)->format('H:i:s');
+                    if ($debutNouveau < $finAncien && $finNouveau > $debutAncien) {
+                        $erreurs[] = sprintf('Classe déjà occupée : %s enseigne le %s de %s à %s entre le %s et le %s (cours #%s). La plage demandée %s-%s chevauche ce cours.',
+                            $cours->personnel?->nom ?? 'Enseignant #'.$cours->id_personnel, $this->jours[(int) $seance['jour_semaine']],
+                            substr($debutAncien, 0, 5), substr($finAncien, 0, 5), $cours->date_debut->format('d/m/Y'), $cours->date_fin->format('d/m/Y'),
+                            $cours->id, substr($debutNouveau, 0, 5), substr($finNouveau, 0, 5));
+                    }
+                }
+            }
+        }
+        if ($erreurs) { throw ValidationException::withMessages(['seances' => array_values(array_unique($erreurs))]); }
     }
 
     private function syncSeances(CoursEnseignant $cours, array $seances): void
